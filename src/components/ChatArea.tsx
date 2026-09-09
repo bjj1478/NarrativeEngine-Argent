@@ -5,6 +5,7 @@ import { useAppStore } from '../store/useAppStore';
 import { findPendingCommitMessage } from '../services/turn/pendingCommit';
 import { LootRollModal } from './chat/LootRollModal';
 import { DiceRollModal } from './chat/DiceRollModal';
+import { PlayerRollModal } from './chat/PlayerRollModal';
 import { SceneImageModal } from './chat/SceneImageModal';
 import { RegenerateSheet } from './chat/RegenerateSheet';
 import { SelectionActionsMenu } from './chat/SelectionActionsMenu';
@@ -137,6 +138,7 @@ export function ChatArea() {
     const {
         isStreaming, loadingStatus, pendingProposal, setPendingProposal,
         pendingPcPrompt, resolvePcPrompt,
+        pendingRollRequest, resolvePlayerRoll,
         handleSend, handleStop,
         directorBriefRunning, handleSkipDirectorBrief,
     } = useChatOperations({
@@ -301,6 +303,16 @@ export function ChatArea() {
             <LootRollModal />
             <DiceRollModal />
             <SceneImageModal />
+
+            {/* Player-rolled resolution. Generation is suspended while this is open, so it
+                renders above every other modal and cannot be dismissed by a stray click. */}
+            {pendingRollRequest && (
+                <PlayerRollModal
+                    request={pendingRollRequest}
+                    onSubmit={(total) => resolvePlayerRoll(total)}
+                    onDecline={() => resolvePlayerRoll(null)}
+                />
+            )}
 
             {pendingPcPrompt && (
                 <PcPromptModal

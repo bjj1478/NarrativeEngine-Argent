@@ -23,6 +23,7 @@ export type PipelinePhase =
     | 'building-prompt'
     | 'generating'
     | 'checking-notes'
+    | 'awaiting-player'
     | 'post-processing';
 
 export type StreamingStats = {
@@ -99,6 +100,27 @@ export type DiceSystemConfig = {
     categories: DiceCategory[];   // up to 10
     // Note: no global rollDef — pool mode always does a singular roll per category.
     // The 3-gate RollDefinition is per-roll (dice me modal / roll_dice tool args), not global.
+};
+
+// How readily the GM asks the player for a roll. A THRESHOLD for what deserves dice,
+// not a target count. Consumed only by getToolDefinitions (it selects request_roll's
+// "when to call me" paragraph). Optional + read-site default (`?? 'contested'`) so no
+// campaign migration is needed — migrateLegacyContext is deliberately untouched.
+export type RollFrequency =
+    | 'contested'       // any action meeting real resistance (default)
+    | 'consequential'   // only when failure imposes a real, lasting cost
+    | 'critical';       // only decisive conflicts and near-impossible attempts
+
+/**
+ * A pending player-rolled resolution, as shown in the roll modal. `successOn` and
+ * `failureMeans` are the bar the GM committed to BEFORE it could see the number — they are
+ * displayed so the player can see the terms are fixed in advance, not chosen afterwards.
+ */
+export type PlayerRollRequest = {
+    dice: string;
+    reason: string;
+    successOn: string;
+    failureMeans: string;
 };
 
 // Player-called "dice me" arm request (WO-H). Resolved at send time so the result is
@@ -227,6 +249,12 @@ export type GameContext = {
     encounterEngineActive: boolean;
     worldEngineActive: boolean;
     diceFairnessActive: boolean;
+    /** Player-rolled resolution: the GM asks, the player rolls real dice and types the
+     *  total. Requires diceFairnessActive === false (pool mode injects pre-rolls instead).
+     *  Optional: absent reads as ON via `?? true` at the use site. */
+    playerRollActive?: boolean;
+    /** Threshold for what deserves dice. Absent reads as 'contested' at the use site. */
+    rollFrequency?: RollFrequency;
     sceneNote: string;
     sceneNoteActive: boolean;
     sceneNoteDepth: number;

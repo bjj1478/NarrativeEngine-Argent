@@ -67,11 +67,42 @@ async function loadModel() {
 
     ensureCacheDir();
 
-    const { pipeline } = await import('@huggingface/transformers');
+    const { pipeline, env } = await import('@huggingface/transformers');
+
+    // `env.cacheDir` must be set as well as the `cache_dir` option below, and it is not
+    // redundant. Before building the pipeline, transformers probes the repo to decide which
+    // files this task needs — get_pipeline_files -> get_tokenizer_files -> get_file_metadata
+    // for 'tokenizer_config.json'. That probe is called with NO options, so it never sees the
+    // `cache_dir` we pass to pipeline(); it consults the global default cache and then the
+    // network. When the probe fails — offline, DNS blip, HF down or rate-limiting — it returns
+    // `{ exists: false }`, the tokenizer is silently never loaded (`if (tokenizer)` simply
+    // skips it), and the pipeline is handed back with `tokenizer: null`. Nothing throws until
+    // the first inference, which dies as:
+    //     [Embedder] Warmup failed: this.tokenizer is not a function
+    // with the tokenizer sitting fully cached on disk the whole time.
+    //
+    // Pointing the global default at the same directory makes that probe find the cached
+    // tokenizer_config.json and answer `exists: true` without a network round-trip, so a
+    // cached model loads offline. Only this module uses the top-level transformers instance
+    // (kokoro-js in tts.js has its own nested copy), so the global is not shared.
+    env.cacheDir = CACHE_DIR;
+
     extractor = await pipeline('feature-extraction', MODEL_ID, {
         dtype: 'q8',
         cache_dir: CACHE_DIR,
     });
+
+    // Fail loudly and specifically if the tokenizer went missing anyway. Otherwise the only
+    // symptom is a TypeError from deep inside the library on first use, which says nothing
+    // about the actual cause.
+    if (typeof extractor.tokenizer !== 'function') {
+        extractor = null;
+        throw new Error(
+            `tokenizer missing for ${MODEL_ID} — the pipeline loaded without one. ` +
+            `The model files may be incompletely cached in ${CACHE_DIR}; delete that folder ` +
+            `while online to re-download.`,
+        );
+    }
 
     console.log(`[Embedder] Model loaded: ${MODEL_ID} (${ACTIVE_DIMS} dims, CPU)`);
     return extractor;

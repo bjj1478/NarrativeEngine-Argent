@@ -302,3 +302,46 @@ describe('useChatOperations — Director Brief UI state (WO-05)', () => {
         await act(async () => { resume(); await sendPromise; });
     });
 });
+
+// Shares this file's store/runTurn harness rather than duplicating 150 lines of mock: the
+// contract under test is the same one — what a full Stop must tear down mid-turn.
+describe('useChatOperations — player-rolled resolution', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('handleStop dismisses the open roll request and settles its promise as declined', async () => {
+        // Pause runTurn inside the awaited requestPlayerRoll, exactly where the real
+        // orchestrator suspends.
+        const holder: { rollPromise?: Promise<number | null> } = {};
+        let resolveRun!: () => void;
+        runTurnMock.mockImplementation(async (_state: any, callbacks: any) => {
+            holder.rollPromise = callbacks.requestPlayerRoll({
+                dice: '2d6',
+                reason: 'Forcing the shutter before the patrol rounds the corner.',
+                successOn: '7+',
+                failureMeans: 'the frame gives loudly and they hear it',
+            });
+            await new Promise<void>(r => { resolveRun = r; });
+        });
+
+        const { result } = renderHook(() => useChatOperations(baseArgs()));
+
+        let sendPromise!: Promise<unknown>;
+        act(() => { sendPromise = result.current.handleSend(); });
+        await act(async () => { await Promise.resolve(); });
+
+        expect(result.current.pendingRollRequest).toMatchObject({ dice: '2d6', successOn: '7+' });
+
+        act(() => { result.current.handleStop(); });
+
+        // ChatArea renders PlayerRollModal on this value, and the modal has no
+        // backdrop-dismiss and no X — so if Stop does not clear it, the player is left
+        // staring at a live-looking request for a turn that is already dead.
+        expect(result.current.pendingRollRequest).toBeNull();
+        // And the orchestrator's await is settled as "no roll" rather than stranded.
+        await expect(holder.rollPromise!).resolves.toBeNull();
+
+        await act(async () => { resolveRun(); await sendPromise; });
+    });
+});

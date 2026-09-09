@@ -122,8 +122,20 @@ export function wrapCallbacksWithRecorder(
         };
     const wrapOptional = <A extends unknown[]>(name: string, fn: ((...a: A) => void) | undefined) =>
         fn ? wrap(name, fn) : undefined;
+    // `requestPlayerRoll` returns a promise the orchestrator AWAITS, so `wrap`'s void return
+    // would swallow it and the turn would resume with no roll.
+    const wrapAsync = <A extends unknown[], R>(name: string, fn: ((...a: A) => Promise<R>) | undefined) =>
+        fn
+            ? (...a: A): Promise<R> => { recorder.recordCallback(name, a); return fn(...a); }
+            : undefined;
 
     return {
+        // Spread first so a member this literal forgets to enumerate is still PASSED THROUGH
+        // unwrapped, rather than silently dropped. `requestPlayerRoll` was dropped exactly that
+        // way: absent, `runGenerationStage` falls back to the engine-rolled tool, which the gate
+        // only failed to notice because its fixture is in pool mode. An un-recorded callback is
+        // a gap in the audit; a missing one is a behaviour change.
+        ...inner,
         onCheckingNotes: wrap('onCheckingNotes', inner.onCheckingNotes),
         addMessage: wrap('addMessage', inner.addMessage),
         updateLastAssistant: wrap('updateLastAssistant', inner.updateLastAssistant),
@@ -150,6 +162,7 @@ export function wrapCallbacksWithRecorder(
         archiveNPC: wrap('archiveNPC', inner.archiveNPC),
         restoreNPC: wrap('restoreNPC', inner.restoreNPC),
         stageInventoryProposal: wrapOptional('stageInventoryProposal', inner.stageInventoryProposal),
+        requestPlayerRoll: wrapAsync('requestPlayerRoll', inner.requestPlayerRoll),
         onDirectorBriefPhase: wrapOptional('onDirectorBriefPhase', inner.onDirectorBriefPhase),
         persistTurnState: wrapOptional('persistTurnState', inner.persistTurnState),
     };

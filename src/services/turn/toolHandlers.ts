@@ -1,4 +1,4 @@
-import type { GameContext, LoreChunk, DiceSystemConfig, DieType, InventoryProposal } from '../../types';
+import type { GameContext, LoreChunk, DiceSystemConfig, DieType, InventoryProposal, RollFrequency } from '../../types';
 import { searchLoreByQuery } from '../lore/loreRetriever';
 import { uid } from '../../utils/uid';
 import { mapTier } from '../engine/diceTier';
@@ -110,6 +110,163 @@ const ROLL_DICE_TOOL = {
     }
 } as const;
 
+// ── Player-rolled resolution (request_roll) ───────────────────────────
+//
+// The inverse of ROLL_DICE_TOOL: the engine does not roll. It asks the player,
+// suspends generation, and resumes with the number the player typed.
+//
+// The load-bearing property is that `success_on` / `failure_means` are declared
+// in the CALL, before the model can see the number. The bar is committed to
+// sight-unseen, which is what makes a player-supplied number trustworthy —
+// there is nothing left to fudge after the fact.
+
+/**
+ * Threshold paragraphs, selected by `context.rollFrequency`. Each is a threshold for
+ * what deserves dice, never a quota — the expected cadence is a consequence of the
+ * threshold and is deliberately not stated to the model as a target.
+ */
+const ROLL_FREQUENCY_GUIDANCE: Record<RollFrequency, string> = {
+    contested:
+        'WHEN TO ASK — any contested action. Ask whenever the action meets real resistance: ' +
+        'persuasion against a genuine want, a lock, a fight, a risky climb, a lie someone might ' +
+        'catch. Resistance is the test; do not wait for the outcome to also be dramatic.',
+    consequential:
+        'WHEN TO ASK — consequential actions only. Ask ONLY when failure would impose a real, ' +
+        'lasting cost: a wound, a burnt relationship, a door closed for good, time lost that ' +
+        'matters. Friction that would merely inconvenience the player resolves in the fiction, ' +
+        'without dice.',
+    critical:
+        'WHEN TO ASK — decisive moments only. Ask ONLY for a conflict that could genuinely go ' +
+        'either way, a confrontation that settles something, or an attempt that by rights should ' +
+        'not be possible. Ordinary resistance — haggling, routine locks, most persuasion, a fight ' +
+        'against outmatched opposition — resolves in the fiction, without dice.',
+};
+
+const ROLL_NEVER_ASK =
+    'NEVER ask for a roll for movement, routine professional competence, ambient description, ' +
+    'obvious perception, a friendly conversation, or anything that cannot reasonably fail. NEVER ' +
+    'ask for a repeat roll on an unchanged approach — a fresh attempt needs a changed method, a ' +
+    'new resource, new information, or changed circumstances.';
+
+const ROLL_PROTOCOL = [
+    'PROTOCOL — follow exactly:',
+    '1. Decide the bar BEFORE calling. `success_on` and `failure_means` are BINDING: you commit ' +
+        'to them without knowing the number, and you must honour them once it arrives.',
+    '2. Call `request_roll`, then STOP. Do not narrate the outcome, do not invent or assume a ' +
+        'number, and do not write both branches.',
+    '3. The player rolls physical dice and types their total, including any bonus they judge ' +
+        'applies. You receive it as `player_total`. The engine rolls nothing and tracks no stats.',
+    '4. Compare `player_total` to the `success_on` you already stated, and narrate that outcome. ' +
+        'Never re-roll, never move the bar, never soften a miss or inflate a hit.',
+    '5. Dice, totals, thresholds and bonuses belong in the request block ONLY. The narration that ' +
+        'follows is pure fiction: name no die, no total, no threshold, no bonus, and no faculty, ' +
+        'skill or attribute. Show the cause in the world — a mechanism recently oiled, a man who ' +
+        'turned — never the mechanic behind it.',
+    '6. Use the die your Action Resolution rules specify. Consequence tables in the world lore, ' +
+        'where present, govern what a miss actually costs.',
+].join('\n');
+
+function buildRequestRollDescription(frequency: RollFrequency): string {
+    return [
+        'Ask the PLAYER to roll physical dice and report the result. Use this for an action whose ' +
+            'outcome is uncertain and worth resolving with dice.',
+        ROLL_FREQUENCY_GUIDANCE[frequency],
+        ROLL_NEVER_ASK,
+        ROLL_PROTOCOL,
+    ].join('\n\n');
+}
+
+function buildRequestRollTool(frequency: RollFrequency) {
+    return {
+        type: 'function' as const,
+        function: {
+            name: 'request_roll',
+            description: buildRequestRollDescription(frequency),
+            parameters: {
+                type: 'object' as const,
+                properties: {
+                    dice: {
+                        type: 'string' as const,
+                        description: "Dice for the player to roll, NdM form, e.g. '2d6' or '1d20'. Shown verbatim; the engine never rolls it.",
+                    },
+                    reason: {
+                        type: 'string' as const,
+                        description: "One in-fiction line naming what is attempted and against what, e.g. 'Forcing the shutter before the patrol rounds the corner.'",
+                    },
+                    success_on: {
+                        type: 'string' as const,
+                        description: "The bar to beat, stated BEFORE the number exists and binding once stated, e.g. '7+' or '12 or higher'.",
+                    },
+                    failure_means: {
+                        type: 'string' as const,
+                        description: "What a miss costs, committed up front. One concrete line, no numbers, e.g. 'the frame gives loudly and the patrol hears it'.",
+                    },
+                },
+                required: ['dice', 'reason', 'success_on', 'failure_means'],
+            },
+        },
+    } as const;
+}
+
+export type RequestRollArgs = {
+    dice: string;
+    reason: string;
+    success_on: string;
+    failure_means: string;
+};
+
+/**
+ * Parses a `request_roll` call. Returns null when the arguments are unusable, which the
+ * caller treats as "no roll was requested" rather than failing the turn.
+ */
+export function parseRequestRollArgs(toolArguments: string): RequestRollArgs | null {
+    let raw: Record<string, unknown> = {};
+    try { raw = JSON.parse(toolArguments); } catch { return null; }
+    const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    const dice = str(raw.dice);
+    const reason = str(raw.reason);
+    if (!dice || !reason) return null;
+    return { dice, reason, success_on: str(raw.success_on), failure_means: str(raw.failure_means) };
+}
+
+/**
+ * The tool result handed back once the player types their total. It restates the bar the
+ * model committed to, at maximum recency, so the outcome cannot drift from it.
+ *
+ * No tier or band mapping happens anywhere on this path — `mapTier` is deliberately NOT
+ * called. The number and the bar the model already stated are the whole resolution.
+ */
+export function formatPlayerRollResult(args: RequestRollArgs, playerTotal: number): string {
+    return JSON.stringify({
+        dice: args.dice,
+        reason: args.reason,
+        success_on: args.success_on || '(unstated)',
+        failure_means: args.failure_means || '(unstated)',
+        player_total: playerTotal,
+        source: 'player-rolled',
+        binding:
+            'The player rolled this and it is final. Judge it against success_on exactly as you ' +
+            'stated it, then narrate the result as cause in the world. Do not restate the number, ' +
+            'the dice, the threshold, or any skill or attribute name in the prose.',
+    });
+}
+
+/**
+ * The player dismissed the request. The model is told to leave the attempt unresolved
+ * rather than inventing a number for it.
+ */
+export function formatPlayerRollDeclined(args: RequestRollArgs): string {
+    return JSON.stringify({
+        dice: args.dice,
+        reason: args.reason,
+        player_total: null,
+        source: 'player-declined',
+        binding:
+            'No roll happened. Do NOT invent a number or resolve the attempt by chance. Leave the ' +
+            'outcome open — end on the moment before it resolves, or let the fiction move around it.',
+    });
+}
+
 import { normalizeLocationTag } from '../../types';
 
 const PROPOSE_INVENTORY_TOOL = {
@@ -138,9 +295,22 @@ const PROPOSE_INVENTORY_TOOL = {
     },
 } as const;
 
-export function getToolDefinitions(opts: { allowDiceTool: boolean }): unknown[] {
+export function getToolDefinitions(opts: {
+    /** Offer the ENGINE-rolled `roll_dice`. Ignored when `playerRollFrequency` is set. */
+    allowDiceTool: boolean;
+    /**
+     * When set, offer the PLAYER-rolled `request_roll` in place of `roll_dice`, with its
+     * "when to ask" threshold selected by this value. The two dice tools are mutually
+     * exclusive: offering both would let the model roll silently to dodge asking.
+     */
+    playerRollFrequency?: RollFrequency;
+}): unknown[] {
     const tools: unknown[] = [...BASE_TOOLS];
-    if (opts.allowDiceTool) tools.push(ROLL_DICE_TOOL);
+    if (opts.playerRollFrequency) {
+        tools.push(buildRequestRollTool(opts.playerRollFrequency));
+    } else if (opts.allowDiceTool) {
+        tools.push(ROLL_DICE_TOOL);
+    }
     // propose_inventory_change is combat-independent — always offered.
     tools.push(PROPOSE_INVENTORY_TOOL);
     return tools;

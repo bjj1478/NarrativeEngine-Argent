@@ -96,6 +96,15 @@ export function formatFactsForContext(facts: SemanticFact[]): string {
 // tags, or when plannerEventTypes is empty, bypass the tag filter (fault
 // tolerance — missing planner output degrades to "inject best by score").
 
+/** Caller-supplied gates for {@link formatTraitsForContext}. */
+export type FormatTraitsOptions = {
+    /**
+     * Emit the PC's stat block. Defaults to FALSE — the caller must opt in, normally by
+     * asking whether the turn's recommender put `'stats'` in `profileFields`.
+     */
+    includeStats?: boolean;
+};
+
 export type SelectedTraits = {
     core: CharacterTrait[];
     extended: CharacterTrait[];
@@ -182,6 +191,7 @@ function formatTraitLine(trait: CharacterTrait): string {
 export function formatTraitsForContext(
     profile: CharacterProfileState,
     selected: SelectedTraits,
+    opts: FormatTraitsOptions = {},
 ): string {
     // WO-A rewrite 2 §2: strengthened the persona label so the LLM treats this
     // block as the human's player character (the protagonist), not just a
@@ -202,7 +212,19 @@ export function formatTraitsForContext(
     if (id.level !== undefined) idParts.push(`Level ${id.level}`);
     if (idParts.length > 0) parts.push(idParts.join(' | '));
 
-    if (profile.stats) {
+    // Stats are gated, and default to OFF. This block used to emit every stat on the sheet
+    // unconditionally — `PWR 14 | SPD 12` — while the traits three lines below went through
+    // full relevance selection. That asymmetry was the bug: the writer got a set of bare
+    // numbers no rule claimed, banded, or forbade it from reading back out into the prose.
+    //
+    // The gate is the caller's, because the authority already exists: the recommender's
+    // `profileFields` decides this for the smart-bookkeeping branch (contextMinifier's
+    // `minifySelectedProfile`, `want('stats')`). Now both branches answer to it.
+    //
+    // Defaulting to false makes omission the failure mode, matching that branch — where an
+    // absent `profileFields` yields no profile block at all — and the engine's standing
+    // convention that an unknown fact does not satisfy a condition.
+    if (opts.includeStats && profile.stats) {
         const s = profile.stats;
         const statParts = Object.entries(s).map(([k, v]) => `${k.toUpperCase()} ${v}`);
         if (statParts.length > 0) parts.push(statParts.join(' | '));

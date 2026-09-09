@@ -25,6 +25,22 @@ if exist "%TEMP_BAT%" (
 if not defined APP_DIR set "APP_DIR=%~dp0"
 cd /d "%APP_DIR%"
 
+REM ============================================================
+REM Repository identity - the ONLY fork-specific thing in this
+REM file. The updater pulls from one known repository on purpose:
+REM a remote nobody recognizes could pull code that then runs on
+REM the next start. If this app is forked again, change these
+REM three lines and nothing else.
+REM   REPO_SLUG - matched against every configured git remote
+REM   REPO_URL  - offered for re-cloning when no remote matches
+REM   REPO_NAME - how to refer to it in the messages below
+REM Keep parentheses out of REPO_NAME: it is echoed inside an
+REM if-block, where an unescaped one would end the block early.
+REM ============================================================
+set "REPO_SLUG=bjj1478/NarrativeEngine-Argent"
+set "REPO_URL=https://github.com/bjj1478/NarrativeEngine-Argent.git"
+set "REPO_NAME=Narrative Engine Argent"
+
 echo ============================================
 echo   Narrative Engine - Update Tool
 echo ============================================
@@ -178,8 +194,8 @@ exit /b 1
 
 :npm_found
 
-REM ===== Pre-flight: verify the git remote is official =====
-echo Checking that this is the official app...
+REM ===== Pre-flight: verify the git remote is the expected one =====
+echo Checking where this copy came from...
 echo.
 set "PULL_REMOTE="
 for /f "tokens=1,2 delims= " %%a in ('git remote -v 2^>nul') do call :check_remote %%a %%b
@@ -188,24 +204,27 @@ if not defined PULL_REMOTE (
     echo   [STOP] Unrecognized download source
     echo ============================================
     echo.
-    echo This folder's Git remote does not point to
-    echo the official Sagesheep Narrative Engine
-    echo repository. Updating from an unknown source
-    echo could pull untrusted code.
+    echo None of this folder's Git remotes point to
+    echo %REPO_NAME%.
+    echo Updating from an unknown source could pull
+    echo untrusted code.
     echo.
-    echo If you are using a fork or a custom version,
-    echo update it manually by running:
+    echo If you are running a different fork or your
+    echo own custom version, update it by hand:
     echo   git pull
     echo   npm install
     echo.
-    echo If you believe this is a mistake, re-clone
-    echo the official app from:
-    echo   https://github.com/Sagesheep/NarrativeEngine-P.git
+    echo If you believe this is a mistake, check what
+    echo this folder is pointed at:
+    echo   git remote -v
+    echo.
+    echo The expected repository is:
+    echo   %REPO_URL%
     echo.
     pause
     exit /b 1
 )
-echo Official Sagesheep repository detected - OK.
+echo %REPO_NAME% detected - OK.
 echo.
 
 REM ===== Check for uncommitted local changes =====
@@ -401,8 +420,11 @@ echo.
 pause
 exit /b 1
 
-REM ===== Subroutine: mark the first Sagesheep remote as the pull source =====
+REM ===== Subroutine: mark the first matching remote as the pull source =====
+REM Called once per line of `git remote -v`, so %1 is the remote name and %2
+REM its URL. First match wins, which keeps working if an `upstream` remote is
+REM later added alongside `origin` - only the fork is ever pulled from.
 :check_remote
-echo %2 | findstr /i "Sagesheep/NarrativeEngine-P" >nul
+echo %2 | findstr /i "%REPO_SLUG%" >nul
 if not errorlevel 1 if not defined PULL_REMOTE set "PULL_REMOTE=%1"
 goto :eof

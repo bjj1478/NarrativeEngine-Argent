@@ -61,6 +61,24 @@ export type TurnCallbacks = {
     /** Stage a GM-proposed inventory change for user confirmation (Phase 6). The
      *  proposal does not mutate inventory until the user confirms it in the UI. */
     stageInventoryProposal?: (proposal: InventoryProposal) => void;
+    /**
+     * Player-rolled resolution: the GM called `request_roll`, so generation SUSPENDS here
+     * until the player types the total their physical dice showed. Resolve with the number,
+     * or `null` if they dismissed the request (the model is then told no roll happened rather
+     * than being allowed to invent one).
+     *
+     * This is the only awaited callback on this interface. It is OPTIONAL by necessity: the
+     * base-app gate fixtures enumerate TurnCallbacks members, and the commit / swipe / test
+     * paths build their own callbacks with no UI to suspend into. When absent, the tool falls
+     * back to the registry's non-suspending handler.
+     *
+     * Implementations MUST settle — a promise that never resolves hangs the turn with
+     * `isStreaming` stuck true. The caller stops WAITING on abort (it resolves its own wait
+     * with null; it never rejects this promise) and guards against a stale resolution landing
+     * in a later turn. Closing whatever UI this opened is the implementation's job, not the
+     * caller's — see `handleStop` in useChatOperations.
+     */
+    requestPlayerRoll?: (req: import('../../types').PlayerRollRequest) => Promise<number | null>;
     /** WO-05: Director phase UI hook. Fires 'running' just before the Director
      *  call begins and 'done' after it settles (success, abort, timeout, or
      *  parse-failure — `runDirectorBrief` always returns). The UI uses this to

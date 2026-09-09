@@ -16,6 +16,9 @@ const PHASE_INDEX: Record<PipelinePhase, number> = {
     'building-prompt': 2,
     'generating': 3,
     'checking-notes': 3,
+    // Suspended waiting on the player's dice — still the Generating step as far as the
+    // progress bar is concerned; the modal is the real affordance.
+    'awaiting-player': 3,
     'post-processing': 4,
 };
 

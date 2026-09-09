@@ -77,6 +77,13 @@
   --color-command-label:  #B91C1C;  /* label text — 5.5:1 on the fill (WCAG AA)     */
   --color-command-accent: #E01B1B;  /* border + icon + ARMED segment fill           */
 
+  /* Argent — the fork's own mark on the hub wordmark. Its own token rather than
+     --color-danger, which is warm red too: danger is a STATE colour, and a brand
+     word riding on it would change meaning the next time errors are retuned. Warm
+     brick red, and carried in the dark block below so the wordmark stays legible
+     in both themes. 6.73:1 on this ground — AA at any size. */
+  --color-argent: #A62B1F;
+
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
@@ -137,6 +144,11 @@
   --color-command-fill:   #0A0A0B;  /* near-black; the gold border defines the shape */
   --color-command-label:  #D9B44A;  /* label text — 9.2:1 on the fill                */
   --color-command-accent: #E8C25A;  /* border + icon + ARMED segment fill            */
+
+  /* Argent, dark mode. The light-mode brick red drops to ~1.6:1 on this ground, so
+     it lifts to a warm salmon-red at the same lightness tier as the dark accent.
+     7.25:1 on #141519. */
+  --color-argent: #F0857A;
 }
 
 @layer base {

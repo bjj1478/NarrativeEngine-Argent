@@ -17,23 +17,36 @@ function joinPromptSections(...sections: Array<string | null | undefined>): stri
 }
 
 const SCENE_STAKES_RE = /\[\[SCENE_STAKES:\s*(calm|tense|dangerous)\s*\]\]/i;
-const SCENE_STAKES_ANY_RE = /\[\[SCENE_STAKES:\s*\S+\s*\]\]/i;
+// The strip pattern is deliberately laxer than the match pattern, and global.
+//
+// `[^\]]*` rather than `\s*\S+\s*`: a multi-word value ("very tense", "tense — the guard
+// noticed") matched NEITHER regex before, so the tag survived into the player's prose. And
+// `/g` because one stray second copy would likewise have survived. Both only started to
+// matter once the prompt actually began asking for the tag (see stable.ts) — until then the
+// writer emitted it rarely enough that neither case was reachable.
+//
+// Kept separate from SCENE_STAKES_RE, which must stay non-global: `String.match` with /g
+// returns all matches and NO capture groups, so `match[1]` below would break.
+const SCENE_STAKES_STRIP_RE = /\[\[SCENE_STAKES:[^\]]*\]\]/gi;
 const VALID_STAKES: Set<string> = new Set(['calm', 'tense', 'dangerous']);
+
+// Only ever used via String.prototype.match/replace, which reset a global regex's lastIndex —
+// never RegExp.test/exec, which would carry it between calls.
+const stripTags = (text: string): string =>
+    text.replace(SCENE_STAKES_STRIP_RE, '').replace(/ +$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
 
 export function extractAndStripSceneStakes(text: string): { displayText: string; stakes: SceneStakes } {
     const match = text.match(SCENE_STAKES_RE);
     if (!match) {
-        const garbled = text.match(SCENE_STAKES_ANY_RE);
+        const garbled = text.match(SCENE_STAKES_STRIP_RE);
         if (garbled) {
-            const displayText = text.replace(SCENE_STAKES_ANY_RE, '').replace(/ +$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-            return { displayText, stakes: 'calm' };
+            return { displayText: stripTags(text), stakes: 'calm' };
         }
         return { displayText: text, stakes: 'calm' };
     }
     const raw = match[1].toLowerCase();
     const stakes: SceneStakes = VALID_STAKES.has(raw) ? (raw as SceneStakes) : 'calm';
-    const displayText = text.replace(SCENE_STAKES_RE, '').replace(/ +$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
-    return { displayText, stakes };
+    return { displayText: stripTags(text), stakes };
 }
 
 export async function classifySceneStakes(

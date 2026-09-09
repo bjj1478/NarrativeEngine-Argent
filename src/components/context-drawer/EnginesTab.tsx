@@ -12,9 +12,33 @@ import {
     minifySelectedInventory,
     minifySelectedProfile,
 } from '../../services/turn/contextMinifier';
-import type { DieType, OutcomeBand, DiceCategory, CharacterProfile } from '../../types';
+import type { DieType, OutcomeBand, DiceCategory, CharacterProfile, RollFrequency } from '../../types';
 
 function uid(prefix: string) { return `${prefix}_${Math.random().toString(36).slice(2, 9)}`; }
+
+/**
+ * The roll-frequency dial. Each option is described by its THRESHOLD — what deserves dice —
+ * and deliberately not by an expected roll count. Printing "~1-2 per scene" here would invite
+ * the model to treat the setting as a quota to fill, which is the failure mode the whole
+ * stakes-aware pacing change is fighting. The cadence is a consequence, not a target.
+ */
+const ROLL_FREQUENCY_OPTIONS: { value: RollFrequency; label: string; detail: string }[] = [
+    {
+        value: 'contested',
+        label: 'Any contested action',
+        detail: 'Anything meeting real resistance — a lock, a fight, a risky climb, persuasion against a genuine want.',
+    },
+    {
+        value: 'consequential',
+        label: 'Only when it costs something',
+        detail: 'Only when failure leaves a mark: a wound, a burnt relationship, a door closed for good. Mere inconvenience resolves in the fiction.',
+    },
+    {
+        value: 'critical',
+        label: 'Only decisive moments',
+        detail: 'Only a conflict that could genuinely go either way, or an attempt that by rights should not be possible.',
+    },
+];
 
 export function EnginesTab() {
     const context = useAppStore((s) => s.context);
@@ -439,7 +463,59 @@ function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProp
 
             {(context.diceFairnessActive ?? true) && (
                 <div className="text-[11px] text-amber-400/70 italic px-1">
-                    ⚡ Pool mode active — pre-rolled dice injected. Turn OFF to let the AI call roll_dice on demand.
+                    ⚡ Pool mode active — pre-rolled dice injected. Its category names (Combat,
+                    Perception, Knowledge…) are handed to the writer every turn and tend to surface
+                    in the prose. Turn OFF for player-rolled resolution.
+                </div>
+            )}
+
+            {/* ── Player-rolled resolution ── Only reachable with pool mode off: the two are
+                mutually exclusive, since pool mode has already rolled everything. */}
+            {!(context.diceFairnessActive ?? true) && (
+                <div className="bg-void border border-border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-text-dim uppercase tracking-wider font-bold">
+                            Ask Me To Roll
+                        </span>
+                        <Toggle
+                            active={context.playerRollActive ?? true}
+                            onChange={() => updateContext({ playerRollActive: !(context.playerRollActive ?? true) })}
+                        />
+                    </div>
+                    <div className="text-[11px] text-text-dim/70 leading-relaxed">
+                        {(context.playerRollActive ?? true)
+                            ? 'The GM states the dice and the bar, then stops. You roll real dice and type the total — bonuses included. Nothing is tracked.'
+                            : 'The AI calls roll_dice and the engine rolls silently on its behalf.'}
+                    </div>
+
+                    {(context.playerRollActive ?? true) && (
+                        <div className="space-y-1 pt-1">
+                            <div className="text-[9px] text-text-dim uppercase tracking-wider">
+                                When to ask
+                            </div>
+                            {ROLL_FREQUENCY_OPTIONS.map(opt => {
+                                const active = (context.rollFrequency ?? 'contested') === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => updateContext({ rollFrequency: opt.value })}
+                                        className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${
+                                            active
+                                                ? 'border-terminal/50 bg-terminal/10'
+                                                : 'border-border/50 hover:border-border'
+                                        }`}
+                                    >
+                                        <div className={`text-[11px] font-bold ${active ? 'text-terminal' : 'text-text-primary'}`}>
+                                            {opt.label}
+                                        </div>
+                                        <div className="text-[10px] text-text-dim/70 leading-snug">
+                                            {opt.detail}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
 

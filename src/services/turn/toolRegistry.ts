@@ -4,6 +4,8 @@ import {
     handleNotebookTool,
     handleDiceTool,
     handleProposeInventoryTool,
+    parseRequestRollArgs,
+    formatPlayerRollDeclined,
 } from './toolHandlers';
 
 /**
@@ -88,6 +90,36 @@ const handleDice: ToolHandlerFn = (ctx) => {
     };
 };
 
+/**
+ * `request_roll` — the NON-SUSPENDING fallback.
+ *
+ * The real behaviour lives in `runGenerationStage`, which special-cases this tool by name
+ * (as it already does for `query_campaign_lore`), awaits the player's number, and builds the
+ * result with `formatPlayerRollResult`. Keeping `ToolHandlerFn` synchronous is deliberate:
+ * widening it to return a Promise would break the "handlers are pure, the registry knows
+ * nothing of store or callbacks" contract above, AND would silently break the second dispatch
+ * site in sceneContinue.ts, which calls handlers synchronously and would push
+ * `content: undefined` into a payload.
+ *
+ * This entry exists so the tool still RESOLVES on any path that cannot suspend — without it,
+ * `resolveToolHandler` returns null, the call is dropped, and the turn silently ends mid-action.
+ * On such a path we report that no roll happened rather than inventing one.
+ */
+const handleRequestRoll: ToolHandlerFn = (ctx) => {
+    const args = parseRequestRollArgs(ctx.arguments);
+    return {
+        toolResult: args
+            ? formatPlayerRollDeclined(args)
+            : JSON.stringify({
+                player_total: null,
+                source: 'malformed-request',
+                binding: 'The roll request was unusable. Do not invent a number; carry on without it.',
+            }),
+        accumulation: 'append',
+        traceResult: true,
+    };
+};
+
 const handleProposeInventory: ToolHandlerFn = (ctx) => {
     const { toolResult, proposal } = handleProposeInventoryTool(ctx.arguments);
     return {
@@ -102,6 +134,7 @@ export const TOOL_REGISTRY: Record<string, ToolHandlerFn> = {
     query_campaign_lore: handleLore,
     update_scene_notebook: handleNotebook,
     roll_dice: handleDice,
+    request_roll: handleRequestRoll,
     propose_inventory_change: handleProposeInventory,
 };
 
@@ -124,6 +157,7 @@ export function validateToolRegistry(): void {
         'query_campaign_lore',
         'update_scene_notebook',
         'roll_dice',
+        'request_roll',
         'propose_inventory_change',
     ];
     for (const name of expected) {

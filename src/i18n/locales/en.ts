@@ -219,6 +219,9 @@ export const en = {
     'hub.tagline': 'AI Game Master System',
     'hub.brand.lead': 'Narrative',
     'hub.brand.accent': 'Nexus',
+    // The fork's mark. Stored in normal case like any proper name — the hub
+    // uppercases it, as it already does for the tagline above the wordmark.
+    'hub.brand.fork': 'Argent',
     'hub.subtitle': 'Choose your world. Shape its fate.',
     'hub.delete.confirm': 'Delete this campaign? All data — chat history, lore, saves — will be lost forever.',
     'hub.delete.cancel': 'Cancel',

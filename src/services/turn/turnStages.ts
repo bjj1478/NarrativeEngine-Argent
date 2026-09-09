@@ -29,6 +29,8 @@ import { toast } from '../../components/Toast';
 import { sanitizePayloadForApi } from '../lib/payloadSanitizer';
 import { getToolDefinitions } from './toolHandlers';
 import { resolveToolHandler } from './toolRegistry';
+import type { ToolDispatchResult } from './toolRegistry';
+import { parseRequestRollArgs, formatPlayerRollResult, formatPlayerRollDeclined } from './toolHandlers';
 import { gatherContext } from './contextGatherer';
 import { tierAllows } from './aiTier';
 import { extractAndStripSceneStakes } from './sceneStakesTag';
@@ -47,6 +49,11 @@ import { blockTokenCap } from './blockEnablement';
 import { BUILTIN_IDS, getBuiltinTokenCap } from '../payload/contributions/builtins';
 
 const MAX_TOOL_CALLS_PER_TURN = 5;
+
+// Monotonic per-generation counter. Only the player-roll suspension reads it: a suspended
+// turn can outlive its own generation (the player walks away, presses Stop, sends something
+// else), and a stale resolution must not write into whatever turn is current by then.
+let activeGenerationId = 0;
 
 // ── Smart Retry v1 helpers ──────────────────────────────────────────────
 // Build the collapsed-box summary for the `precontext` field on a retryable
@@ -598,6 +605,43 @@ export async function runGenerationStage(
     let accumulatedContent = '';
     const armed = state.armedRoll;
 
+    // Stale-generation guard for the player-roll suspension below. `handleStop` clears
+    // `isStreaming`, which unlocks the composer, so the player can start a NEW turn while an
+    // old request_roll modal is still open. If that stale request then resolved, its
+    // `updateLastAssistant*` calls would scan back to the last assistant message — the NEW
+    // turn's bubble — and write into it. Bumping a module counter per generation lets the old
+    // closure notice it has been superseded and bail.
+    const generationId = ++activeGenerationId;
+
+    /**
+     * Awaits the player's dice total, and is GUARANTEED to settle.
+     *
+     * `onDone`'s promise is discarded by llmService, so an unhandled rejection here would hang
+     * the turn forever with `isStreaming` stuck true and no Retry button. Abort resolves null,
+     * a rejection resolves null, and the abort listener is always removed.
+     */
+    const awaitPlayerRoll = (req: {
+        dice: string; reason: string; successOn: string; failureMeans: string;
+    }): Promise<number | null> => {
+        const ask = callbacks.requestPlayerRoll;
+        if (!ask || abortController.signal.aborted) return Promise.resolve(null);
+        return new Promise<number | null>((resolve) => {
+            let settled = false;
+            const onAbort = () => finish(null);
+            const finish = (value: number | null) => {
+                if (settled) return;
+                settled = true;
+                abortController.signal.removeEventListener('abort', onAbort);
+                resolve(value);
+            };
+            abortController.signal.addEventListener('abort', onAbort, { once: true });
+            ask(req).then(finish, (err) => {
+                console.warn('[Turn] requestPlayerRoll rejected — continuing without a roll:', err);
+                finish(null);
+            });
+        });
+    };
+
     const executeTurn = async (currentPayload: any[], toolCallCount = 0, apiRetryCount = 0, existingMsgId?: string) => {
         if (abortController.signal.aborted) return;
 
@@ -614,14 +658,30 @@ export async function runGenerationStage(
         const allowTools = toolCallCount < MAX_TOOL_CALLS_PER_TURN && apiRetryCount < 2;
         const requestPayload = sanitizePayloadForApi(currentPayload, allowTools, provider?.modelName);
 
-        // Dice tool availability is decoupled from pool mode (diceFairnessActive).
-        // Pool mode = pre-rolled numbers injected; tool mode = AI calls roll_dice on demand.
-        // They are mutually exclusive: tool is available only when pool mode is OFF
-        // (diceFairnessActive === false) and the player hasn't manually armed a roll.
-        // When the player armed a manual roll, the resolved fact is already in the payload;
-        // offering the tool too would let the model double-roll (WO-H).
-        const allowDiceTool = context.diceFairnessActive === false && !armed;
-        const tools = allowTools ? getToolDefinitions({ allowDiceTool }) : undefined;
+        // Dice availability. THREE mutually exclusive modes, in precedence order:
+        //
+        //   pool        — diceFairnessActive: pre-rolled [DICE OUTCOMES] already in the payload.
+        //                 No tool. (This is the mode whose category names leaked into prose.)
+        //   player-roll — the GM calls request_roll, generation SUSPENDS, the player types the
+        //                 total their physical dice showed. Requires a UI to suspend into.
+        //   engine-roll — legacy roll_dice: the engine rolls silently on the model's request.
+        //
+        // A manually armed roll ("dice me") suppresses every tool: the resolved fact is already
+        // in the payload, and offering a tool as well would let the model double-roll (WO-H).
+        const diceToolsAllowed = context.diceFairnessActive === false && !armed;
+        // `playerRollActive` and `rollFrequency` are optional on GameContext and defaulted HERE
+        // rather than in migrateLegacyContext — see the note on those fields. Campaigns created
+        // before this feature therefore opt in automatically, with no migration.
+        const playerRollMode =
+            diceToolsAllowed &&
+            (context.playerRollActive ?? true) &&
+            typeof callbacks.requestPlayerRoll === 'function';
+        const tools = allowTools
+            ? getToolDefinitions({
+                allowDiceTool: diceToolsAllowed && !playerRollMode,
+                playerRollFrequency: playerRollMode ? (context.rollFrequency ?? 'contested') : undefined,
+            })
+            : undefined;
 
         callbacks.setPipelinePhase?.('generating');
         callbacks.setLoadingStatus?.(null);
@@ -652,7 +712,77 @@ export async function runGenerationStage(
                     }
 
                     const engineText = stripLLMSceneHeader(finalText);
-                    const dispatchResult = toolHandler({ arguments: toolCall.arguments, loreChunks, notebook: state.context.notebook, diceSystem: context.diceSystem });
+
+                    // `request_roll` is the one tool that SUSPENDS. Only the production of the
+                    // tool RESULT differs; everything downstream (accumulate → stamp → push →
+                    // resume after 800ms) is the shared path, so the suspension stays confined
+                    // to this block. ToolHandlerFn is deliberately left synchronous — see the
+                    // note on handleRequestRoll in toolRegistry.ts.
+                    let dispatchResult: ToolDispatchResult;
+                    const rollArgs = toolName === 'request_roll' && playerRollMode
+                        ? parseRequestRollArgs(toolCall.arguments)
+                        : null;
+
+                    if (rollArgs) {
+                        // Show the request before blocking. Stamping tool_calls WITHOUT adding
+                        // the tool message is what renders the request chip with no result yet
+                        // (ToolCallChips' `request_roll` branch shows "waiting for your roll"
+                        // until a matching tool message exists), and it means an abandoned
+                        // request leaves no persisted ephemeral orphan behind.
+                        //
+                        // `accumulatedContent` is deliberately NOT assigned here. The shared
+                        // path below runs for this tool call too — `accumulation` is 'append' —
+                        // and composes the identical string from the same two pieces. Assigning
+                        // here as well appended the pre-roll paragraph twice, into the bubble
+                        // and from there into every later prompt's history window.
+                        const preview = accumulatedContent
+                            ? `${accumulatedContent}\n\n${engineText}`
+                            : engineText;
+                        callbacks.updateLastAssistant(preview);
+                        callbacks.updateLastAssistantMessage({
+                            tool_calls: [{
+                                id: toolCall.id,
+                                type: 'function' as const,
+                                function: { name: toolName, arguments: toolCall.arguments },
+                            }],
+                            ...(reasoningContent ? { reasoning_content: reasoningContent } : {}),
+                        });
+                        callbacks.setPipelinePhase?.('awaiting-player');
+
+                        const playerTotal = await awaitPlayerRoll({
+                            dice: rollArgs.dice,
+                            reason: rollArgs.reason,
+                            successOn: rollArgs.success_on,
+                            failureMeans: rollArgs.failure_means,
+                        });
+
+                        // The player may have taken minutes. Two things can have changed.
+                        if (abortController.signal.aborted) {
+                            // Stop was pressed. Nothing downstream ran, so no branch stamps this
+                            // bubble — do it here, or the half-written turn is unrecoverable AND
+                            // commitPendingTurn discards the snapshot on the next send.
+                            stampRetryable(callbacks, assistantMsgId, ctx.gathered);
+                            return;
+                        }
+                        if (generationId !== activeGenerationId) {
+                            // A newer turn started while we were suspended. Writing now would
+                            // land in ITS bubble and payload. Drop this resolution silently.
+                            console.warn('[Turn] player roll resolved after a newer turn began — discarded');
+                            return;
+                        }
+
+                        callbacks.setPipelinePhase?.('generating');
+                        dispatchResult = {
+                            toolResult: playerTotal === null
+                                ? formatPlayerRollDeclined(rollArgs)
+                                : formatPlayerRollResult(rollArgs, playerTotal),
+                            accumulation: 'append',
+                            traceResult: true,
+                        };
+                    } else {
+                        dispatchResult = toolHandler({ arguments: toolCall.arguments, loreChunks, notebook: state.context.notebook, diceSystem: context.diceSystem });
+                    }
+
                     if (dispatchResult.accumulation === 'overwrite') {
                         accumulatedContent = engineText;
                     } else {

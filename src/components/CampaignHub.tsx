@@ -232,7 +232,19 @@ export function CampaignHub() {
                     margin: '0 0 10px', lineHeight: 1,
                 }}>
                     {t('hub.brand.lead')}{' '}
-                    <span style={{ color: 'var(--color-terminal)' }}>{t('hub.brand.accent')}</span>
+                    <span style={{ color: 'var(--color-terminal)' }}>{t('hub.brand.accent')}</span>{' '}
+                    {/* Caps + warm red so the fork reads as its own mark rather than a third
+                        word in the title. Slightly smaller and tighter-tracked than the
+                        wordmark it sits beside: at 36px, all-caps Cinzel would otherwise
+                        out-weigh the two title-case words in front of it. */}
+                    <span style={{
+                        color: 'var(--color-argent)',
+                        textTransform: 'uppercase',
+                        fontSize: '0.72em',
+                        letterSpacing: '0.14em',
+                    }}>
+                        {t('hub.brand.fork')}
+                    </span>
                 </h1>
                 <p style={{
                     fontStyle: 'italic', fontSize: 15,

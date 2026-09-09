@@ -66,7 +66,15 @@ export function useSceneContinue(messageId: string | null) {
 
         const pcName = store.context.characterProfileData?.name ?? '';
         const targetWords = computeLastSegmentWordCount(msg.content);
-        const allowDiceTool = store.context.diceFairnessActive === false;
+        // Continue never offers a dice tool under player-rolled resolution. It is a second,
+        // SYNCHRONOUS tool-dispatch site (sceneContinue.ts) with no modal to suspend into, so
+        // request_roll cannot work here — and leaving roll_dice on would let the engine roll
+        // silently behind the player's back, which is the behaviour we are removing. With this
+        // false, buildSceneContinueDirective emits its existing "do not initiate or invent dice
+        // rolls; narrate only from results already in history" line, which is exactly right.
+        const allowDiceTool =
+            store.context.diceFairnessActive === false &&
+            !(store.context.playerRollActive ?? true);
 
         if (cachedPayload) {
             // Snapshot path — append assistant + system to the cached payload.

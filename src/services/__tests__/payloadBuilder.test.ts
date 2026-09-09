@@ -626,6 +626,36 @@ describe('buildPayload — scenario 7: scene note depth splice', () => {
 });
 
 // ── Scenario 8: Thinking-mode + tool-mode ───────────────────────────────────
+// The whole receive side of the scene-stakes tag shipped without anything ever asking the
+// writer for it, so `tagPresent` was always false and the beat budget fell back to 'calm'
+// forever whenever no utility model was configured. These pin the request itself: the half
+// that was missing, and the half no other test would notice the loss of.
+describe('buildPayload — scene-stakes tag request', () => {
+    const stableContent = (settings: AppSettings): string =>
+        buildPayload({ settings, context: baseContext(), history: [], userMessage: 'Hello' })
+            .messages[0].content as string;
+
+    it('asks the writer for the tag, with the rubric', () => {
+        const content = stableContent(baseSettings());
+        expect(content).toContain('[[SCENE_STAKES: calm|tense|dangerous]]');
+        expect(content).toContain('On the LAST line of your response');
+        expect(content).toContain('never reference it in your prose');
+    });
+
+    // Deliberately NOT inside the thinking gate: the tag is cheap output, not reasoning, and
+    // gating it would leave every thinking-off campaign permanently tagless — which is the
+    // bug this fixes, reintroduced for a subset of users.
+    it('is present with thinking OFF as well as on', () => {
+        const thinkingOff = {
+            ...baseSettings(),
+            activePresetId: 'preset_off',
+            providers: [{ id: 'prov_off', modelName: 'anything', thinkingEffort: 'off' }],
+            presets: [{ id: 'preset_off', storyAIProviderId: 'prov_off' }],
+        } as unknown as AppSettings;
+        expect(stableContent(thinkingOff)).toContain('[[SCENE_STAKES:');
+    });
+});
+
 describe('buildPayload — scenario 8: thinking mode and tool mode', () => {
     it('reasoning reminder text appears in stable content when thinkingEffort is enabled', () => {
         const reasoningSettings = {
@@ -941,7 +971,52 @@ describe('buildPayload — scenario 9: smart bookkeeping vs legacy', () => {
         expect(allContent).toContain('[CHARACTER PROFILE]');
         expect(allContent).toContain('Gareth');
     });
+
+    // Both character branches must answer to the same authority for stats. Branch A
+    // (smart bookkeeping) has always gated them on profileFields; branch B shipped every
+    // stat every turn until this was fixed.
+    const branchBContext = (): GameContext => ({
+        ...baseContext(),
+        smartBookkeepingActive: false,
+        characterProfileActive: true,
+        characterProfile: {
+            identity: { name: 'Gareth', class: 'Fighter', level: 5 },
+            stats: { PWR: 14, SPD: 12 },
+            activeTraits: [{
+                id: 't1', subject: 'Gareth', category: 'party_facts', text: 'A seasoned fighter',
+                importance: 7, eventTags: ['other'], sceneEstablished: '', superseded: false, source: 'seed',
+            }],
+        },
+        characterProfileLastScene: 'Never',
+    } as unknown as GameContext);
+
+    const contentFor = (profileFields: string[] | undefined): string =>
+        buildPayload({
+            settings: baseSettings(), context: branchBContext(), history: [],
+            userMessage: 'Who am I?', profileFields,
+        }).messages.map(m => m.content as string).join('\n');
+
+    it('legacy: PC stats stay out of the prompt when the turn did not select them', () => {
+        const allContent = contentFor(['name', 'class']);
+        expect(allContent).toContain('[CHARACTER PROFILE]');
+        expect(allContent).toContain('Gareth');
+        expect(allContent).not.toContain('PWR');
+        expect(allContent).not.toContain('SPD');
+    });
+
+    it('legacy: PC stats appear when the turn selected them', () => {
+        const allContent = contentFor(['name', 'stats']);
+        expect(allContent).toContain('PWR 14');
+        expect(allContent).toContain('SPD 12');
+    });
+
+    it('legacy: no recommender result means no stats, not all of them', () => {
+        // profileFields is undefined whenever the recommender is unavailable, disallowed by
+        // tier, or throws. Failing closed matches branch A, which emits no profile block at all.
+        expect(contentFor(undefined)).not.toContain('PWR');
+    });
 });
+
 
 // ── Scenario 10: cache_control: ephemeral markers ──────────────────────────────
 describe('buildPayload — cache_control: ephemeral markers', () => {

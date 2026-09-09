@@ -34,6 +34,43 @@ function DiceChip({ args, result }: { args: Record<string, unknown>; result: Rec
     );
 }
 
+/**
+ * Player-rolled resolution (`request_roll`). Deliberately NOT DiceChip: that one reads
+ * `result.result` / `result.tier`, and `formatPlayerRollResult` returns neither — no tier is
+ * ever mapped on this path. Without its own branch this fell through to the generic wrench
+ * chip, which printed the literal string `request_roll` into the transcript.
+ *
+ * Three states, keyed on whether the matching `tool` message exists yet. The orchestrator
+ * stamps `tool_calls` BEFORE it suspends and adds the tool message only once the player
+ * answers, so "no result" is precisely "still waiting on the player".
+ */
+function PlayerRollChip({ args, result, hasResult }: {
+    args: Record<string, unknown>;
+    result: Record<string, unknown>;
+    hasResult: boolean;
+}) {
+    const dice = (result.dice ?? args.dice ?? '') as string;
+    const reason = (result.reason ?? args.reason ?? '') as string;
+    const total = result.player_total;
+    const declined = hasResult && (total === null || total === undefined);
+    return (
+        <>
+            <Dices size={11} className="text-terminal shrink-0" />
+            <span className="text-terminal/90 font-semibold">{dice ? `Roll ${dice}` : 'Roll'}</span>
+            {reason && <span className="text-text-dim/80 truncate">· {reason}</span>}
+            <span className="ml-auto flex items-center gap-1 shrink-0 tabular-nums">
+                {!hasResult ? (
+                    <span className="text-terminal/70 uppercase">waiting for your roll</span>
+                ) : declined ? (
+                    <span className="text-text-dim/60 uppercase">no roll</span>
+                ) : (
+                    <span className="text-text-primary font-bold">{String(total)}</span>
+                )}
+            </span>
+        </>
+    );
+}
+
 function LoreChip({ args, result }: { args: Record<string, unknown>; result?: string }) {
     const query = (args.query ?? '') as string;
     const found = result ? !/^no relevant lore/i.test(result.trim()) : undefined;
@@ -67,6 +104,9 @@ function ChipBody({ call, toolResult }: { call: ToolCall; toolResult?: string })
     const name = call.function.name;
     const args = safeParse(call.function.arguments);
     if (name === 'roll_dice') return <DiceChip args={args} result={safeParse(toolResult)} />;
+    if (name === 'request_roll') {
+        return <PlayerRollChip args={args} result={safeParse(toolResult)} hasResult={toolResult !== undefined} />;
+    }
     if (name === 'query_campaign_lore') return <LoreChip args={args} result={toolResult} />;
     if (name === 'update_scene_notebook') return <NotebookChip args={args} />;
     return (

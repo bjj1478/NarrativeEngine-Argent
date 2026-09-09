@@ -78,7 +78,12 @@ export function buildVolatile(opts: {
                 400,
                 CORE_FLOOR_TRAITS,
             );
-            let profileText = formatTraitsForContext(profile, selected);
+            // Stats ride the same authority the smart-bookkeeping branch above uses: the
+            // recommender's `profileFields` (already in scope — see line ~59). Without this
+            // the two branches disagreed, and this one shipped every stat every turn.
+            let profileText = formatTraitsForContext(profile, selected, {
+                includeStats: profileFields?.includes('stats') ?? false,
+            });
             const kitLine = buildPcKitLine(context.playerCharacter);
             if (kitLine) {
                 profileText = profileText.replace(

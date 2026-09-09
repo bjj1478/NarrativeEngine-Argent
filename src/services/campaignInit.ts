@@ -30,7 +30,10 @@ export const DEFAULT_CONTEXT = {
     canonStateActive: false, headerIndexActive: false, starterActive: false,
     continuePromptActive: false, inventoryActive: false, characterProfileActive: false,
     surpriseEngineActive: false, encounterEngineActive: true, worldEngineActive: true,
-    diceFairnessActive: true, sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
+    // Player-rolled resolution is the default for new campaigns: pool mode OFF (no
+    // pre-rolled [DICE OUTCOMES] tag), the GM asks and the player types the total.
+    diceFairnessActive: false, playerRollActive: true, rollFrequency: 'contested' as const,
+    sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     diceSystem: buildDefaultDiceSystem(),
     worldVibe: '',
     worldEventConfig: { initialDC: 498, dcReduction: 2, who: [] as string[], where: [] as string[], why: [] as string[], what: [] as string[] },

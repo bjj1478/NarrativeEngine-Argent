@@ -501,7 +501,14 @@ export function buildWorld(opts: {
                     const a = present[i], b = present[j];
                     const r = relationToward(a, b, relationshipMemoryEnabled);
                     if (typeof r === 'number' && r !== 0) {
-                        relationLines.push(`${a.name}\u2192${b.name}: ${r > 0 ? '+' : ''}${r}`);
+                        // Band WORDS, never the raw integer. This line used to emit `A->B: +2`,
+                        // contradicting the engine's own standing rule that affinity and
+                        // relationship reach the writer as band words and never as numbers
+                        // (see the Engine Boundary section of defaultRules.ts) — and handing
+                        // the writer a number it can read straight back out into the prose.
+                        // relationBand is the same -3..+3 mapping every other relationship
+                        // surface already goes through, and is already imported above.
+                        relationLines.push(`${a.name}\u2192${b.name}: ${relationBand(r)}`);
                     }
                 }
             }

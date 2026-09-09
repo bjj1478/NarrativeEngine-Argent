@@ -338,6 +338,10 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
             relationsBlock,
             relationshipStances,
             relationshipStanceBudget,
+            // Drives the per-turn beat budget on the writer.cot contribution. Read from the
+            // writer's own last [[SCENE_STAKES]] tag; absent (a fresh campaign) reads as calm,
+            // matching extractAndStripSceneStakes' own fallback.
+            sceneStakes: context.lastSceneStakes,
             directorBrief,
             watchdogNudge,
             absoluteCommand,

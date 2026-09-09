@@ -6,6 +6,7 @@ import { createContributionRegistry } from './registry';
 import type { ContributionModule, ContributionRegistry } from './registry';
 import type { ContributionSpec } from './types';
 import { renderRelationshipStanceBlock } from '../../npc/relationshipStance';
+import type { SceneStakes } from '../../../types';
 
 /**
  * Project 2 / WO-P2-02 — the built-in prompt contributions, as modules.
@@ -72,6 +73,8 @@ export interface FinalUserModuleInput {
     /** WO-5: scene-specific NPC readings; numbers and flat relationship arrows never enter v3. */
     relationshipStances?: readonly RelationshipStance[];
     relationshipStanceBudget?: number;
+    /** Scene stakes from the writer's own last [[SCENE_STAKES]] tag; drives the beat budget. */
+    sceneStakes?: SceneStakes;
     directorBrief?: string;
     watchdogNudge?: string;
     absoluteCommand?: string;
@@ -83,6 +86,37 @@ export interface FinalUserModuleInput {
      */
     facts?: TurnFacts;
 }
+
+/**
+ * Per-turn beat budget, keyed on the scene stakes the writer itself tagged last turn
+ * (`[[SCENE_STAKES: …]]` → `context.lastSceneStakes`, parsed in sceneStakesTag.ts). The
+ * signal already existed and was tracked but unused.
+ *
+ * This is what replaced the flat "draft 5-8 beats" quota in WRITER_COT: intense scenes
+ * hand the turn back fast, calm ones may run long. It lives here, in a contribution below
+ * the cache boundary, rather than in the stable CoT — see the PACING note in stable.ts.
+ */
+const BEAT_BUDGET: Record<SceneStakes, string> = {
+    calm:
+        '[BEAT BUDGET: 4-6 beats. The scene is calm, so it may breathe — elapsed time, travel, ' +
+        'errands and downtime can run long and cover real ground.]',
+    tense:
+        '[BEAT BUDGET: 2-3 beats, then stop. The scene is tense: end the turn the moment a ' +
+        'decision faces the player and hand the beat back rather than resolving it for them. ' +
+        'Never pad a pressured scene to fill a budget — under-running it is correct.]',
+    dangerous:
+        '[BEAT BUDGET: 2-3 beats, then stop. The scene is dangerous: keep it close and physical, ' +
+        'end on the moment that demands a response, and never resolve the danger on the player\'s ' +
+        'behalf. Never pad — under-running it is correct.]',
+};
+
+// `?? BEAT_BUDGET.calm` is not redundant with `stakes ?? 'calm'`: the first `??` only
+// catches null/undefined, so a value that is outside the union at RUNTIME — an older save,
+// a hand-edited context — indexes the record to `undefined` and gets template-interpolated
+// into the prompt as the literal string "undefined". Same words-only fallback shape as
+// agencyDigest's `BAND_PROSE[...] ?? 'moved on'`.
+export const beatBudgetLine = (stakes: SceneStakes | undefined): string =>
+    BEAT_BUDGET[stakes ?? 'calm'] ?? BEAT_BUDGET.calm;
 
 export const GM_REMINDER =
     '[GM REMINDER: NPCs push back when their wants/boundaries are crossed. Do not default to facilitation.]';
@@ -251,11 +285,16 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
         (input) => ({
             id: BUILTIN_IDS.writerCot,
             order: 200,
+            // The beat budget rides along with the invocation, so a turn either gets both or
+            // neither — a budget with no framework to apply it in would be noise. Both branches
+            // carry it: an Absolute Command overrides the framework's content, not the pacing.
             text: !isThinkingEnabled(input.settings)
                 ? ''
                 : hasAbsolute(input)
-                    ? 'Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.'
-                    : 'Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.',
+                    ? `Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.
+${beatBudgetLine(input.sceneStakes)}`
+                    : `Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.
+${beatBudgetLine(input.sceneStakes)}`,
         }),
     ),
 

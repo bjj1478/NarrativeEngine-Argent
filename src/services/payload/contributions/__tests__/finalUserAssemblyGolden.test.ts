@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { AppSettings } from '../../../../types';
+import type { AppSettings, SceneStakes } from '../../../../types';
 import { isThinkingEnabled } from '../../stable';
 import { formatAskGmBrief } from '../../../ooc/askGmHandoff';
 import { buildAbsoluteCommandBlock } from '../../../turn/absoluteCommand';
 import { assembleContributions } from '../assemble';
-import { createFinalUserRegistry, GM_REMINDER } from '../builtins';
+import { createFinalUserRegistry, GM_REMINDER, beatBudgetLine } from '../builtins';
 import type { FinalUserModuleInput } from '../builtins';
 
 /**
@@ -16,7 +16,14 @@ import type { FinalUserModuleInput } from '../builtins';
  * the flags that drove it (64 cases).
  *
  * If the migration changed the prompt by so much as one character, in any reachable
- * configuration, this fails. It also pins the debug-trace sequence, which the old code emitted
+ * configuration, this fails.
+ *
+ * DELIBERATE DIVERGENCE — stakes-aware pacing. The CoT invocation now carries a
+ * [BEAT BUDGET] line keyed on `input.sceneStakes`, which the legacy expression had no
+ * concept of. The oracle below appends it through the SAME `beatBudgetLine` helper the
+ * contribution uses — as it already does for `GM_REMINDER` — because this test's job is to
+ * pin assembly, precedence and ordering, not to re-type the block text. The pacing text
+ * itself is covered by the 'beat budget' describe block at the bottom of this file. It also pins the debug-trace sequence, which the old code emitted
  * in a different source order (watchdog → director → absolute) than the new code sorts by
  * (director → watchdog → absolute); the two agree only because the Director Brief and the
  * watchdog nudge are mutually exclusive, and that is asserted here rather than assumed.
@@ -35,6 +42,12 @@ function legacy(input: FinalUserModuleInput): { text: string; traceSources: stri
             ? 'Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.'
             : 'Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.';
 
+    // Stakes-aware pacing: the budget rides with the invocation, so a turn gets both or neither.
+    const writerCotWithBudget = writerCotNudge
+        ? `${writerCotNudge}
+${beatBudgetLine(input.sceneStakes)}`
+        : '';
+
     const watchdogNudgeActive =
         input.watchdogNudge && !input.directorBrief && !hasAbsolute ? input.watchdogNudge : '';
 
@@ -43,7 +56,7 @@ function legacy(input: FinalUserModuleInput): { text: string; traceSources: stri
     const askGmBrief = formatAskGmBrief(input.nextTurnOocBrief);
 
     const text = [
-        input.volatileBlock, writerCotNudge, directorBriefBlock, gmReminderActive,
+        input.volatileBlock, writerCotWithBudget, directorBriefBlock, gmReminderActive,
         watchdogNudgeActive, askGmBrief, input.userMessage, absoluteCommandBlock,
     ].filter(Boolean).join('\n\n');
 
@@ -189,5 +202,60 @@ describe('WO-P2-02 — precedence rules survive as declared suppression', () => 
     it('every built-in is unbounded, which is what keeps the migration byte-identical', () => {
         const specs = createFinalUserRegistry().collect({ ...base, directorBrief: 'x' });
         expect(specs.every((s) => s.budget === undefined)).toBe(true);
+    });
+});
+
+// ─── stakes-aware pacing ─────────────────────────────────────────────────────────────────────
+describe('beat budget — pacing follows the scene, not a flat quota', () => {
+    const thinking: FinalUserModuleInput = {
+        settings: thinkingOn,
+        userMessage: 'I wait.',
+        volatileBlock: '',
+    };
+
+    const cotText = (input: FinalUserModuleInput): string =>
+        createFinalUserRegistry().collect(input).find((s) => s.id === 'writer.cot')?.text ?? '';
+
+    it('a calm scene gets the long budget', () => {
+        expect(cotText({ ...thinking, sceneStakes: 'calm' })).toContain('4-6 beats');
+    });
+
+    it.each(['tense', 'dangerous'] as const)('a %s scene gets the short budget and a hard stop', (stakes) => {
+        const text = cotText({ ...thinking, sceneStakes: stakes });
+        expect(text).toContain('2-3 beats');
+        expect(text).toContain('then stop');
+        // The whole point: an intense turn must not be padded to fill the budget.
+        expect(text).toContain('Never pad');
+    });
+
+    it('absent stakes reads as calm, matching extractAndStripSceneStakes own fallback', () => {
+        expect(cotText({ ...thinking, sceneStakes: undefined })).toBe(cotText({ ...thinking, sceneStakes: 'calm' }));
+    });
+
+    // `stakes ?? 'calm'` guards null/undefined only. A value outside the union at runtime —
+    // an older save, a hand-edited context — indexed the record to `undefined` and put the
+    // literal string "undefined" in the prompt.
+    it('a stakes value outside the union reads as calm, never the string "undefined"', () => {
+        const text = cotText({ ...thinking, sceneStakes: 'urgent' as SceneStakes });
+        expect(text).toBe(cotText({ ...thinking, sceneStakes: 'calm' }));
+        expect(text).not.toContain('undefined');
+    });
+
+    it('the budget rides with the invocation — thinking off means neither', () => {
+        const text = cotText({ ...thinking, settings: thinkingOff, sceneStakes: 'dangerous' });
+        expect(text).toBe('');
+    });
+
+    it('an Absolute Command overrides the framework but NOT the pacing', () => {
+        // A command changes what the writer reasons about; it is not a licence to run long.
+        const text = cotText({ ...thinking, sceneStakes: 'dangerous', absoluteCommand: 'Be terse.' });
+        expect(text).toContain('USER ABSOLUTE COMMAND');
+        expect(text).toContain('2-3 beats');
+    });
+
+    it('no flat 5-8 beat quota survives anywhere in the invocation', () => {
+        for (const stakes of ['calm', 'tense', 'dangerous'] as const) {
+            expect(cotText({ ...thinking, sceneStakes: stakes })).not.toContain('5-8');
+        }
     });
 });
