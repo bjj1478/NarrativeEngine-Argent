@@ -36,12 +36,13 @@
 // Arc was enabled. Arc's REAL surfacing path goes through
 // `ctx.write.updateContext({ arcDigest })` in `compute.js:446`, which the
 // world builder reads at `src/services/payload/world.ts:560` and emits as
-// `[WORLD UNDERCURRENT]\n${arcDigest}` — a host-owned, host-coupled path.
+// `[WORLD PRESSURES — developing situations]` wrapping ${arcDigest} — a
+// host-owned, host-coupled path.
 //
 // Phase 5.1's macro registry COULD have registered `arcSurface` as a macro,
 // but doing so would require exposing `context.arcDigest` on `ModData` (a
 // new API surface) just to duplicate the world block `world.ts:560` already
-// emits — emitting `[WORLD UNDERCURRENT]` twice (once from the world
+// emits — emitting `[WORLD PRESSURES]` twice (once from the world
 // builder, once from the macro at order 820) would be a regression, not a
 // fix. The `arcDigest` → `world.ts:560` path is load-bearing AND
 // host-coupled; Phase 8.3 ("logic and prompt move") owns moving that path
@@ -331,7 +332,7 @@ function setPhase(phase) {
 //
 // The Arc Engine runs ONE arc. A second arc spawned alongside the first does
 // not add a second story — it adds a second voice whispering into
-// `[WORLD UNDERCURRENT]` every scene, and the GM gets two unrelated systemic
+// `[WORLD PRESSURES]` every scene, and the GM gets two unrelated systemic
 // pressures to weave at once. `MAX_ACTIVE_ARCS = 3` exists in `compute.js` and
 // is read by nothing; the only description of it as a gate is a comment in the
 // host's `arcSpawn.ts`, describing the automatic seam spawn that was deleted

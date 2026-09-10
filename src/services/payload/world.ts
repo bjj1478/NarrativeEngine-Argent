@@ -600,7 +600,11 @@ export function buildWorld(opts: {
         worldBlocks.push({ source: 'Agency Digest', content: text, tokens: countTokens(text), reason: 'Off-screen NPC agency tick digest' });
     }
     if (arcDigest) {
-        const text = `[WORLD UNDERCURRENT]\n${arcDigest}`;
+        // Block name and shape match mobile (payloadWorldContext.ts) so a single ruleset
+        // reads correctly on both apps. Every shipped and community ruleset documents this
+        // block as [WORLD PRESSURES]; the parity port renamed it here and nothing followed.
+        // The [END ...] terminator stops the arc lines bleeding into the next world block.
+        const text = `[WORLD PRESSURES — developing situations]\n${arcDigest}\n[END WORLD PRESSURES]`;
         worldBlocks.push({ source: 'Arc Digest', content: text, tokens: countTokens(text), reason: 'Arc Engine surface line' });
     }
 

@@ -2,7 +2,7 @@
  * The Arc Engine runs ONE arc at a time.
  *
  * A second arc alongside the first is not a second story — both tick every
- * scene and both push a line into `[WORLD UNDERCURRENT]`, so the GM is handed
+ * scene and both push a line into `[WORLD PRESSURES]`, so the GM is handed
  * two unrelated systemic pressures to weave at once. `MAX_ACTIVE_ARCS = 3`
  * lived in `compute.js` and was read by NOTHING: `arcWorldState` never
  * consulted it, and the only description of it as a gate was a comment in the

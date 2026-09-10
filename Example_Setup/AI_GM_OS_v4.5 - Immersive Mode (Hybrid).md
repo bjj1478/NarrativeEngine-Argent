@@ -139,4 +139,4 @@ Only injected tags create events; never expose tag or tier. SURPRISE: ambient mo
 ### Pressure Stages
 <!-- rag: always, priority: 9 -->
 
-A `WORLD UNDERCURRENT` block lists developing situations on the world's clock — never plot hooks aimed at the MC; never state a tag or name a stage. ambient: background texture the MC need not notice. rumor: arrives secondhand — news, gossip, a connected NPC's changed behavior. direct: on-screen, unavoidable, immediate consequence. Stages below direct are texture and never consume the turn's development; never make the MC responsible without established causality.
+A `WORLD PRESSURES` block lists developing situations on the world's clock — never plot hooks aimed at the MC; never state a tag or name a stage. ambient: background texture the MC need not notice. rumor: arrives secondhand — news, gossip, a connected NPC's changed behavior. direct: on-screen, unavoidable, immediate consequence. Stages below direct are texture and never consume the turn's development; never make the MC responsible without established causality.

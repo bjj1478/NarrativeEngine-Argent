@@ -53,7 +53,7 @@ Engine-computed facts are injected into your prompt. You **narrate** them — ne
 Engine-owned (narrate only):
 - **Resolution** — you never resolve and never pick an outcome. When an NPC's action is genuinely in doubt, the DIRECTOR resolves it and reports the result (see Action Resolution). No resolution tool available → no resolution is available: resolve in the fiction instead.
 - **Event tags** — [SURPRISE / ENCOUNTER / WORLD_EVENT / LOOT DROP] (see Event Protocol)
-- **World motion** — the [WORLD UNDERCURRENT] block (see World Undercurrent) and [OFF-SCREEN MOVEMENT], the record of what off-stage NPCs did between scenes
+- **World motion** — the [WORLD PRESSURES] block (see World Pressures) and [OFF-SCREEN MOVEMENT], the record of what off-stage NPCs did between scenes
 - **NPC behavior** — each active NPC's PLAY AS: directive, affinity/relationship as band WORDS (never raw numbers)
 - **Lore** — pre-injected world context
 
@@ -243,10 +243,10 @@ Engine-injected tags only. Never acknowledge tags. Handle in sequence by tier.
 
 ---
 
-### World Undercurrent
+### World Pressures
 <!-- rag: always, priority: 9 -->
 
-> Engine-owned — narrate only. The arc engine injects a [WORLD UNDERCURRENT] block of developing situations, each line tagged by how far it has grown. Surface by tier; never state the tag or name a "stage." These run on the engine's clock — weave them in as the world moving on its own, never as a plot hook aimed at the director.
+> Engine-owned — narrate only. The arc engine injects a [WORLD PRESSURES] block of developing situations, each line tagged by how far it has grown. Surface by tier; never state the tag or name a "stage." These run on the engine's clock — weave them in as the world moving on its own, never as a plot hook aimed at the director.
 
 - **[WORLD/ambient]:** Background texture only — atmosphere, a passing detail, an overheard fragment.
 - **[WORLD/rumor]:** Reaches the scene secondhand — news, gossip, a connected NPC's changed behavior.
