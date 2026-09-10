@@ -1,4 +1,4 @@
-import type { ChatMessage, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, TimelineEvent, DivergenceRegister, DivergenceEntry, ArchiveChapter, SceneEvent, SceneEventType } from '../../types';
+import type { ChatMessage, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, TimelineEvent, DivergenceRegister, DivergenceEntry, ArchiveChapter, SceneEvent, SceneEventType, SceneStakes } from '../../types';
 import { countTokens } from '../infrastructure/tokenizer';
 import { buildDriftAlert, buildKnowledgeBoundary, buildReactionMenuLine } from '../npc/npcBehaviorDirective';
 import { relationBand, describeHex } from '../npc/agency/agencyBands';
@@ -135,6 +135,10 @@ export function buildWorld(opts: {
     npcBudgetFloor: number;
     plannerEventTypes?: SceneEventType[];
     matureMode?: boolean;
+    /** `context.lastSceneStakes` — selects which halves of the reaction table are in play. */
+    sceneStakes?: SceneStakes;
+    /** `settings.debugMode` — console-traces each NPC's reaction selection. */
+    debugReactions?: boolean;
     isDebug: boolean;
     collector: TraceCollector;
     // WO-11: synopsis-tier scenes surfaced verbatim below the cache boundary
@@ -169,6 +173,8 @@ export function buildWorld(opts: {
         npcBudgetFloor,
         plannerEventTypes: plannerEventTypesOpt,
         matureMode,
+        sceneStakes,
+        debugReactions,
         isDebug,
         collector,
         elevatedScenes,
@@ -483,11 +489,15 @@ export function buildWorld(opts: {
                 }
                 // Reaction menu (Phase 2 §9.1) — on-stage NPCs only; the engine-scored menu is the
                 // anti-sycophancy forcing function and is meaningful only for NPCs actually in the
-                // scene. matureMode threads the same gate the want draws use; context stays
-                // 'peaceful' until encounter/combat state is available here. The repression event is
-                // discarded (read path) — booking is once-per-turn in postTurnPipeline (WO-3).
+                // scene. matureMode threads the same gate the want draws use. `sceneStakes` picks
+                // which halves of the table are in play — until it was wired this call fell through
+                // to the 'peaceful' default and the whole dangerous half was unreachable. The
+                // repression event is discarded (read path) — booking is once-per-turn in
+                // postTurnPipeline (WO-3).
                 if (onStageSet.has(npc.id)) {
-                    const menuLine = buildReactionMenuLine(npc, { matureMode, relationshipMemoryEnabled });
+                    const menuLine = buildReactionMenuLine(npc, {
+                        matureMode, relationshipMemoryEnabled, sceneStakes, debug: debugReactions,
+                    });
                     if (menuLine) extParts.push(menuLine);
                 }
                 const extLine = extParts.length > 0 ? extParts.join(' | ') : '';

@@ -812,7 +812,7 @@ describe('buildPayload — scenario 8: thinking mode and tool mode', () => {
     // The load-bearing property of the two-mode design, in executable form.
     //
     // Turning dice off must NOT vary the system prompt. Every "ask the player for a roll"
-    // imperative lives in the request_roll tool's own description, so withholding the tool is
+    // imperative lives in the request_outcome tool's own description, so withholding the tool is
     // what withholds the instructions — which means this block, the FIRST system message, can
     // carry `cache_control: ephemeral` and stay byte-constant across the toggle. Were the
     // ruleset made mode-aware instead, `diceFairnessActive` would become a cache-key input and

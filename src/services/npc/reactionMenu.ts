@@ -1,4 +1,4 @@
-import type { HexAxis, NPCEntry, PersonalityHex } from '../../types';
+import type { HexAxis, NPCEntry, PersonalityHex, SceneStakes } from '../../types';
 import { REACTION_VOCAB, type ReactionEntry } from './agency/agencyPools';
 import { pcRelationOf } from './affinityAccess';
 
@@ -26,6 +26,46 @@ const TRAIT_BONUS    = 2;             // per matching traitKey
 const RELATION_CLOSE = 2;             // pcRelation >= this counts as a "close" bond (loyalty gates engage)
 
 export type ReactionContext = 'peaceful' | 'dangerous';
+
+/**
+ * Which halves of the table a scene may draw from.
+ *
+ * `SceneStakes` is ternary and `ReactionContext` is binary, so `tense` is the only real
+ * decision. It maps to BOTH: a standoff can plausibly produce a warm plea or a drawn weapon,
+ * and letting scoring plus the trait gates choose between them is the whole point of the menu.
+ * Collapsing tense onto one side loses that — onto `peaceful` and the dark half stays dark
+ * (only an explicitly `dangerous` tag would ever reach it, which is rare in play), onto
+ * `dangerous` and warmth, mercy and secret-sharing vanish the moment a scene tightens.
+ *
+ * Absent stakes read as `calm`, matching `agencyEngine`'s `?? 'calm'`.
+ */
+export function contextsForStakes(stakes?: SceneStakes): ReactionContext[] {
+    switch (stakes) {
+        case 'dangerous': return ['dangerous'];
+        case 'tense':     return ['peaceful', 'dangerous'];
+        default:          return ['peaceful'];
+    }
+}
+
+/**
+ * Why a reaction did not make the menu, and how everything that did was scored. Built on the
+ * way through `selectReactions` so the log reports what actually happened rather than a second
+ * implementation's guess at it.
+ */
+export type ReactionDiagnostics = {
+    npcId: string;
+    npcName: string;
+    contexts: ReactionContext[];
+    matureMode: boolean;
+    pcRel: number;
+    hex: PersonalityHex | undefined;
+    traits: string[];
+    /** Entries excluded before scoring, each with the rule that excluded them. */
+    excluded: { text: string; reason: string }[];
+    /** Everything that survived, highest first, flagged with whether it reached the menu. */
+    scored: { text: string; score: number; tier: string; context: ReactionContext; surfaced: boolean }[];
+    menu: string[];
+};
 
 /**
  * Fit score for a reaction against an NPC's hex+traits AND their relationship to the PC.
@@ -101,17 +141,59 @@ export function passesGate(r: ReactionEntry, npc: NPCEntry, pcRel: number, matur
  */
 export function buildReactionMenu(
     npc: NPCEntry,
-    context: ReactionContext,
+    context: ReactionContext | ReactionContext[],
     rng: () => number = Math.random,
     matureMode: boolean = false,
     relationshipMemoryEnabled = false,
 ): string[] {
-    // Legacy NPC with no hex → no engine menu (directive omits the line).
-    if (!npc.personalityHex) return [];
+    return selectReactions(npc, context, rng, matureMode, relationshipMemoryEnabled).menu;
+}
 
-    const pcRel = pcRelationOf(npc, relationshipMemoryEnabled);
-    const eligible = REACTION_VOCAB.filter(r => r.context === context && passesGate(r, npc, pcRel, matureMode));
-    if (eligible.length === 0) return [];
+/**
+ * The selection itself, plus the diagnostics the reaction log reports.
+ *
+ * `buildReactionMenu` delegates here rather than the log re-deriving anything: a second
+ * implementation of the gate-and-score walk would drift from this one, and a log that lies
+ * about why a reaction was excluded is worse than no log.
+ *
+ * `context` accepts a list so a `tense` scene can draw from both halves of the table — see
+ * `contextsForStakes`.
+ */
+export function selectReactions(
+    npc: NPCEntry,
+    context: ReactionContext | ReactionContext[],
+    rng: () => number = Math.random,
+    matureMode: boolean = false,
+    relationshipMemoryEnabled = false,
+): { menu: string[]; diag: ReactionDiagnostics } {
+    const contexts = Array.isArray(context) ? context : [context];
+    const pcRel = npc.personalityHex ? pcRelationOf(npc, relationshipMemoryEnabled) : 0;
+    const diag: ReactionDiagnostics = {
+        npcId: npc.id,
+        npcName: npc.name,
+        contexts,
+        matureMode,
+        pcRel,
+        hex: npc.personalityHex,
+        traits: npc.traits ?? [],
+        excluded: [],
+        scored: [],
+        menu: [],
+    };
+
+    // Legacy NPC with no hex → no engine menu (directive omits the line).
+    if (!npc.personalityHex) {
+        diag.excluded.push({ text: '(all)', reason: 'npc has no personalityHex' });
+        return { menu: [], diag };
+    }
+
+    const eligible: typeof REACTION_VOCAB[number][] = [];
+    for (const r of REACTION_VOCAB) {
+        if (!contexts.includes(r.context)) continue;   // wrong half of the table; not worth logging
+        if (passesGate(r, npc, pcRel, matureMode)) { eligible.push(r); continue; }
+        diag.excluded.push({ text: r.text, reason: gateRefusalReason(r, npc, pcRel, matureMode) });
+    }
+    if (eligible.length === 0) return { menu: [], diag };
 
     const scored = eligible
         .map(r => ({ r, s: scoreReaction(r, npc, pcRel) }))
@@ -136,5 +218,38 @@ export function buildReactionMenu(
         const text = top[i].text;
         if (!result.includes(text)) result.push(text);
     }
-    return result;
+
+    diag.menu = result;
+    diag.scored = scored.map(({ r, s }) => ({
+        text: r.text, score: s, tier: r.tier, context: r.context, surfaced: result.includes(r.text),
+    }));
+    return { menu: result, diag };
+}
+
+/**
+ * Which clause of `passesGate` refused this entry. Reporting-only — the gate itself is the
+ * authority, and this is called ONLY after `passesGate` has already said no, so the fallback
+ * at the bottom should be unreachable.
+ */
+function gateRefusalReason(
+    r: ReactionEntry,
+    npc: NPCEntry,
+    pcRel: number,
+    matureMode: boolean,
+): string {
+    if (r.tier === 'mature' && !matureMode) return 'mature tier, Mature Mode off';
+    const traitSet = new Set(npc.traits ?? []);
+    const gate = r.gate;
+    if (gate?.requireTraitAny?.length && !gate.requireTraitAny.some(t => traitSet.has(t))) {
+        return `needs one of: ${gate.requireTraitAny.join(', ')}`;
+    }
+    if (gate?.forbidTraitAny?.length) {
+        const hit = gate.forbidTraitAny.filter(t => traitSet.has(t));
+        if (hit.length > 0) return `forbidden by trait: ${hit.join(', ')}`;
+    }
+    if (gate?.forbidTraitWhenClose?.length && pcRel >= RELATION_CLOSE) {
+        const hit = gate.forbidTraitWhenClose.filter(t => traitSet.has(t));
+        if (hit.length > 0) return `forbidden while close (rel ${pcRel}) by: ${hit.join(', ')}`;
+    }
+    return 'gated';
 }

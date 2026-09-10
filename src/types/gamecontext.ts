@@ -101,25 +101,68 @@ export type DiceSystemConfig = {
     // The 3-gate RollDefinition is per-roll (dice me modal / roll_dice tool args), not global.
 };
 
-// How readily the GM asks the player for a roll. A THRESHOLD for what deserves dice,
-// not a target count. Consumed only by getToolDefinitions (it selects request_roll's
-// "when to call me" paragraph). Optional + read-site default (`?? 'contested'`) so no
-// campaign migration is needed — migrateLegacyContext is deliberately untouched.
+// How readily the GM asks the player to resolve something. A THRESHOLD for what deserves
+// asking, not a target count. Consumed only by getToolDefinitions (it selects
+// request_outcome's "when to call me" paragraph). Optional + read-site default
+// (`?? 'contested'`) so no campaign migration is needed — migrateLegacyContext is
+// deliberately untouched.
 export type RollFrequency =
     | 'contested'       // any action meeting real resistance (default)
     | 'consequential'   // only when failure imposes a real, lasting cost
     | 'critical';       // only decisive conflicts and near-impossible attempts
 
+// How hard the GM judges the attempt, estimated BEFORE it can see the player's answer. This
+// replaced the die plus the numeric bar: a label carries the same pre-commitment without
+// assuming a dice size, a threshold, or any particular ruleset.
+//
+// Declared as a const tuple, not a bare union, because three places need the values at
+// runtime — the tool's JSON-schema `enum`, the parser's coercion, and the modal's badge —
+// and a second hand-written list is a list that drifts. Ordered easiest to hardest; the
+// modal and the fallback weights both rely on that order.
+export const OUTCOME_DIFFICULTIES = ['trivial', 'easy', 'average', 'hard', 'impossible'] as const;
+export type OutcomeDifficulty = typeof OUTCOME_DIFFICULTIES[number];
+
 /**
- * A pending player-rolled resolution, as shown in the roll modal. `successOn` and
- * `failureMeans` are the bar the GM committed to BEFORE it could see the number — they are
+ * What the player reports back. The load-bearing split is fail/success, not the consequence
+ * rider: any `fail*` means the attempted action does NOT happen, any `success*` means it
+ * fundamentally does and the GM carries on. What "with consequence" MEANS is deliberately not
+ * the engine's business (design goal 5) — it only needs to know which of the four came back.
+ *
+ * Ordered worst to best, which is the order the modal presents them in.
+ */
+export const PLAYER_OUTCOMES = [
+    'fail',
+    'fail_with_consequence',
+    'success_with_consequence',
+    'success',
+] as const;
+export type PlayerOutcome = typeof PLAYER_OUTCOMES[number];
+
+/**
+ * A pending player-resolved action, as shown in the outcome modal. `difficulty` and
+ * `failureMeans` are what the GM committed to BEFORE it could see the answer — they are
  * displayed so the player can see the terms are fixed in advance, not chosen afterwards.
  */
-export type PlayerRollRequest = {
-    dice: string;
+export type PlayerOutcomeRequest = {
     reason: string;
-    successOn: string;
+    difficulty: OutcomeDifficulty;
     failureMeans: string;
+};
+
+/**
+ * What the outcome modal hands back. Two values, not one, because the modal also carries the
+ * Consequence field — drawn from `context.consequences`, rerollable, and freely editable.
+ *
+ * The consequence travels even for a plain `fail` / `success`, where it is irrelevant. That is
+ * deliberate: the modal reports what the player was looking at, and exactly one place —
+ * `formatPlayerOutcomeResult` — decides whether it matters. Filtering it out in the UI as well
+ * would put that rule in two places, to drift apart later.
+ */
+export type PlayerOutcomeResolution = {
+    outcome: PlayerOutcome;
+    /** The Consequence field verbatim, `''` when blank. Ignored unless `outcome` carries the
+     *  `_with_consequence` rider. */
+    consequence: string;
 };
 
 // Player-called "dice me" arm request (WO-H). Resolved at send time so the result is
@@ -260,17 +303,18 @@ export type GameContext = {
     encounterEngineActive: boolean;
     worldEngineActive: boolean;
     /**
-     * "Ask To Roll" — the one dice mode. ON (the default) offers the `request_roll` tool: the
-     * GM states the die and the bar, generation suspends, and the player types the total their
-     * physical dice showed. OFF means no dice at all — no tool, and therefore no instruction to
-     * ask for one, since every "ask for a roll" imperative lives in that tool's description.
+     * "Ask To Resolve" — the one resolution mode. ON (the default) offers the `request_outcome`
+     * tool: the GM states what is attempted and how hard it judges it, generation suspends, and
+     * the player picks one of four outcomes. OFF means nothing is ever asked — no tool, and
+     * therefore no instruction to ask, since every "ask the player" imperative lives in that
+     * tool's description.
      *
      * The name is historical. It used to mean the opposite thing (an engine-pre-rolled
      * `[DICE OUTCOMES]` pool); it is kept as the key so no save needs rewriting, and the UI
-     * reads "Ask To Roll". The one-time value flip lives in migrateLegacyContext.
+     * reads "Ask To Resolve". The one-time value flip lives in migrateLegacyContext.
      */
     diceFairnessActive: boolean;
-    /** Threshold for what deserves dice. Absent reads as 'contested' at the use site. */
+    /** Threshold for what deserves asking. Absent reads as 'contested' at the use site. */
     rollFrequency?: RollFrequency;
     sceneNote: string;
     sceneNoteActive: boolean;

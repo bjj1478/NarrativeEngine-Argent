@@ -35,16 +35,61 @@ function DiceChip({ args, result }: { args: Record<string, unknown>; result: Rec
 }
 
 /**
- * Player-rolled resolution (`request_roll`). Deliberately NOT DiceChip: that one reads
- * `result.result` / `result.tier`, and `formatPlayerRollResult` returns neither — no tier is
- * ever mapped on this path. Without its own branch this fell through to the generic wrench
- * chip, which printed the literal string `request_roll` into the transcript.
+ * Player-resolved action (`request_outcome`). Deliberately NOT DiceChip: that one reads
+ * `result.result` / `result.tier`, and this path maps no tier and carries no number at all.
+ * Without its own branch this fell through to the generic wrench chip, which printed the raw
+ * tool name into the transcript.
  *
  * Three states, keyed on whether the matching `tool` message exists yet. The orchestrator
  * stamps `tool_calls` BEFORE it suspends and adds the tool message only once the player
  * answers, so "no result" is precisely "still waiting on the player".
  */
-function PlayerRollChip({ args, result, hasResult }: {
+const OUTCOME_CHIP_LABELS: Record<string, string> = {
+    fail: 'fail',
+    fail_with_consequence: 'fail + cost',
+    success_with_consequence: 'success + cost',
+    success: 'success',
+};
+
+function PlayerOutcomeChip({ args, result, hasResult }: {
+    args: Record<string, unknown>;
+    result: Record<string, unknown>;
+    hasResult: boolean;
+}) {
+    const difficulty = (result.difficulty ?? args.difficulty ?? '') as string;
+    const reason = (result.reason ?? args.reason ?? '') as string;
+    const outcome = typeof result.outcome === 'string' ? result.outcome : null;
+    const happens = result.action_happens === true;
+    return (
+        <>
+            <Dices size={11} className="text-terminal shrink-0" />
+            <span className="text-terminal/90 font-semibold">
+                {difficulty ? `Resolve · ${difficulty}` : 'Resolve'}
+            </span>
+            {reason && <span className="text-text-dim/80 truncate">· {reason}</span>}
+            <span className="ml-auto flex items-center gap-1 shrink-0">
+                {!hasResult ? (
+                    <span className="text-terminal/70 uppercase">waiting for you</span>
+                ) : !outcome ? (
+                    <span className="text-text-dim/60 uppercase">unresolved</span>
+                ) : (
+                    <span className={`font-bold uppercase ${happens ? 'text-terminal' : 'text-amber-400'}`}>
+                        {OUTCOME_CHIP_LABELS[outcome] ?? outcome}
+                    </span>
+                )}
+            </span>
+        </>
+    );
+}
+
+/**
+ * LEGACY `request_roll` — the pre-Argent-outcome shape, kept only so saved transcripts still
+ * render. That tool asked for a die and a numeric bar and came back with `player_total`;
+ * nothing emits it any more. Dropping this branch would send every archived roll through the
+ * generic wrench chip, which prints the raw tool name — exactly the machinery goal 1 wants
+ * off the page.
+ */
+function LegacyPlayerRollChip({ args, result, hasResult }: {
     args: Record<string, unknown>;
     result: Record<string, unknown>;
     hasResult: boolean;
@@ -143,8 +188,11 @@ function ChipBody({ call, toolResult }: { call: ToolCall; toolResult?: string })
     const name = call.function.name;
     const args = safeParse(call.function.arguments);
     if (name === 'roll_dice') return <DiceChip args={args} result={safeParse(toolResult)} />;
+    if (name === 'request_outcome') {
+        return <PlayerOutcomeChip args={args} result={safeParse(toolResult)} hasResult={toolResult !== undefined} />;
+    }
     if (name === 'request_roll') {
-        return <PlayerRollChip args={args} result={safeParse(toolResult)} hasResult={toolResult !== undefined} />;
+        return <LegacyPlayerRollChip args={args} result={safeParse(toolResult)} hasResult={toolResult !== undefined} />;
     }
     if (name === 'query_campaign_lore') return <LoreChip args={args} result={toolResult} />;
     if (name === 'update_scene_notebook') return <NotebookChip args={args} />;

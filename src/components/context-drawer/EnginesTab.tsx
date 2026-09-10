@@ -27,8 +27,8 @@ const POPULATE_CATEGORIES: Record<PopulateField, LoreCategory[]> = {
 };
 
 /**
- * The roll-frequency dial. Each option is described by its THRESHOLD — what deserves dice —
- * and deliberately not by an expected roll count. Printing "~1-2 per scene" here would invite
+ * The ask-frequency dial. Each option is described by its THRESHOLD — what deserves asking —
+ * and deliberately not by an expected count. Printing "~1-2 per scene" here would invite
  * the model to treat the setting as a quota to fill, which is the failure mode the whole
  * stakes-aware pacing change is fighting. The cadence is a consequence, not a target.
  */
@@ -382,7 +382,9 @@ export function EnginesTab() {
                             World-specific costs of a miss, seeded from your lore file's consequence
                             tables. One per line — these are whole phrases, not tags, so they are
                             never split on commas. Populate adds to the list rather than replacing it.
-                            Nothing draws from this list yet.
+                            The resolve prompt draws one of these at random into its Consequence
+                            field, where you can reroll it or type your own; it is used when you pick
+                            an outcome <span className="text-text-dim">with consequence</span>.
                         </p>
                         <div className="flex flex-col">
                             <label className="text-[12px] text-text-dim uppercase tracking-wider mb-1 flex justify-between items-center">
@@ -437,12 +439,12 @@ export function EnginesTab() {
     );
 }
 
-// ─── Ask To Roll Section ───────────────────────────────────────────────
+// ─── Ask To Resolve Section ────────────────────────────────────────────
 //
-// The one dice mode. ON: the GM states the die and the bar, generation suspends, and the
-// player rolls real dice and types the total. OFF: no dice at all — no tool is offered, and
-// because every "ask the player to roll" imperative lives in that tool's own description,
-// withholding the tool is also what stops the model being told to ask.
+// The one resolution mode. ON: the GM states what is attempted and how hard it judges it,
+// generation suspends, and the player picks one of four outcomes. OFF: nothing is ever asked
+// — no tool is offered, and because every "ask the player" imperative lives in that tool's
+// own description, withholding the tool is also what stops the model being told to ask.
 //
 // The stored field is still `diceFairnessActive`, which used to select the opposite thing (an
 // engine-pre-rolled `[DICE OUTCOMES]` pool). The key is kept so no save needs rewriting; the
@@ -450,9 +452,9 @@ export function EnginesTab() {
 //
 // The die-type/outcome-band registry and the category→die map that used to live here are gone
 // with pool mode: bands existed to turn a rolled number into a label like "Triumph", which is
-// precisely the machinery the player-rolled path refuses to compute. "Dice me" still needs a
-// die to roll, so the built-in registry from buildDefaultDiceSystem() remains — it is just no
-// longer editable, because nothing reads the parts you could edit.
+// precisely the machinery this path refuses to compute. "Dice me" still needs a die to roll,
+// so the built-in registry from buildDefaultDiceSystem() remains — it is just no longer
+// editable, because nothing reads the parts you could edit.
 
 type DiceFairnessSectionProps = {
     context: ReturnType<typeof useAppStore.getState>['context'];
@@ -468,7 +470,7 @@ function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProp
                 <div className="flex items-center gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full ${askToRoll ? 'bg-terminal' : 'bg-border'}`} />
                     <span className="text-[13px] text-text-primary font-bold uppercase tracking-wider">
-                        Ask To Roll
+                        Ask To Resolve
                     </span>
                 </div>
                 <Toggle active={askToRoll} onChange={() => updateContext({ diceFairnessActive: !askToRoll })} />
@@ -476,8 +478,8 @@ function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProp
 
             <div className="text-[11px] text-text-dim/70 leading-relaxed">
                 {askToRoll
-                    ? 'The GM states the dice and the bar, then stops. You roll real dice and type the total — bonuses included. The bar is committed to before the number exists, and nothing is tracked.'
-                    : 'No dice. The GM narrates outcomes directly and is never asked to call for a roll.'}
+                    ? 'The GM states what is attempted, how hard it judges it, and what a failure costs, then stops. You resolve it however you like — dice, cards, an oracle — and pick one of four outcomes. The difficulty is committed to before you answer, and nothing is tracked.'
+                    : 'Nothing is ever asked. The GM narrates outcomes directly and is never told to stop for you.'}
             </div>
 
             {askToRoll && (

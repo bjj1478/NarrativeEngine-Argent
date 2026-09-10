@@ -37,7 +37,7 @@ Honest state of the tree, not a roadmap.
 |---|---|
 | Memory, archive, condensation | Stable — inherited from upstream, unchanged |
 | NPC agency, goals, relationships | Stable — inherited from upstream, unchanged |
-| Ask To Roll resolution | **Reworked in this fork.** The pre-rolled pool is removed; `request_roll` is the only dice path |
+| Ask To Resolve | **Reworked in this fork.** The pre-rolled pool is removed; `request_outcome` is the only resolution path, and it is system-agnostic — no die, no threshold, no number |
 | Character sheet & creation | **Reworked in this fork.** AI-guided, no point-buy, condition staging instead of stat blocks |
 | Narrative event engines | Working. Seeds are parsed from your lore file's Engine Seed Tags |
 | World Map | **Unfinished — v0.3.0-wip.** Ships enabled because a half-built map is more useful than a hidden one. Read [`public/bundled-mods/worldmap/STATUS.md`](public/bundled-mods/worldmap/STATUS.md) before relying on it |
@@ -185,32 +185,92 @@ Each list needs **at least 3 entries** or the engine falls back to its genre-neu
 
 ---
 
-## Ask To Roll
+## Ask To Resolve
 
 Argent's resolution system. The engine does not roll behind the narration — it asks, and waits.
 
-When the GM judges an action uncertain it calls `request_roll` and stops, stating four things:
+It also does not assume your system. There is no die, no threshold and no number anywhere on this
+path; whether you play with 2d6, a d20, cards, or an oracle deck is entirely your business, and
+the engine never learns which.
 
-- **the die** — `2d6`, `1d20`, whatever the ruleset uses
+When the GM judges an action uncertain it calls `request_outcome` and stops, stating three things:
+
 - **the reason** — why this is in doubt, in world terms
-- **the bar** — `7+`. Committed to *before* the number exists, so it cannot be bent to suit the result
-- **what a miss costs** — named up front, not invented afterwards
+- **the difficulty** — `trivial`, `easy`, `average`, `hard` or `impossible`. Committed to *before*
+  you answer, so it cannot be bent to suit the result
+- **what a failure costs** — named up front, not invented afterwards
 
-You roll physical dice, add your own bonuses, and type one total. The GM narrates the outcome as cause in the world and never names the die, the bar, or the bonus.
+You resolve it however your table does, then pick one of four outcomes:
 
-**If you would rather not reach for dice**, the "dice me" modal rolls for you: pick a die type, a modifier (advantage / disadvantage / none), a count, and how the dice aggregate, then confirm. That *arms* the roll — the app resolves it at send time and asserts the result as fact. It is an explicit opt-in, and the only path by which the app rolls at all.
+| Outcome | What it means |
+|---|---|
+| **Fail** | The attempted action does not happen |
+| **Fail with consequence** | It does not happen, and the stated cost lands |
+| **Success with consequence** | It happens, but a cost rides along |
+| **Success** | It happens, as attempted |
 
-**Roll frequency** is a threshold, not a quota. Three settings in Engine Tuning:
+Any *fail* means the action does not happen — not a near-miss that lands anyway, and not the same
+thing achieved by another route in the same breath. Any *success* means it fundamentally does, and
+the GM carries the scene on from there. What a *consequence* costs belongs to your ruleset and
+world docs, per genre — the engine only needs to know which of the four came back.
 
-| Setting | What deserves dice |
+The GM narrates the result as cause in the world and never names the difficulty, the outcome, a
+die, or a bonus.
+
+### Consequences
+
+The two *with consequence* outcomes are where the cost gets named. The resolve prompt carries a
+**Consequence** field: it opens with one entry drawn at random from the campaign's list, a reroll
+button beside it draws another, and the field is freely editable — so you can take the draw,
+swap it, or write your own.
+
+The list lives in **Engine Tuning → Costs of a Miss**, one whole phrase per line. It is seeded
+from your lore file's consequence tables and can be extended by Populate. The documented shape is
+a label and what it costs:
+
+```
+Noise — Not discovery, attention. A patrol changes its route.
+Trace — You are through, but you left something.
+```
+
+The field only matters when you pick **Fail with consequence** or **Success with consequence**.
+Then the outcome lands exactly as it would have — the action still does or does not happen — and
+the GM is additionally told to weave that consequence into the same beat as a twist or
+complication arriving alongside it, never instead of it and never deferred to a later scene.
+
+Pick a plain **Fail** or **Success** and the field is ignored, even with text in it. Pick a
+*with consequence* outcome with the field blank and the GM falls back to the cost it already
+named when it asked. If the campaign has no list authored, the field simply opens empty and you
+can type into it.
+
+The division of labour is the same one the rest of the engine uses: the engine draws, you approve
+or override, the model renders. The engine never gets the last word on the fiction, and the model
+never invents the cost from nothing.
+
+**If you have nothing to resolve with**, "Decide for me" picks an outcome weighted by the
+difficulty the GM already committed to. It is an explicit opt-in, and the difficulty is the only
+input — so it cannot be steered any more than the manual pick can.
+
+**If you would rather roll something concrete**, the "dice me" modal rolls for you: pick a die
+type, a modifier (advantage / disadvantage / none), a count, and how the dice aggregate, then
+confirm. That *arms* the roll — the app resolves it at send time and asserts the result as fact.
+It is the one path on which a number reaches the writer, and the only path by which the app rolls
+at all.
+
+**Ask frequency** is a threshold, not a quota. Three settings in Engine Tuning:
+
+| Setting | What deserves asking |
 |---|---|
 | **Any contested action** | Anything meeting real resistance — a lock, a fight, a risky climb, persuasion against a genuine want |
 | **Only when it costs something** | Only when failure leaves a mark. Mere inconvenience resolves in the fiction |
 | **Only decisive moments** | Only a conflict that could genuinely go either way |
 
-Turning Ask To Roll off means **no dice at all** — pure freeform narration.
+Turning Ask To Resolve off means **nothing is ever asked** — pure freeform narration. Every "ask
+the player" imperative lives in the tool's own description, so withholding the tool is also what
+stops the GM being told to ask.
 
-Die types and their outcome bands (Catastrophe → Failure → Success → Triumph → Narrative Boon) are stored per campaign and honoured by the roller, but the desktop UI no longer exposes an editor for them — only the mobile client does. Campaigns saved under the retired pool are migrated on load.
+Campaigns saved under the retired pre-rolled pool are migrated on load. Transcripts recorded under
+the older `request_roll` tool still render in full.
 
 ---
 
@@ -382,7 +442,7 @@ The GM can use five tools mid-conversation:
 |---|---|
 | `query_campaign_lore` | Searches your world bible on the fly when the GM needs a detail |
 | `update_scene_notebook` | Volatile working memory — active effects, timers, NPC positions, environmental conditions |
-| `request_roll` | Asks the player for a roll, stating die, reason, bar, and cost of a miss |
+| `request_outcome` | Asks the player to resolve an action, stating the reason, the difficulty, and the cost of a failure |
 | `propose_condition_change` | Suggests a condition on the player character (you confirm) |
 | `propose_inventory_change` | Suggests adding, removing, or equipping items (you confirm) |
 

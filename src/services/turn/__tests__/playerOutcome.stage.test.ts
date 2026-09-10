@@ -1,21 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Player-rolled resolution — the mid-turn suspend.
+// Player-resolved action — the mid-turn suspend.
 //
-// `request_roll` is the only tool that suspends generation: the GM states the dice and the
-// bar, the turn stops, and it resumes with the number the player typed. These tests cover the
-// three things that can go wrong around an unbounded human wait, all of which are silent
-// failures if unguarded:
+// `request_outcome` is the only tool that suspends generation: the GM states the difficulty
+// and what a failure costs, the turn stops, and it resumes with the outcome the player picked.
+// These tests cover the three things that can go wrong around an unbounded human wait, all of
+// which are silent failures if unguarded:
 //
 //   1. the turn never resumes (a rejected or abandoned promise hangs it with isStreaming true)
 //   2. Stop is pressed while the modal is open (the half-written turn must stay recoverable)
 //   3. a stale resolution lands after a NEWER turn began (it would write into that turn's
 //      bubble, because updateLastAssistant scans back to the last assistant message)
 //
-// plus the three-way mode resolution that decides which dice tool — if any — is offered.
+// plus the mode resolution that decides whether the tool is offered at all.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { runTurn } from '../turnOrchestrator';
 import type { TurnState, TurnCallbacks } from '../turnOrchestrator';
-import type { ChatMessage } from '../../../types';
+import type { ChatMessage, PlayerOutcomeResolution } from '../../../types';
 
 const updateLastAssistantMessageMock = vi.fn();
 const updateLastAssistantMock = vi.fn();
@@ -65,39 +65,42 @@ vi.mock('../../components/Toast', () => ({
     toast: { warning: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
-// Test doubles for the request_roll helpers. The real ones are pure and covered separately
-// in requestRoll.format.test.ts; here we only need them to behave, so this file does not have
-// to import toolHandlers (which drags in the lore retriever).
+// Test doubles for the request_outcome helpers. The real ones are pure and covered separately
+// in requestOutcome.format.test.ts; here we only need them to behave, so this file does not
+// have to import toolHandlers (which drags in the lore retriever).
 vi.mock('../toolHandlers', () => ({
     getToolDefinitions: (...args: unknown[]) => getToolDefinitionsMock(...(args as [])),
-    parseRequestRollArgs: (raw: string) => {
+    parseRequestOutcomeArgs: (raw: string) => {
         try {
             const o = JSON.parse(raw);
-            if (!o.dice || !o.reason) return null;
+            if (!o.reason) return null;
             return {
-                dice: o.dice, reason: o.reason,
-                success_on: o.success_on ?? '', failure_means: o.failure_means ?? '',
+                reason: o.reason,
+                difficulty: o.difficulty ?? 'average',
+                failure_means: o.failure_means ?? '',
             };
         } catch { return null; }
     },
-    formatPlayerRollResult: (args: any, total: number) =>
-        JSON.stringify({ ...args, player_total: total, source: 'player-rolled' }),
-    formatPlayerRollDeclined: (args: any) =>
-        JSON.stringify({ ...args, player_total: null, source: 'player-declined' }),
+    formatPlayerOutcomeResult: (args: any, outcome: string, consequence = '') =>
+        JSON.stringify({
+            ...args, outcome, source: 'player-resolved',
+            ...(consequence ? { consequence } : {}),
+        }),
+    formatPlayerOutcomeDeclined: (args: any) =>
+        JSON.stringify({ ...args, outcome: null, source: 'player-declined' }),
 }));
 
-// Only request_roll resolves; every other name falls through to the final-answer path.
+// Only request_outcome resolves; every other name falls through to the final-answer path.
 vi.mock('../toolRegistry', () => ({
     resolveToolHandler: (name: string) =>
-        name === 'request_roll'
+        name === 'request_outcome'
             ? () => ({ toolResult: '{"source":"fallback"}', accumulation: 'append', traceResult: true })
             : null,
 }));
 
-const ROLL_ARGS = JSON.stringify({
-    dice: '2d6',
+const OUTCOME_ARGS = JSON.stringify({
     reason: 'Forcing the shutter before the patrol rounds the corner.',
-    success_on: '7+',
+    difficulty: 'hard',
     failure_means: 'the frame gives loudly and they hear it',
 });
 
@@ -141,20 +144,20 @@ function baseCallbacks(over: Partial<TurnCallbacks> = {}): TurnCallbacks {
 }
 
 /**
- * Drives one request_roll call, then a plain final answer on the resume.
+ * Drives one request_outcome call, then a plain final answer on the resume.
  *
  * The mock AWAITS onDone, which the real llmService does not do (it discards the promise).
  * That is a deliberate test convenience: it makes the suspend/resume ordering deterministic
  * instead of racing. The "turn resumes" assertion below still goes through the real 800ms
  * timer, so the resume path itself is not faked.
  */
-function wireRequestRollThenAnswer(args = ROLL_ARGS): void {
+function wireRequestOutcomeThenAnswer(args = OUTCOME_ARGS): void {
     let call = 0;
     sendMessageMock.mockImplementation(
         async (_p: unknown, _m: unknown, _c: unknown, onDone: (t: string, tc?: unknown) => unknown) => {
             call++;
             if (call === 1) {
-                await onDone('You get the pry bar seated.', { id: 'tc_1', name: 'request_roll', arguments: args });
+                await onDone('You get the pry bar seated.', { id: 'tc_1', name: 'request_outcome', arguments: args });
             } else {
                 await onDone('The frame lets go, quiet as a knuckle crack.');
             }
@@ -167,38 +170,73 @@ const toolMessages = () =>
         .map((c) => c[0] as { role?: string; content?: string; name?: string })
         .filter((m) => m.role === 'tool');
 
-describe('player-rolled resolution — the mid-turn suspend', () => {
+describe('player-resolved action — the mid-turn suspend', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         getToolDefinitionsMock.mockReturnValue([]);
     });
     afterEach(() => { vi.clearAllMocks(); vi.useRealTimers(); });
 
-    it('asks the player, with the bar the GM committed to before seeing the number', async () => {
-        wireRequestRollThenAnswer();
+    it('asks the player, with the terms the GM committed to before seeing the answer', async () => {
+        wireRequestOutcomeThenAnswer();
         const asked: unknown[] = [];
         await runTurn(
             baseState(),
-            baseCallbacks({ requestPlayerRoll: async (req) => { asked.push(req); return 11; } }),
+            baseCallbacks({ requestPlayerOutcome: async (req) => { asked.push(req); return { outcome: 'success', consequence: '' }; } }),
             new AbortController(),
         );
 
         expect(asked).toEqual([{
-            dice: '2d6',
             reason: 'Forcing the shutter before the patrol rounds the corner.',
-            successOn: '7+',
+            difficulty: 'hard',
             failureMeans: 'the frame gives loudly and they hear it',
         }]);
     });
 
-    it("feeds the player's total back as the tool result", async () => {
-        wireRequestRollThenAnswer();
-        await runTurn(baseState(), baseCallbacks({ requestPlayerRoll: async () => 11 }), new AbortController());
+    it("feeds the player's outcome back as the tool result", async () => {
+        wireRequestOutcomeThenAnswer();
+        await runTurn(baseState(), baseCallbacks({ requestPlayerOutcome: async () => ({ outcome: 'success' as const, consequence: '' }) }), new AbortController());
 
         const tool = toolMessages();
         expect(tool).toHaveLength(1);
-        expect(tool[0].name).toBe('request_roll');
-        expect(JSON.parse(tool[0].content!)).toMatchObject({ player_total: 11, source: 'player-rolled', success_on: '7+' });
+        expect(tool[0].name).toBe('request_outcome');
+        expect(JSON.parse(tool[0].content!)).toMatchObject({
+            outcome: 'success', source: 'player-resolved', difficulty: 'hard',
+        });
+    });
+
+    // The Consequence field rides along with the outcome. The modal reports it for every pick;
+    // `formatPlayerOutcomeResult` is the single place that decides whether it is relevant, so
+    // all the stage has to get right is passing it through untouched.
+    it("carries the player's chosen consequence into the tool result", async () => {
+        wireRequestOutcomeThenAnswer();
+        await runTurn(
+            baseState(),
+            baseCallbacks({
+                requestPlayerOutcome: async () => ({
+                    outcome: 'fail_with_consequence' as const,
+                    consequence: 'Noise — a patrol changes its route.',
+                }),
+            }),
+            new AbortController(),
+        );
+        expect(JSON.parse(toolMessages()[0].content!)).toMatchObject({
+            outcome: 'fail_with_consequence',
+            consequence: 'Noise — a patrol changes its route.',
+        });
+    });
+
+    // A failure must travel exactly as picked. This is the one the whole rework hangs on: the
+    // model no longer has a number to check itself against, so nothing between the button and
+    // the payload may soften it.
+    it('carries a failure through unchanged', async () => {
+        wireRequestOutcomeThenAnswer();
+        await runTurn(
+            baseState(),
+            baseCallbacks({ requestPlayerOutcome: async () => ({ outcome: 'fail_with_consequence' as const, consequence: '' }) }),
+            new AbortController(),
+        );
+        expect(JSON.parse(toolMessages()[0].content!).outcome).toBe('fail_with_consequence');
     });
 
     // The suspend branch shows the pre-roll narration before blocking, and the shared
@@ -206,9 +244,9 @@ describe('player-rolled resolution — the mid-turn suspend', () => {
     // BOTH places appended that paragraph twice — into the bubble, and from there into
     // every later prompt's history window. Every write is checked, not just the last, so
     // neither half of the pair can regress unnoticed.
-    it('shows the pre-roll narration exactly once, never twice', async () => {
-        wireRequestRollThenAnswer();
-        await runTurn(baseState(), baseCallbacks({ requestPlayerRoll: async () => 11 }), new AbortController());
+    it('shows the pre-request narration exactly once, never twice', async () => {
+        wireRequestOutcomeThenAnswer();
+        await runTurn(baseState(), baseCallbacks({ requestPlayerOutcome: async () => ({ outcome: 'success' as const, consequence: '' }) }), new AbortController());
 
         const writes = updateLastAssistantMock.mock.calls.map((c) => c[0] as string);
         expect(writes.length).toBeGreaterThan(0);
@@ -218,40 +256,40 @@ describe('player-rolled resolution — the mid-turn suspend', () => {
     });
 });
 
-describe('player-rolled resolution — guards around an unbounded human wait', () => {
+describe('player-resolved action — guards around an unbounded human wait', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         getToolDefinitionsMock.mockReturnValue([]);
     });
     afterEach(() => { vi.clearAllMocks(); vi.useRealTimers(); });
 
-    it('a dismissed request leaves the attempt unresolved instead of inventing a number', async () => {
-        wireRequestRollThenAnswer();
-        await runTurn(baseState(), baseCallbacks({ requestPlayerRoll: async () => null }), new AbortController());
+    it('a dismissed request leaves the attempt unresolved instead of picking an outcome', async () => {
+        wireRequestOutcomeThenAnswer();
+        await runTurn(baseState(), baseCallbacks({ requestPlayerOutcome: async () => null }), new AbortController());
 
         expect(JSON.parse(toolMessages()[0].content!)).toMatchObject({
-            player_total: null,
+            outcome: null,
             source: 'player-declined',
         });
     });
 
-    it('a REJECTED request does not hang the turn — it degrades to no roll', async () => {
+    it('a REJECTED request does not hang the turn — it degrades to unresolved', async () => {
         // onDone's promise is discarded by llmService, so an unhandled rejection here would
         // strand the turn with isStreaming stuck true and no Retry button.
-        wireRequestRollThenAnswer();
+        wireRequestOutcomeThenAnswer();
         await runTurn(
             baseState(),
-            baseCallbacks({ requestPlayerRoll: async () => { throw new Error('modal unmounted'); } }),
+            baseCallbacks({ requestPlayerOutcome: async () => { throw new Error('modal unmounted'); } }),
             new AbortController(),
         );
 
         expect(JSON.parse(toolMessages()[0].content!)).toMatchObject({ source: 'player-declined' });
     });
 
-    it('resumes generation after the roll comes back', async () => {
+    it('resumes generation after the outcome comes back', async () => {
         vi.useFakeTimers();
-        wireRequestRollThenAnswer();
-        await runTurn(baseState(), baseCallbacks({ requestPlayerRoll: async () => 11 }), new AbortController());
+        wireRequestOutcomeThenAnswer();
+        await runTurn(baseState(), baseCallbacks({ requestPlayerOutcome: async () => ({ outcome: 'success' as const, consequence: '' }) }), new AbortController());
 
         expect(sendMessageMock).toHaveBeenCalledTimes(1);
         await vi.advanceTimersByTimeAsync(900);   // the real 800ms resume timer
@@ -260,10 +298,10 @@ describe('player-rolled resolution — guards around an unbounded human wait', (
 
     it('Stop pressed during the wait stamps the bubble retryable and writes nothing further', async () => {
         const abort = new AbortController();
-        wireRequestRollThenAnswer();
+        wireRequestOutcomeThenAnswer();
         await runTurn(
             baseState(),
-            baseCallbacks({ requestPlayerRoll: async () => { abort.abort(); return null; } }),
+            baseCallbacks({ requestPlayerOutcome: async () => { abort.abort(); return null; } }),
             abort,
         );
 
@@ -281,13 +319,13 @@ describe('player-rolled resolution — guards around an unbounded human wait', (
         // The dangerous case: handleStop clears isStreaming, so the player can start another
         // turn with the modal still open. updateLastAssistant scans back to the LAST assistant
         // message, so a late write would land in the new turn's bubble.
-        let release: ((v: number | null) => void) | null = null;
-        const held = new Promise<number | null>((res) => { release = res; });
+        let release: ((v: PlayerOutcomeResolution | null) => void) | null = null;
+        const held = new Promise<PlayerOutcomeResolution | null>((res) => { release = res; });
 
-        wireRequestRollThenAnswer();
+        wireRequestOutcomeThenAnswer();
         const first = runTurn(
             baseState(),
-            baseCallbacks({ requestPlayerRoll: () => held }),
+            baseCallbacks({ requestPlayerOutcome: () => held }),
             new AbortController(),
         );
         await Promise.resolve();
@@ -299,15 +337,15 @@ describe('player-rolled resolution — guards around an unbounded human wait', (
         await runTurn(baseState({ input: 'something else' }), baseCallbacks(), new AbortController());
 
         addMessageMock.mockClear();
-        release!(11);
+        release!({ outcome: 'success', consequence: '' });
         await first;
 
-        // The stale roll must not have produced a tool message in the new turn.
+        // The stale resolution must not have produced a tool message in the new turn.
         expect(toolMessages()).toHaveLength(0);
     });
 });
 
-describe('dice mode resolution — Ask To Roll is the one switch', () => {
+describe('resolution mode — Ask To Resolve is the one switch', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         getToolDefinitionsMock.mockReturnValue([]);
@@ -318,13 +356,13 @@ describe('dice mode resolution — Ask To Roll is the one switch', () => {
     afterEach(() => { vi.clearAllMocks(); vi.useRealTimers(); });
 
     const optsFor = async (context: Record<string, unknown>, over: Partial<TurnCallbacks> = {}) => {
-        await runTurn(baseState({ context }), baseCallbacks({ requestPlayerRoll: async () => 9, ...over }), new AbortController());
+        await runTurn(baseState({ context }), baseCallbacks({ requestPlayerOutcome: async () => ({ outcome: 'success' as const, consequence: '' }), ...over }), new AbortController());
         return getToolDefinitionsMock.mock.calls[0]?.[0] as unknown as {
             playerRollFrequency?: string;
         };
     };
 
-    it('Ask To Roll ON offers request_roll', async () => {
+    it('Ask To Resolve ON offers request_outcome', async () => {
         const opts = await optsFor({ diceFairnessActive: true, rollFrequency: 'contested' });
         expect(opts.playerRollFrequency).toBe('contested');
     });
@@ -340,13 +378,14 @@ describe('dice mode resolution — Ask To Roll is the one switch', () => {
     });
 
     it('an absent diceFairnessActive reads as ON, not off', async () => {
-        // Only an explicit `false` means no dice. A context that never set the field — a bare
-        // fixture, a partially-migrated save — must still get dice rather than silently losing them.
+        // Only an explicit `false` means never ask. A context that never set the field — a bare
+        // fixture, a partially-migrated save — must still be able to ask rather than silently
+        // losing the ability.
         const opts = await optsFor({});
         expect(opts.playerRollFrequency).toBe('contested');
     });
 
-    it('Ask To Roll OFF offers no dice tool at all', async () => {
+    it('Ask To Resolve OFF offers no resolution tool at all', async () => {
         const opts = await optsFor({ diceFairnessActive: false });
         expect(opts.playerRollFrequency).toBeUndefined();
     });
@@ -356,17 +395,17 @@ describe('dice mode resolution — Ask To Roll is the one switch', () => {
     // A caller with no roll UI (the base-app gate, a facade run, a test) has to send the same
     // tools the app sends, or it freezes a payload no user ever sees. The old code degraded to
     // the engine-rolled tool here, silently and invisibly.
-    it('offers request_roll even with no UI to suspend into — tools follow context, not callbacks', async () => {
-        const opts = await optsFor({ diceFairnessActive: true }, { requestPlayerRoll: undefined });
+    it('offers request_outcome even with no UI to suspend into — tools follow context, not callbacks', async () => {
+        const opts = await optsFor({ diceFairnessActive: true }, { requestPlayerOutcome: undefined });
         expect(opts.playerRollFrequency).toBe('contested');
     });
 
-    it('a manually armed "dice me" roll suppresses the dice tool', async () => {
+    it('a manually armed "dice me" roll suppresses the resolution tool', async () => {
         // The resolved number is already asserted into the payload; offering the tool as well
-        // would let the model roll a second time for the same action.
+        // would resolve the same action a second time.
         await runTurn(
             baseState({ context: { diceFairnessActive: true }, armedRoll: '1d20' }),
-            baseCallbacks({ requestPlayerRoll: async () => 9 }),
+            baseCallbacks({ requestPlayerOutcome: async () => ({ outcome: 'success' as const, consequence: '' }) }),
             new AbortController(),
         );
         const opts = getToolDefinitionsMock.mock.calls[0]?.[0] as unknown as { playerRollFrequency?: string };

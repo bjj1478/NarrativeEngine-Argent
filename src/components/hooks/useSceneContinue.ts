@@ -67,7 +67,7 @@ export function useSceneContinue(messageId: string | null) {
         const pcName = store.context.playerCharacter?.name ?? '';
         const targetWords = computeLastSegmentWordCount(msg.content);
         // Continue never offers a dice tool. It is a second, SYNCHRONOUS tool-dispatch site
-        // (sceneContinue.ts) with no modal to suspend into, so request_roll cannot work here —
+        // (sceneContinue.ts) with no modal to suspend into, so request_outcome cannot work here —
         // and no engine-rolled tool exists to fall back on. sceneContinue therefore emits its
         // "do not initiate or invent dice rolls; narrate only from results already in history"
         // line unconditionally, and offers no tools at all.

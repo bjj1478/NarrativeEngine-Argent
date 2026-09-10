@@ -50,6 +50,7 @@ export function NPCSuggestionsPanel({ suggestions }: Props) {
             updateProvider: state.getActiveUtilityEndpoint() ?? state.getActiveStoryEndpoint(),
             addNPC: state.addNPC,
             updateNPC: state.updateNPC,
+            matureMode: state.settings.matureMode ?? false,
         });
         if (result.ok) {
             dismissNpcSuggestion(name);

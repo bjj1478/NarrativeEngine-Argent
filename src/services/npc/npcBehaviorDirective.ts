@@ -1,6 +1,7 @@
-import type { NPCEntry, HexAxis, ArchiveIndexEntry, DivergenceEntry } from '../../types';
+import type { NPCEntry, HexAxis, ArchiveIndexEntry, DivergenceEntry, SceneStakes } from '../../types';
 import { relationBand, describeHex, formatHexShift, formatRungShift } from './agency/agencyBands';
-import { buildReactionMenu, type ReactionContext } from './reactionMenu';
+import { contextsForStakes, selectReactions, type ReactionContext } from './reactionMenu';
+import { logReactionSelection } from './reactionTrace';
 import { applyRepressionToMenu } from './reactionRepression';
 import { readPcAffinity } from './affinityAccess';
 import { parseKnownByToken, parseFactions } from '../campaign-state/knowledgeScope';
@@ -21,10 +22,18 @@ function truncate(s: string, max: number): string {
 }
 
 export type BehaviorDirectiveOpts = {
-    context?: ReactionContext; // Phase 2 §9.1 — peaceful/dangerous filters the reaction menu
+    /** Explicit override. Normally leave unset and pass `sceneStakes` instead. */
+    context?: ReactionContext | ReactionContext[];
+    /** The scene's stakes, mapped to one or both halves of the table by `contextsForStakes`.
+     *  This is what stopped every NPC being stuck on peaceful reactions forever. */
+    sceneStakes?: SceneStakes;
     rng?: () => number;         // injected for deterministic tests
     matureMode?: boolean;       // mirrors agencyWantDraw mature gating
     relationshipMemoryEnabled?: boolean;
+    /** `settings.debugMode` — emits the reaction-selection trace to the console. */
+    debug?: boolean;
+    /** Turn counter or id, so console traces from one turn group together. */
+    traceLabel?: string;
 };
 
 export function buildBehaviorDirective(npc: NPCEntry, opts: BehaviorDirectiveOpts = {}): string {
@@ -109,8 +118,10 @@ export function buildBehaviorDirective(npc: NPCEntry, opts: BehaviorDirectiveOpt
  * NPCs — `buildBehaviorDirective` is no longer the production payload path. Keep ONE implementation
  * here so both callers stay in lockstep.
  *
- * NOTE: `context` defaults to 'peaceful'; wire it from encounter/combat state at the call site (a
- * later refinement). `matureMode` threads the same gate the want/action draws use.
+ * `sceneStakes` selects which halves of the table are in play (`contextsForStakes`): calm draws
+ * peaceful, dangerous draws dangerous, tense draws both. Before it was wired, both production
+ * callers fell through to the 'peaceful' default and the entire dangerous half of the vocabulary
+ * was unreachable in the running app. `matureMode` threads the same gate the want/action draws use.
  *
  * The repression `event` (pressure delta / catharsis) is intentionally DISCARDED here — this is a
  * read path that can re-run, so booking happens once-per-turn elsewhere (postTurnPipeline), never in
@@ -118,11 +129,17 @@ export function buildBehaviorDirective(npc: NPCEntry, opts: BehaviorDirectiveOpt
  */
 export function buildReactionMenuLine(npc: NPCEntry, opts: BehaviorDirectiveOpts = {}): string {
     if (!npc.personalityHex) return '';
-    const context = opts.context ?? 'peaceful';
+    const contexts = opts.context
+        ? (Array.isArray(opts.context) ? opts.context : [opts.context])
+        : contextsForStakes(opts.sceneStakes);
     const rng = opts.rng ?? Math.random;
     const matureMode = opts.matureMode ?? false;
-    const rawMenu = buildReactionMenu(npc, context, rng, matureMode, opts.relationshipMemoryEnabled);
-    const { menu } = applyRepressionToMenu(rawMenu, npc, context, rng);
+    const { menu: rawMenu, diag } = selectReactions(npc, contexts, rng, matureMode, opts.relationshipMemoryEnabled);
+    // Repression is the "did they hide it" layer and only ever engages on the peaceful half, so
+    // a tense scene (both halves) still repress: pass peaceful whenever it is in play.
+    const repressionContext: ReactionContext = contexts.includes('peaceful') ? 'peaceful' : 'dangerous';
+    const { menu } = applyRepressionToMenu(rawMenu, npc, repressionContext, rng);
+    if (opts.debug) logReactionSelection(diag, opts.sceneStakes, menu, opts.traceLabel);
     if (menu.length === 0) return '';
     // Fallback switch point — if playtest shows the AI still always grabs the gentlest, replace the
     // menu with a single engine-picked reaction (rank-1 or weighted-random) asserted as fact, same

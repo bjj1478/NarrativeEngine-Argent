@@ -111,7 +111,15 @@ export function Header() {
             </button>
 
             <h1 className="chrome-label hidden md:block text-terminal text-sm font-bold tracking-[0.3em] uppercase shrink-0">
-                {t('header.title')}
+                {t('header.title')}{' '}
+                {/* The fork's mark, same `--color-argent` token as the hub wordmark so the two
+                    agree in both themes. Unlike the hub, nothing here is scaled down: that
+                    treatment existed because ARGENT sat beside 36px title-case Cinzel and would
+                    have out-weighted it. This wordmark is already 14px all-caps at 0.3em, where
+                    shrinking the third word would just make it look weak. Colour alone carries
+                    it, and the plain space inherits the same tracking-driven gap that already
+                    separates NARRATIVE from ENGINE. */}
+                <span style={{ color: 'var(--color-argent)' }}>{t('hub.brand.fork')}</span>
             </h1>
             <span className="hidden md:inline text-[9px] font-mono text-text-dim shrink-0" title={t('header.version.tooltip', { version: APP_VERSION })}>
                 v{APP_VERSION}

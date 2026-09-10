@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { runTurn } from '../services/turn/turnOrchestrator';
 import { commitPendingTurn, findRetryableMessage, persistPendingTurn } from '../services/turn/pendingCommit';
 import { debouncedSaveCampaignState } from '../store/slices/campaignSlice';
-import type { InventoryProposal, ConditionProposal, PlayerRollRequest } from '../types';
+import type { InventoryProposal, ConditionProposal, PlayerOutcomeRequest, PlayerOutcomeResolution } from '../types';
 import type { useSceneContinue } from '../components/hooks/useSceneContinue';
 
 /**
@@ -89,35 +89,35 @@ export function useChatOperations({
         pcPromptResolverRef.current?.(decision);
         pcPromptResolverRef.current = null;
     };
-    // Player-rolled resolution. The GM called `request_roll` and generation is SUSPENDED
-    // until `resolvePlayerRoll` is called with the total the player's physical dice showed
-    // (or null if they dismissed it). Same resolver-ref shape as `promptPcCreation` above,
-    // which is the app's only other await-a-click gate.
+    // Player-resolved action. The GM called `request_outcome` and generation is SUSPENDED
+    // until `resolvePlayerOutcome` is called with the outcome the player picked (or null if
+    // they dismissed it). Same resolver-ref shape as `promptPcCreation` above, which is the
+    // app's only other await-a-click gate.
     //
     // Unlike that one, this fires MID-turn, so two extra guarantees matter: the orchestrator
     // resolves its own wait with null on abort (it never waits on us forever), and it discards
     // a resolution that lands after a newer turn began.
     //
     // That orchestrator-side abort does NOT close this modal — it cannot; it holds no UI. So
-    // `handleStop` calls `resolvePlayerRoll(null)` itself. Without that, Stop left a
-    // live-looking request on screen for a turn that was already dead, and a total typed into
-    // it resolved an already-settled promise and vanished.
-    const [pendingRollRequest, setPendingRollRequest] = useState<PlayerRollRequest | null>(null);
-    const rollResolverRef = useRef<((total: number | null) => void) | null>(null);
-    const requestPlayerRoll = (req: PlayerRollRequest): Promise<number | null> => {
+    // `handleStop` calls `resolvePlayerOutcome(null)` itself. Without that, Stop left a
+    // live-looking request on screen for a turn that was already dead, and an outcome picked
+    // in it resolved an already-settled promise and vanished.
+    const [pendingOutcomeRequest, setPendingOutcomeRequest] = useState<PlayerOutcomeRequest | null>(null);
+    const outcomeResolverRef = useRef<((resolution: PlayerOutcomeResolution | null) => void) | null>(null);
+    const requestPlayerOutcome = (req: PlayerOutcomeRequest): Promise<PlayerOutcomeResolution | null> => {
         // A second request while one is open should not strand the first promise: settle the
         // old one as declined before replacing it. In practice the model cannot get here twice
         // at once (generation is suspended), but a stranded promise would hang a turn.
-        rollResolverRef.current?.(null);
-        return new Promise<number | null>(resolve => {
-            rollResolverRef.current = resolve;
-            setPendingRollRequest(req);
+        outcomeResolverRef.current?.(null);
+        return new Promise<PlayerOutcomeResolution | null>(resolve => {
+            outcomeResolverRef.current = resolve;
+            setPendingOutcomeRequest(req);
         });
     };
-    const resolvePlayerRoll = (total: number | null) => {
-        setPendingRollRequest(null);
-        rollResolverRef.current?.(total);
-        rollResolverRef.current = null;
+    const resolvePlayerOutcome = (resolution: PlayerOutcomeResolution | null) => {
+        setPendingOutcomeRequest(null);
+        outcomeResolverRef.current?.(resolution);
+        outcomeResolverRef.current = null;
     };
     // WO-05: Director Brief UI state. `directorBriefRunning` toggles the
     // "Director drafting brief…" status + Skip affordance in GenerationProgress.
@@ -319,7 +319,7 @@ export function useChatOperations({
             restoreNPC: storeSnapshot.restoreNPC,
             stageInventoryProposal: (proposal) => setPendingProposal(proposal),
             stageConditionProposal: (proposal) => setPendingConditionProposal(proposal),
-            requestPlayerRoll,
+            requestPlayerOutcome,
             // Durable-commit v1: flush the finished turn (text + pendingCommit + swipe
             // set) the moment it is staged, so an improper close or an idle timeout
             // before the deferred commit leaves a recoverable turn on disk instead of
@@ -350,11 +350,11 @@ export function useChatOperations({
         // Scene Continue v1: abort an in-flight continue too (the global Stop owns
         // every streaming operation — no second stop button is built).
         sceneContinue.getAbortController()?.abort();
-        // A suspended player roll is part of "every streaming operation" too. The orchestrator's
-        // own abort listener settles its wait, but only this closes the modal — and settling it
-        // here as declined is harmless if that listener already fired first (awaitPlayerRoll
-        // latches on `settled`, and both paths resolve null).
-        resolvePlayerRoll(null);
+        // A suspended outcome request is part of "every streaming operation" too. The
+        // orchestrator's own abort listener settles its wait, but only this closes the modal —
+        // and settling it here as declined is harmless if that listener already fired first
+        // (awaitPlayerOutcome latches on `settled`, and both paths resolve null).
+        resolvePlayerOutcome(null);
         setStreaming(false);
         setIsCheckingNotes(false);
         setLoadingStatus(null);
@@ -395,8 +395,8 @@ export function useChatOperations({
         setPendingConditionProposal,
         pendingPcPrompt,
         resolvePcPrompt,
-        pendingRollRequest,
-        resolvePlayerRoll,
+        pendingOutcomeRequest,
+        resolvePlayerOutcome,
         handleSend,
         handleStop,
         directorBriefRunning,

@@ -84,8 +84,8 @@ export function fixtureContext(): GameContext {
         surpriseEngineActive: true,
         encounterEngineActive: true,
         worldEngineActive: true,
-        // Ask To Roll ON — the new default, so the gate freezes the configuration users
-        // actually run. `request_roll` is therefore offered, but the canonical GM completion
+        // Ask To Resolve ON — the default, so the gate freezes the configuration users
+        // actually run. `request_outcome` is therefore offered, but the canonical GM completion
         // carries no tool call, so the turn still resolves in a single pass.
         diceFairnessActive: true,
         rollFrequency: 'contested',

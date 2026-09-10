@@ -34,10 +34,15 @@ describe('armed "dice me" roll — the injected fact', () => {
         expect(ctx.finalInput).toMatch(/Action Resolution rules/);
     });
 
-    it('forbids the prose from restating the number, matching the request_roll binding', () => {
+    // "Dice me" is the one path on which a number still reaches the writer, so its binding
+    // has to carry the same prose boundary the request_outcome result does. The two are
+    // worded in parallel deliberately; these are the shared clauses.
+    it('forbids the prose from restating the number, matching the request_outcome binding', () => {
         const ctx = ctxFor();
         resolveEngineRolls(ctx, stateFor({ dieTypeId: 'dt_d20', rollDef: {}, reason: 'a hard climb' }), callbacks);
         expect(ctx.finalInput).toMatch(/Do not restate the number/);
+        expect(ctx.finalInput).toMatch(/final/i);
+        expect(ctx.finalInput).toMatch(/skill or attribute/i);
     });
 
     it('reads cleanly with no reason given', () => {

@@ -201,6 +201,7 @@ export function useSelectionActions() {
                 updateProvider: state.getActiveSummarizerEndpoint() ?? state.getActiveUtilityEndpoint() ?? state.getActiveStoryEndpoint(),
                 addNPC: state.addNPC,
                 updateNPC: state.updateNPC,
+                matureMode: state.settings.matureMode ?? false,
             });
             if (result.ok) toast.success(result.message);
             else if (result.kind === 'ambiguous') toast.warning(result.message);

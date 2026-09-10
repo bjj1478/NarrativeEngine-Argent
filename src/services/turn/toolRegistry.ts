@@ -4,8 +4,8 @@ import {
     handleNotebookTool,
     handleProposeInventoryTool,
     handleProposeConditionTool,
-    parseRequestRollArgs,
-    formatPlayerRollDeclined,
+    parseRequestOutcomeArgs,
+    formatPlayerOutcomeDeclined,
 } from './toolHandlers';
 
 /**
@@ -82,11 +82,11 @@ const handleNotebook: ToolHandlerFn = (ctx) => {
 };
 
 /**
- * `request_roll` — the NON-SUSPENDING fallback.
+ * `request_outcome` — the NON-SUSPENDING fallback.
  *
  * The real behaviour lives in `runGenerationStage`, which special-cases this tool by name
- * (as it already does for `query_campaign_lore`), awaits the player's number, and builds the
- * result with `formatPlayerRollResult`. Keeping `ToolHandlerFn` synchronous is deliberate:
+ * (as it already does for `query_campaign_lore`), awaits the player's pick, and builds the
+ * result with `formatPlayerOutcomeResult`. Keeping `ToolHandlerFn` synchronous is deliberate:
  * widening it to return a Promise would break the "handlers are pure, the registry knows
  * nothing of store or callbacks" contract above, AND would silently break the second dispatch
  * site in sceneContinue.ts, which calls handlers synchronously and would push
@@ -94,17 +94,18 @@ const handleNotebook: ToolHandlerFn = (ctx) => {
  *
  * This entry exists so the tool still RESOLVES on any path that cannot suspend — without it,
  * `resolveToolHandler` returns null, the call is dropped, and the turn silently ends mid-action.
- * On such a path we report that no roll happened rather than inventing one.
+ * On such a path we report that nothing was resolved rather than picking an outcome.
  */
-const handleRequestRoll: ToolHandlerFn = (ctx) => {
-    const args = parseRequestRollArgs(ctx.arguments);
+const handleRequestOutcome: ToolHandlerFn = (ctx) => {
+    const args = parseRequestOutcomeArgs(ctx.arguments);
     return {
         toolResult: args
-            ? formatPlayerRollDeclined(args)
+            ? formatPlayerOutcomeDeclined(args)
             : JSON.stringify({
-                player_total: null,
+                outcome: null,
+                action_happens: null,
                 source: 'malformed-request',
-                binding: 'The roll request was unusable. Do not invent a number; carry on without it.',
+                binding: 'The request was unusable. Do not pick an outcome yourself; carry on without it.',
             }),
         accumulation: 'append',
         traceResult: true,
@@ -136,7 +137,7 @@ const handleProposeCondition: ToolHandlerFn = (ctx) => {
 export const TOOL_REGISTRY: Record<string, ToolHandlerFn> = {
     query_campaign_lore: handleLore,
     update_scene_notebook: handleNotebook,
-    request_roll: handleRequestRoll,
+    request_outcome: handleRequestOutcome,
     propose_inventory_change: handleProposeInventory,
     propose_condition_change: handleProposeCondition,
 };
@@ -159,7 +160,7 @@ export function validateToolRegistry(): void {
     const expected = [
         'query_campaign_lore',
         'update_scene_notebook',
-        'request_roll',
+        'request_outcome',
         'propose_inventory_change',
         'propose_condition_change',
     ];

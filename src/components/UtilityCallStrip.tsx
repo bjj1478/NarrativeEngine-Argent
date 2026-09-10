@@ -35,7 +35,7 @@ const PHASE_LABEL: Record<PipelinePhase, string> = {
     'building-prompt': 'building prompt',
     'generating': 'generating',
     'checking-notes': 'checking notes',
-    'awaiting-player': 'waiting for your roll',
+    'awaiting-player': 'waiting for you',
     'post-processing': 'post-processing',
 };
 

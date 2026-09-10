@@ -19,7 +19,10 @@
 // WO-P1-02 §4, the whole recursion moves as one unit (do NOT hoist its
 // function-scoped mutable state onto the bus unless provably neutral).
 
-import type { NPCEntry, PayloadTrace, SwipeVariant, EndpointConfig, ThinkingEffort } from '../../types';
+import type {
+    NPCEntry, PayloadTrace, SwipeVariant, EndpointConfig, ThinkingEffort,
+    PlayerOutcomeRequest, PlayerOutcomeResolution,
+} from '../../types';
 import { uid } from '../../utils/uid';
 import { buildPayload, sendMessage } from '../chatEngine';
 import { rollEngines, resolveManualRoll } from '../engine/engineRolls';
@@ -30,7 +33,7 @@ import { sanitizePayloadForApi } from '../lib/payloadSanitizer';
 import { getToolDefinitions } from './toolHandlers';
 import { resolveToolHandler } from './toolRegistry';
 import type { ToolDispatchResult } from './toolRegistry';
-import { parseRequestRollArgs, formatPlayerRollResult, formatPlayerRollDeclined } from './toolHandlers';
+import { parseRequestOutcomeArgs, formatPlayerOutcomeResult, formatPlayerOutcomeDeclined } from './toolHandlers';
 import { gatherContext } from './contextGatherer';
 import { tierAllows } from './aiTier';
 import { extractAndStripSceneStakes } from './sceneStakesTag';
@@ -111,15 +114,19 @@ export function resolveEngineRolls(
 
     // Player-called dice ("dice me"). The player armed a roll before sending, so resolve REAL
     // dice now (hidden until this commit) and assert the number as FACT. This also SUPPRESSES
-    // the request_roll tool for the turn, so the model gets exactly one dice signal it cannot
-    // cherry-pick.
+    // the request_outcome tool for the turn, so the model gets exactly one resolution signal
+    // it cannot cherry-pick.
+    //
+    // This is the ONE remaining path on which a number reaches the writer, and it survives the
+    // request_outcome rework deliberately: the player rolled it themselves and chose to assert
+    // it, so there is nothing for the engine to have decided.
     //
     // No tier is named. `resolveManualRoll` still computes one (mobile reads it) but the label
     // was engine-authored machinery — the writer read it straight back out, and it meant the
     // engine, not the ruleset, decided what the number was worth. What travels instead is the
     // number plus the player's own words for what they were attempting, judged against whatever
-    // ladder the ruleset defines. The binding language mirrors formatPlayerRollResult so both
-    // dice paths speak with one voice.
+    // ladder the ruleset defines. The binding language mirrors formatPlayerOutcomeResult so
+    // both resolution paths speak with one voice.
     const armed = state.armedRoll;
     if (armed) {
         const r = resolveManualRoll(armed, context.diceSystem);
@@ -611,30 +618,29 @@ export async function runGenerationStage(
     let accumulatedContent = '';
     const armed = state.armedRoll;
 
-    // Stale-generation guard for the player-roll suspension below. `handleStop` clears
+    // Stale-generation guard for the player-outcome suspension below. `handleStop` clears
     // `isStreaming`, which unlocks the composer, so the player can start a NEW turn while an
-    // old request_roll modal is still open. If that stale request then resolved, its
+    // old request_outcome modal is still open. If that stale request then resolved, its
     // `updateLastAssistant*` calls would scan back to the last assistant message — the NEW
     // turn's bubble — and write into it. Bumping a module counter per generation lets the old
     // closure notice it has been superseded and bail.
     const generationId = ++activeGenerationId;
 
     /**
-     * Awaits the player's dice total, and is GUARANTEED to settle.
+     * Awaits the player's outcome pick (and the consequence riding with it), and is GUARANTEED
+     * to settle.
      *
      * `onDone`'s promise is discarded by llmService, so an unhandled rejection here would hang
      * the turn forever with `isStreaming` stuck true and no Retry button. Abort resolves null,
      * a rejection resolves null, and the abort listener is always removed.
      */
-    const awaitPlayerRoll = (req: {
-        dice: string; reason: string; successOn: string; failureMeans: string;
-    }): Promise<number | null> => {
-        const ask = callbacks.requestPlayerRoll;
+    const awaitPlayerOutcome = (req: PlayerOutcomeRequest): Promise<PlayerOutcomeResolution | null> => {
+        const ask = callbacks.requestPlayerOutcome;
         if (!ask || abortController.signal.aborted) return Promise.resolve(null);
-        return new Promise<number | null>((resolve) => {
+        return new Promise<PlayerOutcomeResolution | null>((resolve) => {
             let settled = false;
             const onAbort = () => finish(null);
-            const finish = (value: number | null) => {
+            const finish = (value: PlayerOutcomeResolution | null) => {
                 if (settled) return;
                 settled = true;
                 abortController.signal.removeEventListener('abort', onAbort);
@@ -642,7 +648,7 @@ export async function runGenerationStage(
             };
             abortController.signal.addEventListener('abort', onAbort, { once: true });
             ask(req).then(finish, (err) => {
-                console.warn('[Turn] requestPlayerRoll rejected — continuing without a roll:', err);
+                console.warn('[Turn] requestPlayerOutcome rejected — continuing unresolved:', err);
                 finish(null);
             });
         });
@@ -664,26 +670,26 @@ export async function runGenerationStage(
         const allowTools = toolCallCount < MAX_TOOL_CALLS_PER_TURN && apiRetryCount < 2;
         const requestPayload = sanitizePayloadForApi(currentPayload, allowTools, provider?.modelName);
 
-        // Dice availability. ONE mode, one switch: Ask To Roll.
+        // Resolution availability. ONE mode, one switch: Ask To Resolve.
         //
-        //   ON  — the GM calls request_roll, generation SUSPENDS, and the player types the total
-        //         their physical dice showed. Requires a UI to suspend into.
-        //   OFF — no dice tool. Every "ask the player for a roll" imperative lives in that
-        //         tool's description, so withholding the tool withholds the instructions too,
-        //         and the model simply narrates. Nothing in the system prompt needs to vary.
+        //   ON  — the GM calls request_outcome, generation SUSPENDS, and the player picks one of
+        //         the four outcomes. Requires a UI to suspend into.
+        //   OFF — no resolution tool. Every "ask the player" imperative lives in that tool's
+        //         description, so withholding the tool withholds the instructions too, and the
+        //         model simply narrates. Nothing in the system prompt needs to vary.
         //
         // A manually armed roll ("dice me") suppresses the tool: the resolved fact is already in
-        // the payload, and offering the tool too would let the model roll twice for one action.
+        // the payload, and offering the tool too would resolve one action twice.
         //
-        // `requestPlayerRoll` is deliberately NOT part of this decision. The tools array is part
-        // of the prompt, so a caller with no UI to suspend into — the base-app gate, a facade
-        // run, a test — must send the SAME tools the app sends, or it freezes a payload no user
-        // ever sees. Making availability depend on a callback is exactly the bug the recorder
-        // comment in __tests__/baseAppGate/recorder.ts warns about: absent, the old code silently
-        // swapped in the engine-rolled tool and the gate never noticed. If such a caller does
-        // receive a `request_roll` it cannot suspend for, `handleRequestRoll` in toolRegistry.ts
-        // answers it synchronously with `player_total: null` — "no roll happened, do not invent
-        // one" — which resolves the call and lets the turn finish.
+        // `requestPlayerOutcome` is deliberately NOT part of this decision. The tools array is
+        // part of the prompt, so a caller with no UI to suspend into — the base-app gate, a
+        // facade run, a test — must send the SAME tools the app sends, or it freezes a payload
+        // no user ever sees. Making availability depend on a callback is exactly the bug the
+        // recorder comment in __tests__/baseAppGate/recorder.ts warns about: absent, the old
+        // code silently swapped in the engine-rolled tool and the gate never noticed. If such a
+        // caller does receive a `request_outcome` it cannot suspend for, `handleRequestOutcome`
+        // in toolRegistry.ts answers it synchronously with `outcome: null` — "nothing was
+        // resolved, do not pick one" — which resolves the call and lets the turn finish.
         const askToRoll = context.diceFairnessActive !== false && !armed;
         const tools = allowTools
             ? getToolDefinitions({
@@ -721,24 +727,24 @@ export async function runGenerationStage(
 
                     const engineText = stripLLMSceneHeader(finalText);
 
-                    // `request_roll` is the one tool that SUSPENDS. Only the production of the
-                    // tool RESULT differs; everything downstream (accumulate → stamp → push →
-                    // resume after 800ms) is the shared path, so the suspension stays confined
+                    // `request_outcome` is the one tool that SUSPENDS. Only the production of
+                    // the tool RESULT differs; everything downstream (accumulate → stamp → push
+                    // → resume after 800ms) is the shared path, so the suspension stays confined
                     // to this block. ToolHandlerFn is deliberately left synchronous — see the
-                    // note on handleRequestRoll in toolRegistry.ts.
+                    // note on handleRequestOutcome in toolRegistry.ts.
                     let dispatchResult: ToolDispatchResult;
                     // The callback gates SUSPENSION only, never tool availability (see above).
                     // Absent — gate, facade, test — falls through to the registry handler, which
-                    // reports "no roll happened" synchronously rather than hanging the turn.
-                    const canSuspend = typeof callbacks.requestPlayerRoll === 'function';
-                    const rollArgs = toolName === 'request_roll' && canSuspend
-                        ? parseRequestRollArgs(toolCall.arguments)
+                    // reports "nothing was resolved" synchronously rather than hanging the turn.
+                    const canSuspend = typeof callbacks.requestPlayerOutcome === 'function';
+                    const outcomeArgs = toolName === 'request_outcome' && canSuspend
+                        ? parseRequestOutcomeArgs(toolCall.arguments)
                         : null;
 
-                    if (rollArgs) {
+                    if (outcomeArgs) {
                         // Show the request before blocking. Stamping tool_calls WITHOUT adding
                         // the tool message is what renders the request chip with no result yet
-                        // (ToolCallChips' `request_roll` branch shows "waiting for your roll"
+                        // (ToolCallChips' `request_outcome` branch shows "waiting for you"
                         // until a matching tool message exists), and it means an abandoned
                         // request leaves no persisted ephemeral orphan behind.
                         //
@@ -761,11 +767,10 @@ export async function runGenerationStage(
                         });
                         callbacks.setPipelinePhase?.('awaiting-player');
 
-                        const playerTotal = await awaitPlayerRoll({
-                            dice: rollArgs.dice,
-                            reason: rollArgs.reason,
-                            successOn: rollArgs.success_on,
-                            failureMeans: rollArgs.failure_means,
+                        const resolution = await awaitPlayerOutcome({
+                            reason: outcomeArgs.reason,
+                            difficulty: outcomeArgs.difficulty,
+                            failureMeans: outcomeArgs.failure_means,
                         });
 
                         // The player may have taken minutes. Two things can have changed.
@@ -779,15 +784,15 @@ export async function runGenerationStage(
                         if (generationId !== activeGenerationId) {
                             // A newer turn started while we were suspended. Writing now would
                             // land in ITS bubble and payload. Drop this resolution silently.
-                            console.warn('[Turn] player roll resolved after a newer turn began — discarded');
+                            console.warn('[Turn] player outcome resolved after a newer turn began — discarded');
                             return;
                         }
 
                         callbacks.setPipelinePhase?.('generating');
                         dispatchResult = {
-                            toolResult: playerTotal === null
-                                ? formatPlayerRollDeclined(rollArgs)
-                                : formatPlayerRollResult(rollArgs, playerTotal),
+                            toolResult: resolution === null
+                                ? formatPlayerOutcomeDeclined(outcomeArgs)
+                                : formatPlayerOutcomeResult(outcomeArgs, resolution.outcome, resolution.consequence),
                             accumulation: 'append',
                             traceResult: true,
                         };

@@ -65,10 +65,10 @@ export type TurnCallbacks = {
      *  the user applies it in the UI. */
     stageConditionProposal?: (proposal: ConditionProposal) => void;
     /**
-     * Player-rolled resolution: the GM called `request_roll`, so generation SUSPENDS here
-     * until the player types the total their physical dice showed. Resolve with the number,
-     * or `null` if they dismissed the request (the model is then told no roll happened rather
-     * than being allowed to invent one).
+     * Player-resolved action: the GM called `request_outcome`, so generation SUSPENDS here
+     * until the player picks one of the four outcomes. Resolve with that outcome plus whatever
+     * stood in the modal's Consequence field, or `null` if they dismissed the request (the
+     * model is then told nothing was resolved rather than being allowed to pick for itself).
      *
      * This is the only awaited callback on this interface. It is OPTIONAL by necessity: the
      * base-app gate fixtures enumerate TurnCallbacks members, and the commit / swipe / test
@@ -81,7 +81,9 @@ export type TurnCallbacks = {
      * in a later turn. Closing whatever UI this opened is the implementation's job, not the
      * caller's — see `handleStop` in useChatOperations.
      */
-    requestPlayerRoll?: (req: import('../../types').PlayerRollRequest) => Promise<number | null>;
+    requestPlayerOutcome?: (
+        req: import('../../types').PlayerOutcomeRequest,
+    ) => Promise<import('../../types').PlayerOutcomeResolution | null>;
     /** WO-05: Director phase UI hook. Fires 'running' just before the Director
      *  call begins and 'done' after it settles (success, abort, timeout, or
      *  parse-failure — `runDirectorBrief` always returns). The UI uses this to

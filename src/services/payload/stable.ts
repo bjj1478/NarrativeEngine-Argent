@@ -76,8 +76,8 @@ export function buildStable(opts: {
     // stable (it's byte-identical across turns). Mirrors mobileApp payloadStableContent.ts.
     //
     // The user's custom Action Resolution rules are NEVER overwritten. Nor does this block vary
-    // by dice mode: every "ask the player to roll" imperative lives in the request_roll tool
-    // description (toolHandlers.ts), so turning dice off withholds the instructions by
+    // by resolution mode: every "ask the player" imperative lives in the request_outcome tool
+    // description (toolHandlers.ts), so turning it off withholds the instructions by
     // withholding the tool — and this cache-boundary prefix stays byte-constant either way.
     const effectiveRules = context.rulesRaw || DEFAULT_RULES;
 

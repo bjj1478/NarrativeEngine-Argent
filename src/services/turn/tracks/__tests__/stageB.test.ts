@@ -13,6 +13,10 @@ vi.mock('../../../npc/agency/agencyEngine', () => ({
 
 vi.mock('../../../npc/reactionMenu', () => ({
     buildReactionMenu: vi.fn(),
+    // repressionTrack derives its contexts from the scene stakes so it books repression
+    // against the same menu the payload showed. The real mapping is covered in
+    // npc/__tests__/reactionMenu.test.ts; here it only has to return something usable.
+    contextsForStakes: vi.fn(() => ['peaceful']),
 }));
 
 vi.mock('../../../npc/reactionRepression', () => ({
@@ -97,7 +101,10 @@ describe('Stage B every-turn tracks', () => {
 
         expect(ctx.onStageIds).toEqual(['hex-1']);
         expect(ctx.callbacks.setOnStageNpcIds).toHaveBeenCalledWith(['hex-1']);
-        expect(mockBuildReactionMenu).toHaveBeenCalledWith(npc, 'peaceful', expect.any(Function), false);
+        // The menu is now built from the stakes-derived CONTEXT LIST (contextsForStakes), so
+        // repression books against the same table the payload showed. Repression itself still
+        // takes a single context — it only ever engages on the peaceful half.
+        expect(mockBuildReactionMenu).toHaveBeenCalledWith(npc, ['peaceful'], expect.any(Function), false);
         expect(mockApplyRepressionToMenu).toHaveBeenCalledWith(['hostile impulse'], npc, 'peaceful', expect.any(Function));
         expect(ctx.callbacks.updateNPC).toHaveBeenCalledWith('hex-1', { repressionPressure: 1 });
     });
