@@ -35,6 +35,7 @@ export const DEFAULT_CONTEXT = {
     diceSystem: buildDefaultDiceSystem(),
     worldVibe: '',
     worldEventConfig: { initialDC: 498, dcReduction: 2, who: [] as string[], where: [] as string[], why: [] as string[], what: [] as string[] },
+    consequences: [] as string[],
     notebook: [],
     notebookActive: true,
     relationshipMemory: false,
@@ -142,6 +143,10 @@ export async function initializeCampaignState(params: {
                 why: seeds.worldWhy.length >= 3 ? seeds.worldWhy : [...DEFAULT_WORLD_WHY],
                 what: seeds.worldWhat.length >= 3 ? seeds.worldWhat : [...DEFAULT_WORLD_WHAT],
             };
+            // No default fallback and no minimum: consequences are only useful when they
+            // are world-shaped, so an empty list is the honest result for a lore file
+            // that does not define any.
+            if (seeds.consequences.length > 0) ctx.consequences = seeds.consequences;
         }
         await saveCampaignState(campaignId, {
             context: { ...DEFAULT_CONTEXT, ...ctx }, messages: existingState?.messages ?? [],

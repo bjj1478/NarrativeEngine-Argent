@@ -241,6 +241,16 @@ export type GameContext = {
     diceConfig?: DiceConfig;        // @deprecated — migrated to diceSystem on load
     diceSystem?: DiceSystemConfig;   // generalized dice engine config
     worldEventConfig?: WorldEventConfig;
+    /**
+     * World-specific costs of a miss, seeded from the lore file and editable in Engine
+     * Tuning. Whole phrases, not tags — they carry their own commas, so they are stored
+     * one per entry and edited newline-separated.
+     *
+     * Nothing draws from this yet. It is campaign data waiting for the roll path to
+     * consume it, and is deliberately NOT injected into the prompt in the meantime —
+     * an unused list in every payload is context spent for nothing.
+     */
+    consequences?: string[];
     // Toggles: whether each field is appended to context
     canonStateActive: boolean;
     headerIndexActive: boolean;
@@ -591,6 +601,7 @@ export function migrateLegacyContext(ctx: Partial<GameContext>): GameContext {
             why: [],
             what: [],
         },
+        consequences: [],
     };
     const merged: GameContext = { ...base, ...ctx };
     // Inventory normalization. The legacy free-text `inventory` string is read by

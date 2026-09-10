@@ -35,6 +35,7 @@ describe('extractEngineSeeds — empty / no-input cases', () => {
         expect(extractEngineSeeds([])).toEqual({
             surpriseTypes: [], surpriseTones: [], encounterTypes: [], encounterTones: [],
             worldWho: [], worldWhere: [], worldWhy: [], worldWhat: [],
+            consequences: [],
         });
     });
 
@@ -299,5 +300,120 @@ Body one.
 Body two.
 `);
         expect(seed.worldWho).toEqual(['The Guild']);
+    });
+});
+
+describe('extractEngineSeeds — consequences', () => {
+    it('reads an explicit **Consequences:** block one phrase per line', () => {
+        const seed = seedsFor(`
+### SYSTEM -- Engine Seeds
+**Consequences:**
+- Noise — Not discovery, attention. A patrol changes its route, a dog does not settle.
+- Trace — You are through, but you left something: a print, a scratch on a lock.
+- Pinned — The way forward is fine; the way back closed behind you.
+`);
+        expect(seed.consequences).toEqual([
+            'Noise — Not discovery, attention. A patrol changes its route, a dog does not settle.',
+            'Trace — You are through, but you left something: a print, a scratch on a lock.',
+            'Pinned — The way forward is fine; the way back closed behind you.',
+        ]);
+    });
+
+    it('never splits a phrase on its internal commas or slashes', () => {
+        const seed = seedsFor(`
+### SYSTEM -- Engine Seeds
+**Consequences:**
+- The price of their help doubles, or acquires a condition you will not like.
+`);
+        expect(seed.consequences).toHaveLength(1);
+        expect(seed.consequences[0]).toContain(', or acquires');
+    });
+
+    it('ends the block at a blank line, not at the end of the chunk', () => {
+        const seed = seedsFor(`
+### SYSTEM -- Engine Seeds
+**Consequences:**
+- A patrol changes its route.
+
+Some unrelated prose that follows the block.
+`);
+        expect(seed.consequences).toEqual(['A patrol changes its route.']);
+    });
+
+    it('ends the block at the next **Field:** line', () => {
+        const seed = seedsFor(`
+### SYSTEM -- Engine Seeds
+**Consequences:**
+- A patrol changes its route.
+**Surprise Tones:** TENSE, GRIM, SUDDEN
+`);
+        expect(seed.consequences).toEqual(['A patrol changes its route.']);
+        expect(seed.surpriseTones).toEqual(['TENSE', 'GRIM', 'SUDDEN']);
+    });
+
+    it('harvests a two-column consequence table, joining label and cost', () => {
+        const seed = seedsFor(`
+## 5A. CONSEQUENCE TABLES
+### MECHANIC -- Social Consequence Table
+
+| The miss | What it costs |
+|---|---|
+| Overreached | They hear the ask underneath the words. The price doubles. |
+| Read wrong | You misjudged what they wanted. |
+`);
+        expect(seed.consequences).toEqual([
+            'Overreached — They hear the ask underneath the words. The price doubles.',
+            'Read wrong — You misjudged what they wanted.',
+        ]);
+    });
+
+    it('takes a table whose header omits the word, via its parent section', () => {
+        // `MECHANIC -- Magic Backlash Table` names no consequence at all; it is only
+        // recognisable by its parent section and its own cost column.
+        const seed = seedsFor(`
+## 5A. CONSEQUENCE TABLES
+### MECHANIC -- Magic Backlash Table
+
+| The miss | What it costs |
+|---|---|
+| Marked | A visible trace — on you, on the room, on the person you touched. |
+`);
+        expect(seed.consequences).toEqual([
+            'Marked — A visible trace — on you, on the room, on the person you touched.',
+        ]);
+    });
+
+    it('leaves an unrelated table alone', () => {
+        const seed = seedsFor(`
+## 6. ECONOMY
+### ECONOMY -- Coinage
+
+| Coin | Value |
+|---|---|
+| Gold | 10 silver |
+| Silver | 10 copper |
+`);
+        expect(seed.consequences).toEqual([]);
+    });
+
+    it('does not treat a table heading row as an entry', () => {
+        const seed = seedsFor(`
+### MECHANIC -- Violence Consequence Table
+
+| The miss | What it costs |
+|---|---|
+| Position | Your back is to the wrong thing. |
+`);
+        expect(seed.consequences).not.toContain('The miss — What it costs');
+    });
+
+    it('has no default and no heuristic fallback — a world without them gets none', () => {
+        const seed = seedsFor(`
+## 2. FACTIONS
+### FACTION -- The Guild
+**Goals:** Hold the docks.
+Body prose.
+`);
+        expect(seed.consequences).toEqual([]);
     });
 });

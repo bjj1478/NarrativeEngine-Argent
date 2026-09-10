@@ -68,4 +68,10 @@ export type EngineSeed = {
     worldWhere: string[];
     worldWhy: string[];
     worldWhat: string[];
+    /**
+     * World-specific costs of a miss, as whole phrases rather than tags. Unlike every
+     * other field here these are newline-separated in the lore file and in the UI,
+     * because the phrases themselves contain commas.
+     */
+    consequences: string[];
 };

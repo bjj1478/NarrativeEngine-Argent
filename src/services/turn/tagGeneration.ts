@@ -11,7 +11,7 @@ export async function populateEngineTags(
     provider: EndpointConfig | ProviderConfig,
     worldLore: string,
     currentTags: string[],
-    field: 'surpriseTypes' | 'surpriseTones' | 'encounterTypes' | 'encounterTones' | 'worldWho' | 'worldWhere' | 'worldWhy' | 'worldWhat'
+    field: 'surpriseTypes' | 'surpriseTones' | 'encounterTypes' | 'encounterTones' | 'worldWho' | 'worldWhere' | 'worldWhy' | 'worldWhat' | 'consequences'
 ): Promise<string[]> {
     const fieldDescriptions: Record<typeof field, string> = {
         surpriseTypes: 'surprise event TYPES (e.g. WEATHER_SHIFT, ODD_SOUND, NPC_QUIRK). These are categories of unexpected ambient flavor events.',
@@ -22,6 +22,7 @@ export async function populateEngineTags(
         worldWhere: '"Where" elements for world events — the locations, as PREPOSITIONAL PHRASES starting with in/at/across/along/beneath (e.g. "in a neighboring city", "deep underground").',
         worldWhy: '"Why" elements for world events — the motivations, as a "to …" or "because …" CLAUSE (e.g. "to seize power", "for brutal vengeance").',
         worldWhat: '"What" elements for world events — the actions taken, as PAST-TENSE VERB PHRASES (e.g. "declared open hostilities", "formed an unexpected alliance").',
+        consequences: 'CONSEQUENCES — what a failed attempt costs in THIS world. Each is a whole phrase of one or two sentences, in the form "Label — what it costs" (e.g. "Noise — Not discovery, attention. A patrol changes its route."). Name a specific, concrete cost the world would actually impose; never a generic setback, never a number, never a rule or skill name.',
     };
 
     // The four world fields are concatenated verbatim into one sentence, so a tag that

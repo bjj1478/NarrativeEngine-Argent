@@ -8,7 +8,8 @@ import type { RollFrequency, LoreCategory } from '../../types';
 
 type PopulateField =
     | 'surpriseTypes' | 'surpriseTones' | 'encounterTypes' | 'encounterTones'
-    | 'worldWho' | 'worldWhere' | 'worldWhy' | 'worldWhat';
+    | 'worldWho' | 'worldWhere' | 'worldWhy' | 'worldWhat'
+    | 'consequences';
 
 /** Which lore categories carry the answer for each populated field. */
 const POPULATE_CATEGORIES: Record<PopulateField, LoreCategory[]> = {
@@ -20,6 +21,9 @@ const POPULATE_CATEGORIES: Record<PopulateField, LoreCategory[]> = {
     worldWhere: ['location', 'world_overview'],
     worldWhy: ['faction', 'event', 'world_overview'],
     worldWhat: ['event', 'faction'],
+    // A consequence has to be world-shaped, so give the model the mechanical tables
+    // and the world's own tone rather than its cast list.
+    consequences: ['rules', 'world_overview', 'power_system', 'culture'],
 };
 
 /**
@@ -366,6 +370,56 @@ export function EnginesTab() {
 
                 {/* Dice Fairness Engine (generalized) */}
                 <DiceFairnessSection context={context} updateContext={updateContext} />
+
+                {/* Consequences — seeded from lore, edited here, not yet drawn from. */}
+                <div className="space-y-2 xl:col-span-2">
+                    <div className="text-[12px] text-text-dim uppercase tracking-wider font-bold border-b border-border pb-1 flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-text-dim" />
+                        Consequences
+                    </div>
+                    <div className="bg-void border border-border p-3 space-y-3">
+                        <p className="text-[11px] text-text-dim/60 leading-relaxed">
+                            World-specific costs of a miss, seeded from your lore file's consequence
+                            tables. One per line — these are whole phrases, not tags, so they are
+                            never split on commas. Populate adds to the list rather than replacing it.
+                            Nothing draws from this list yet.
+                        </p>
+                        <div className="flex flex-col">
+                            <label className="text-[12px] text-text-dim uppercase tracking-wider mb-1 flex justify-between items-center">
+                                <span>Costs of a Miss (One Per Line)</span>
+                                <span className="flex items-center gap-2">
+                                    {renderPopulateButton('consequences', async () => {
+                                        const provider = useAppStore.getState().getActiveStoryEndpoint();
+                                        if (!provider) return;
+                                        const current = context.consequences ?? [];
+                                        const result = await populateEngineTags(
+                                            provider, loreTextFor('consequences'), current, 'consequences');
+                                        // Append, unlike the tag fields, which replace. This list is
+                                        // seeded from hand-written consequence tables, and the populator
+                                        // is asked for entries it has not already got — so replacing
+                                        // would throw away authored work to make room for a guess.
+                                        updateContext({ consequences: [...new Set([...current, ...result])] });
+                                    })}
+                                    <span className="text-text-dim/60">
+                                        {(context.consequences?.length ?? 0)} entries
+                                    </span>
+                                </span>
+                            </label>
+                            <textarea
+                                value={(context.consequences ?? []).join('\n')}
+                                onChange={(e) => {
+                                    // Split on newlines only. A consequence is a sentence and
+                                    // carries its own commas; comma-splitting would shred it.
+                                    const phrases = e.target.value.split('\n').map(p => p.trim()).filter(Boolean);
+                                    updateContext({ consequences: phrases });
+                                }}
+                                placeholder={'Noise — Not discovery, attention. A patrol changes its route.\nTrace — You are through, but you left something.'}
+                                rows={8}
+                                className="w-full bg-surface border border-border px-3 py-2 text-[13px] font-mono text-text-primary focus:border-terminal outline-none transition-colors resize-y min-h-[10rem]"
+                            />
+                        </div>
+                    </div>
+                </div>
 
             </div>
 

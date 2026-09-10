@@ -141,6 +141,21 @@ Here is the exact structure you must use:
 **World Event Why:** [List 5-10 motives e.g. to seize power, for brutal vengeance, to protect a dangerous secret]
 **World Event Where:** [List 5-10 prepositional phrases e.g. in a neighboring city, along a main trade route, in a forgotten ruin]
 
+**── CONSEQUENCES: what a miss costs in THIS world ──**
+> Not an engine tier — a pool of world-shaped costs, held on the campaign and editable in
+> Engine Tuning. One phrase per line, NOT comma-separated: each entry is a whole sentence
+> or two and carries its own commas. Write the form "Label — what it costs", where the
+> label names the shape of the miss and the cost is specific and concrete.
+> Nothing draws from this list yet; it is being populated ahead of the roll path.
+**Consequences:**
+- Noise — Not discovery, attention. A patrol changes its route, a dog does not settle.
+- Trace — You are through, but you left something: a print, a scratch on a lock.
+- Overreached — They hear the ask underneath the words. The price of their help doubles.
+
+> Already have `| The miss | What it costs |` tables under a `## CONSEQUENCE TABLES`
+> section? They are read automatically — the two columns are joined as "Label — cost", so
+> there is nothing to rewrite.
+
 > Legacy: `**Quest Hook Who/What/Where/Why:**` is still accepted. Those rows are authored
 > in rumour order (who + what + WHERE + why), and the parser swaps Where and Why so the
 > sentence still reads correctly. Prefer the `World Event` labels in new files — if both

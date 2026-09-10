@@ -678,6 +678,9 @@ export type EngineSeed = {
     worldWhere: string[];
     worldWhy: string[];
     worldWhat: string[];
+    /** World-specific costs of a miss. Whole phrases, newline-separated in the lore
+     *  file and in the UI, because the phrases carry their own commas. */
+    consequences: string[];
     characterIntros: CharacterIntroEntry[];
 };
 

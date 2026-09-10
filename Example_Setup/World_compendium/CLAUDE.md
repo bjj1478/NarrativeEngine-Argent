@@ -66,6 +66,13 @@ hostilities to seize power in a neighboring city"*. Write each row to fit its sl
 the joined sentence back before committing. The event is TRUE and moves the campaign
 baseline; it reaches the player as news, rumour, or environmental consequence.
 
+**Consequences** are a separate, non-tier list: world-shaped costs of a miss, held on the
+campaign and editable in Engine Tuning. Author them as a `**Consequences:**` block with ONE
+PHRASE PER LINE (never comma-separated — each entry carries its own commas), in the form
+"Label — what it costs". Existing `| The miss | What it costs |` tables under a
+`## CONSEQUENCE TABLES` section are harvested automatically and need no rewrite. Nothing
+draws from the list yet.
+
 `**Quest Hook Who/What/Where/Why:**` is the legacy label and is still parsed. Those rows are
 authored in rumour order (who + what + WHERE + why), and the parser swaps Where and Why so
 the sentence still reads correctly. Use `World Event` in new files. If a file carries both

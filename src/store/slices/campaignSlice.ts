@@ -265,6 +265,9 @@ export const defaultContext: GameContext = {
         why: [...DEFAULT_WORLD_WHY],
         what: [...DEFAULT_WORLD_WHAT],
     },
+    // No genre-neutral default: a consequence that is not world-shaped is the exact
+    // thing the lore-authored list exists to replace. Empty until a lore file fills it.
+    consequences: [],
     // WO-A rewrite 2 §2: PC lives here, not in npcLedger. Optional — null means
     // "no PC created yet" (the Character panel shows the creation entry point).
     playerCharacter: null,

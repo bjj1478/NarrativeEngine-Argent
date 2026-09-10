@@ -18,7 +18,7 @@ import type { LoreChunk, EngineSeed, CharacterIntroEntry } from '../../types';
 type WorldField = 'worldWho' | 'worldWhat' | 'worldWhere' | 'worldWhy';
 type SeedField =
     | 'surpriseTypes' | 'surpriseTones' | 'encounterTypes' | 'encounterTones'
-    | WorldField;
+    | WorldField | 'consequences';
 
 const ENUM_FIELDS: [RegExp, SeedField][] = [
     [/\*\*Surprise Types:\*\*\s*(.+)/i, 'surpriseTypes'],
@@ -51,6 +51,96 @@ function extractEntityName(header: string): string {
     const prefixMatch = name.match(/^[A-Z][A-Z_\s]*(?:--|[—–])\s*(.+)/);
     if (prefixMatch) return prefixMatch[1].trim();
     return name.split(/[—–]/)[0].trim();
+}
+
+// ── Consequences ───────────────────────────────────────────────────────
+// World-specific costs of a miss. Whole phrases, not tags — they carry their own
+// commas, so they are never comma-split. Two authored shapes are accepted:
+//
+//   1. A `**Consequences:**` block whose entries are one per line, optionally
+//      bulleted. The block ends at the first blank line or the next `**Field:**`.
+//   2. The `| The miss | What it costs |` markdown tables that already exist under
+//      `MECHANIC -- … Consequence Table` headers. The two columns are joined as
+//      "Label — cost" so the label (Noise, Trace, Pinned) survives as the handle.
+//
+// Nothing draws from these yet; extraction only has to be faithful.
+
+const CONSEQUENCE_HEADER = /^\s*\*\*Consequences:\*\*\s*(.*)$/i;
+/** A markdown table row: leading pipe, cells, trailing pipe. */
+const TABLE_ROW = /^\s*\|(.+)\|\s*$/;
+/** The `|---|---|` separator under a table header. */
+const TABLE_RULE = /^[\s|:-]+$/;
+/** Another `**Field:**` line, which terminates a consequence block. */
+const NEXT_FIELD = /^\s*\*\*[^*]+:\*\*/;
+
+function cleanPhrase(raw: string): string {
+    return raw
+        .replace(/^\s*[-*+]\s+/, '')   // bullet
+        .replace(/^\s*\d+[.)]\s+/, '') // numbered
+        .replace(/\*\*/g, '')
+        .trim();
+}
+
+/** Entries from an explicit `**Consequences:**` block, one per line. */
+function consequencesFromBlock(lines: string[]): string[] {
+    const out: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+        const header = lines[i].match(CONSEQUENCE_HEADER);
+        if (!header) continue;
+
+        // A value on the header line itself is the first entry.
+        const inline = cleanPhrase(header[1] ?? '');
+        if (inline) out.push(inline);
+
+        for (let j = i + 1; j < lines.length; j++) {
+            const line = lines[j];
+            if (!line.trim()) break;              // blank line ends the block
+            if (NEXT_FIELD.test(line)) break;     // next field ends the block
+            if (/^\s*#{1,6}\s/.test(line)) break; // next header ends the block
+            const phrase = cleanPhrase(line);
+            if (phrase) out.push(phrase);
+        }
+    }
+    return out;
+}
+
+/** A heading row that names a cost column — the table identifies itself. */
+const COST_HEADING = /what it costs|the cost|cost\b/i;
+
+/**
+ * Entries from a two-column consequence table.
+ *
+ * A table qualifies two ways, because the headers in the wild do not all say the word:
+ * the Sword Coast's fourth table is `MECHANIC -- Magic Backlash Table`, which names no
+ * consequence at all and is only recognisable by sitting under `## 5A. CONSEQUENCE
+ * TABLES` and by its own `| The miss | What it costs |` heading row. Either signal is
+ * enough; an unrelated table (prices, a timeline) matches neither and is left alone.
+ */
+function consequencesFromTable(header: string, parentSection: string, lines: string[]): string[] {
+    const namedConsequence = /consequence/i.test(`${header} ${parentSection}`);
+    const out: string[] = [];
+    let headingCells: string[] | null = null;
+
+    for (const line of lines) {
+        const row = line.match(TABLE_ROW);
+        if (!row) { headingCells = null; continue; }  // a gap ends the table
+        if (TABLE_RULE.test(row[1])) continue;
+
+        const cells = row[1].split('|').map(c => cleanPhrase(c)).filter(Boolean);
+        if (cells.length < 2) continue;
+
+        // First row of a table is its column headings ("The miss", "What it costs").
+        if (!headingCells) { headingCells = cells; continue; }
+
+        // Take the table only if its name or its own heading row vouches for it.
+        if (!namedConsequence && !headingCells.some(c => COST_HEADING.test(c))) continue;
+
+        const [label, ...rest] = cells;
+        const cost = rest.join(' ').trim();
+        if (!cost) continue;
+        out.push(label ? `${label} — ${cost}` : cost);
+    }
+    return out;
 }
 
 function splitEnum(raw: string): string[] {
@@ -97,6 +187,7 @@ export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
         encounterTypes: new Set(), encounterTones: new Set(),
         worldWho: new Set(), worldWhat: new Set(),
         worldWhere: new Set(), worldWhy: new Set(),
+        consequences: new Set(),
     };
 
     // A field supplied by an explicit row is authoritative — the heuristics never
@@ -112,6 +203,11 @@ export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
             const m = chunk.content.match(pattern);
             if (m) { splitPhrases(m[1]).forEach(v => sets[field].add(v)); explicit.add(field); }
         }
+
+        // Consequences are never comma-split and have no heuristic fallback.
+        const contentLines = chunk.content.split(/\r?\n/);
+        for (const phrase of consequencesFromBlock(contentLines)) sets.consequences.add(phrase);
+        for (const phrase of consequencesFromTable(chunk.header, chunk.parentSection ?? '', contentLines)) sets.consequences.add(phrase);
     }
 
     // Quest Hook alias — only for slots the canonical rows did not fill.
@@ -203,6 +299,7 @@ export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
         worldWhere: Array.from(sets.worldWhere),
         worldWhy: Array.from(sets.worldWhy),
         worldWhat: Array.from(sets.worldWhat),
+        consequences: Array.from(sets.consequences),
         characterIntros: [],
     };
 
