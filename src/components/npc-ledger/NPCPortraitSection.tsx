@@ -1,7 +1,9 @@
-import { Loader2, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
+import { Loader2, Image as ImageIcon, ScanText, Trash2, Upload } from 'lucide-react';
 import type { NPCVisualProfile } from '../../types';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { DEFAULT_PORTRAIT_ART_STYLE, PORTRAIT_ART_STYLE_OPTIONS } from '../../data/portraitStyles';
+import { buildPortraitPrompt } from '../../services/npc/portraitPrompt';
+import { PortraitPromptModal } from './PortraitPromptModal';
 
 type Props = {
     portrait?: string;
@@ -22,6 +24,8 @@ export function NPCPortraitSection({
     onGeneratePortrait, onUploadPortrait, onRemovePortrait, onVisualProfileChange, appearance, onAppearanceChange,
 }: Props) {
     const fileInputRef = useRef<HTMLInputElement>(null);
+    // Snapshotted on open so later edits to the fields don't mutate the prompt under review.
+    const [previewPrompt, setPreviewPrompt] = useState<string | null>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -60,12 +64,12 @@ export function NPCPortraitSection({
                 </div>
             ) : null}
 
-            <div className="flex items-center justify-between mb-4 border-b border-border/50 pb-2">
+            <div className="flex items-center justify-between flex-wrap gap-x-3 gap-y-2 mb-4 border-b border-border/50 pb-2">
                 <div className="text-terminal font-bold uppercase tracking-widest text-xs">
                     Visual Profile (AI Ready)
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="text-[9px] uppercase tracking-wider text-text-dim hidden sm:block">Portrait Generation Data</div>
+                <div className="flex items-center flex-wrap gap-2">
+                    <div className="text-[9px] uppercase tracking-wider text-text-dim hidden xl:block">Portrait Generation Data</div>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -82,6 +86,15 @@ export function NPCPortraitSection({
                     >
                         <Upload size={10} />
                         Upload
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setPreviewPrompt(buildPortraitPrompt(visualProfile, name, appearance))}
+                        title="Build the image prompt and show it instead of generating — copy it into an external image tool"
+                        className="flex items-center gap-1 px-2 py-1 border border-border hover:border-terminal text-terminal text-[9px] uppercase tracking-wider rounded transition-colors"
+                    >
+                        <ScanText size={10} />
+                        Show Prompt
                     </button>
                     <button
                         type="button"
@@ -147,6 +160,14 @@ export function NPCPortraitSection({
                     className="w-full bg-surface border border-border rounded px-2 py-1.5 text-xs text-text-primary disabled:opacity-70 disabled:bg-surface disabled:border-transparent resize-none focus:outline-none focus:border-terminal"
                 />
             </div>
+
+            {previewPrompt !== null && (
+                <PortraitPromptModal
+                    prompt={previewPrompt}
+                    name={name}
+                    onClose={() => setPreviewPrompt(null)}
+                />
+            )}
         </div>
     );
 }

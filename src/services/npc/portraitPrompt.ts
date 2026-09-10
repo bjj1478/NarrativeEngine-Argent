@@ -2,7 +2,7 @@ import type { NPCVisualProfile } from '../../types';
 import { DEFAULT_VISUAL_PROFILE } from '../../types';
 import { DEFAULT_PORTRAIT_ART_STYLE, PORTRAIT_STYLE_PROMPTS } from '../../data/portraitStyles';
 
-const MAX_PORTRAIT_PROMPT_CHARS = 1_300;
+export const MAX_PORTRAIT_PROMPT_CHARS = 1_300;
 
 function isMeaningful(value: string | undefined): value is string {
     const normalized = value?.trim().toLowerCase();
