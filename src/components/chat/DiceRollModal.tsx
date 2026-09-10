@@ -27,12 +27,14 @@ export function DiceRollModal() {
 
     const [dieTypeId, setDieTypeId] = useState(diceSystem.dieTypes[0]?.id ?? '');
     const [rollDef, setRollDef] = useState<RollDefinition>(defaultRollDef);
+    const [reason, setReason] = useState('');
     const openedAtRef = useRef(0);
 
     useEffect(() => {
         if (open) {
             setDieTypeId(diceSystem.dieTypes[0]?.id ?? '');
             setRollDef(defaultRollDef);
+            setReason('');
             openedAtRef.current = Date.now();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,7 +48,7 @@ export function DiceRollModal() {
     };
 
     const confirm = () => {
-        const req: ManualRollRequest = { dieTypeId, rollDef };
+        const req: ManualRollRequest = { dieTypeId, rollDef, reason: reason.trim() || undefined };
         setArmedRoll(req);
         onClose();
     };
@@ -77,6 +79,22 @@ export function DiceRollModal() {
                 </div>
 
                 <div className="p-4 space-y-4">
+                    {/* What the roll is for. Goes into the turn in place of the outcome tier the
+                        engine used to assert: the GM needs to know what was attempted to judge
+                        the number against its own rules. Optional — a bare number still works. */}
+                    <div>
+                        <div className="text-[9px] text-text-dim uppercase tracking-wider mb-1">
+                            What is this roll for?
+                        </div>
+                        <input
+                            type="text"
+                            value={reason}
+                            onChange={e => setReason(e.target.value)}
+                            placeholder="e.g. forcing the shutter before the patrol turns"
+                            className="w-full bg-void border border-border focus:border-terminal text-[13px] text-text-primary rounded px-2 py-1.5 outline-none placeholder:text-text-dim/40"
+                        />
+                    </div>
+
                     {/* Die type selector */}
                     <div>
                         <div className="text-[9px] text-text-dim uppercase tracking-wider mb-1">Die Type</div>
@@ -148,7 +166,9 @@ export function DiceRollModal() {
                     </div>
 
                     <p className="text-[10px] text-text-dim/70 leading-relaxed">
-                        Confirm to arm the roll. On your next send, the engine rolls real dice and the GM narrates the outcome as fact.
+                        Confirm to arm the roll. On your next send the dice are rolled and the number is
+                        given to the GM as fact — it judges it against the campaign's rules and narrates
+                        the result. No outcome label is assigned for it.
                     </p>
                 </div>
 

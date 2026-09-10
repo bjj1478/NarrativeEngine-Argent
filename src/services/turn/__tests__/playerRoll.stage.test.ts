@@ -105,7 +105,7 @@ function baseState(over: Partial<Record<string, unknown>> = {}): TurnState {
     return {
         input: 'I force the shutter', displayInput: 'I force the shutter',
         settings: { debugMode: false, aiTier: 'lite', contextLimit: 8192 } as any,
-        context: { diceFairnessActive: false, playerRollActive: true, rollFrequency: 'contested' } as any,
+        context: { diceFairnessActive: true, rollFrequency: 'contested' } as any,
         messages: [], condenser: { condensedUpToIndex: -1 },
         loreChunks: [], npcLedger: [], archiveIndex: [], activeCampaignId: 'camp1',
         provider: { endpoint: 'http://x', modelName: 'm' } as any,
@@ -307,7 +307,7 @@ describe('player-rolled resolution — guards around an unbounded human wait', (
     });
 });
 
-describe('dice mode resolution — the three modes are mutually exclusive', () => {
+describe('dice mode resolution — Ask To Roll is the one switch', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         getToolDefinitionsMock.mockReturnValue([]);
@@ -320,58 +320,56 @@ describe('dice mode resolution — the three modes are mutually exclusive', () =
     const optsFor = async (context: Record<string, unknown>, over: Partial<TurnCallbacks> = {}) => {
         await runTurn(baseState({ context }), baseCallbacks({ requestPlayerRoll: async () => 9, ...over }), new AbortController());
         return getToolDefinitionsMock.mock.calls[0]?.[0] as unknown as {
-            allowDiceTool: boolean; playerRollFrequency?: string;
+            playerRollFrequency?: string;
         };
     };
 
-    it('player-roll mode offers request_roll and NOT roll_dice', async () => {
-        const opts = await optsFor({ diceFairnessActive: false, playerRollActive: true, rollFrequency: 'contested' });
+    it('Ask To Roll ON offers request_roll', async () => {
+        const opts = await optsFor({ diceFairnessActive: true, rollFrequency: 'contested' });
         expect(opts.playerRollFrequency).toBe('contested');
-        expect(opts.allowDiceTool).toBe(false);
     });
 
     it('passes the campaign frequency through', async () => {
-        const opts = await optsFor({ diceFairnessActive: false, playerRollActive: true, rollFrequency: 'critical' });
+        const opts = await optsFor({ diceFairnessActive: true, rollFrequency: 'critical' });
         expect(opts.playerRollFrequency).toBe('critical');
     });
 
-    it("an absent rollFrequency reads as 'contested' with no migration", async () => {
-        const opts = await optsFor({ diceFairnessActive: false, playerRollActive: true });
+    it("an absent rollFrequency reads as 'contested'", async () => {
+        const opts = await optsFor({ diceFairnessActive: true });
         expect(opts.playerRollFrequency).toBe('contested');
     });
 
-    it('an absent playerRollActive opts a pre-existing campaign in', async () => {
+    it('an absent diceFairnessActive reads as ON, not off', async () => {
+        // Only an explicit `false` means no dice. A context that never set the field — a bare
+        // fixture, a partially-migrated save — must still get dice rather than silently losing them.
+        const opts = await optsFor({});
+        expect(opts.playerRollFrequency).toBe('contested');
+    });
+
+    it('Ask To Roll OFF offers no dice tool at all', async () => {
         const opts = await optsFor({ diceFairnessActive: false });
+        expect(opts.playerRollFrequency).toBeUndefined();
+    });
+
+    // The invariant that matters most here, and the one whose absence caused the original bug:
+    // the tools array is part of the PROMPT, so it must be a function of campaign context alone.
+    // A caller with no roll UI (the base-app gate, a facade run, a test) has to send the same
+    // tools the app sends, or it freezes a payload no user ever sees. The old code degraded to
+    // the engine-rolled tool here, silently and invisibly.
+    it('offers request_roll even with no UI to suspend into — tools follow context, not callbacks', async () => {
+        const opts = await optsFor({ diceFairnessActive: true }, { requestPlayerRoll: undefined });
         expect(opts.playerRollFrequency).toBe('contested');
     });
 
-    it('opting out falls back to the engine-rolled tool', async () => {
-        const opts = await optsFor({ diceFairnessActive: false, playerRollActive: false });
-        expect(opts.playerRollFrequency).toBeUndefined();
-        expect(opts.allowDiceTool).toBe(true);
-    });
-
-    it('pool mode offers no dice tool at all — it has already rolled everything', async () => {
-        const opts = await optsFor({ diceFairnessActive: true, playerRollActive: true });
-        expect(opts.playerRollFrequency).toBeUndefined();
-        expect(opts.allowDiceTool).toBe(false);
-    });
-
-    it('no UI to suspend into (commit/swipe/test paths) falls back to the engine tool', async () => {
-        // requestPlayerRoll is optional precisely because these paths build their own callbacks.
-        const opts = await optsFor({ diceFairnessActive: false, playerRollActive: true }, { requestPlayerRoll: undefined });
-        expect(opts.playerRollFrequency).toBeUndefined();
-        expect(opts.allowDiceTool).toBe(true);
-    });
-
-    it('a manually armed "dice me" roll suppresses every dice tool', async () => {
+    it('a manually armed "dice me" roll suppresses the dice tool', async () => {
+        // The resolved number is already asserted into the payload; offering the tool as well
+        // would let the model roll a second time for the same action.
         await runTurn(
-            baseState({ context: { diceFairnessActive: false, playerRollActive: true }, armedRoll: '1d20' }),
+            baseState({ context: { diceFairnessActive: true }, armedRoll: '1d20' }),
             baseCallbacks({ requestPlayerRoll: async () => 9 }),
             new AbortController(),
         );
-        const opts = getToolDefinitionsMock.mock.calls[0]?.[0] as unknown as { allowDiceTool: boolean; playerRollFrequency?: string };
+        const opts = getToolDefinitionsMock.mock.calls[0]?.[0] as unknown as { playerRollFrequency?: string };
         expect(opts.playerRollFrequency).toBeUndefined();
-        expect(opts.allowDiceTool).toBe(false);
     });
 });

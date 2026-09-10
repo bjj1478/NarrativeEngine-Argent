@@ -66,28 +66,23 @@ export function useSceneContinue(messageId: string | null) {
 
         const pcName = store.context.characterProfileData?.name ?? '';
         const targetWords = computeLastSegmentWordCount(msg.content);
-        // Continue never offers a dice tool under player-rolled resolution. It is a second,
-        // SYNCHRONOUS tool-dispatch site (sceneContinue.ts) with no modal to suspend into, so
-        // request_roll cannot work here — and leaving roll_dice on would let the engine roll
-        // silently behind the player's back, which is the behaviour we are removing. With this
-        // false, buildSceneContinueDirective emits its existing "do not initiate or invent dice
-        // rolls; narrate only from results already in history" line, which is exactly right.
-        const allowDiceTool =
-            store.context.diceFairnessActive === false &&
-            !(store.context.playerRollActive ?? true);
+        // Continue never offers a dice tool. It is a second, SYNCHRONOUS tool-dispatch site
+        // (sceneContinue.ts) with no modal to suspend into, so request_roll cannot work here —
+        // and no engine-rolled tool exists to fall back on. sceneContinue therefore emits its
+        // "do not initiate or invent dice rolls; narrate only from results already in history"
+        // line unconditionally, and offers no tools at all.
 
         if (cachedPayload) {
             // Snapshot path — append assistant + system to the cached payload.
             basePayload = cachedPayload;
             assistantText = msg.content; // LIVE content — user may have swiped/edited
-            directive = buildSceneContinueDirective({ pcName, targetWords, allowDiceTool });
+            directive = buildSceneContinueDirective({ pcName, targetWords });
         } else {
             // Fallback path — rebuild payload from live store (§6).
             const built = await buildFallbackPayload({
                 pendingMsg: msg,
                 pcName,
                 targetWords,
-                allowDiceTool,
                 abortSignal: abortRef.current?.signal,
             });
             if (!built) {
@@ -120,8 +115,6 @@ export function useSceneContinue(messageId: string | null) {
                     directive,
                     modelName: provider.modelName,
                     temperature,
-                    allowDiceTool,
-                    combatModeActive: false, // passed through to getToolDefinitions (unused for roll_dice filter)
                     abortSignal,
                 },
                 (partial) => {
@@ -309,10 +302,9 @@ async function buildFallbackPayload(opts: {
     pendingMsg: ChatMessage;
     pcName: string;
     targetWords: number;
-    allowDiceTool: boolean;
     abortSignal?: AbortSignal;
 }): Promise<{ basePayload: import('../../services/llm/llmService').OpenAIMessage[]; directive: string } | null> {
-    const { pendingMsg, pcName, targetWords, allowDiceTool, abortSignal } = opts;
+    const { pendingMsg, pcName, targetWords, abortSignal } = opts;
     const store = useAppStore.getState();
 
     const state = rebuildStateFromLiveStoreLike(store, {
@@ -339,7 +331,7 @@ async function buildFallbackPayload(opts: {
         // Build the payload with the directive as the input (it becomes the final
         // user-role message — provider-safe shape). The live messages already include
         // the pending GM reply, so history contains it naturally.
-        const directive = buildSceneContinueDirective({ pcName, targetWords, allowDiceTool });
+        const directive = buildSceneContinueDirective({ pcName, targetWords });
         const payloadResult = buildPayload({
             settings: store.settings,
             context: store.context,

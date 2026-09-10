@@ -243,10 +243,8 @@ export const defaultContext: GameContext = {
     surpriseEngineActive: false,
     encounterEngineActive: true,
     worldEngineActive: true,
-    // Player-rolled resolution is the default for new campaigns — see DEFAULT_CONTEXT
-    // in campaignInit.ts, which this literal mirrors.
-    diceFairnessActive: false,
-    playerRollActive: true,
+    // Ask To Roll on by default — see DEFAULT_CONTEXT in campaignInit.ts, which this mirrors.
+    diceFairnessActive: true,
     rollFrequency: 'contested' as const,
     sceneNote: '',
     sceneNoteActive: false,

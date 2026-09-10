@@ -83,32 +83,33 @@ describe('formatPlayerRollDeclined', () => {
     });
 });
 
-describe('getToolDefinitions — the two dice tools are mutually exclusive', () => {
-    it('offers request_roll and withholds roll_dice in player-roll mode', () => {
-        const names = toolNames(getToolDefinitions({ allowDiceTool: true, playerRollFrequency: 'contested' }));
+describe('getToolDefinitions — request_roll is the only dice tool', () => {
+    it('offers request_roll when a frequency is given', () => {
+        const names = toolNames(getToolDefinitions({ playerRollFrequency: 'contested' }));
         expect(names).toContain('request_roll');
+    });
+
+    // Ask To Roll off. There is no engine-rolled tool to fall back to any more, and because
+    // every "ask for a roll" imperative lives in request_roll's own description, withholding
+    // the tool is also what stops the model being told to ask.
+    it('offers no dice tool at all when no frequency is given', () => {
+        const names = toolNames(getToolDefinitions({}));
+        expect(names).not.toContain('request_roll');
         expect(names).not.toContain('roll_dice');
     });
 
-    it('offers roll_dice when no frequency is given', () => {
-        const names = toolNames(getToolDefinitions({ allowDiceTool: true }));
-        expect(names).toContain('roll_dice');
-        expect(names).not.toContain('request_roll');
-    });
-
-    it('offers neither when dice are off', () => {
-        const names = toolNames(getToolDefinitions({ allowDiceTool: false }));
-        expect(names).not.toContain('roll_dice');
-        expect(names).not.toContain('request_roll');
+    it('never offers the retired engine-rolled roll_dice, in either mode', () => {
+        expect(toolNames(getToolDefinitions({ playerRollFrequency: 'contested' }))).not.toContain('roll_dice');
+        expect(toolNames(getToolDefinitions({}))).not.toContain('roll_dice');
     });
 
     it('requires the bar up front, which is what makes a player-supplied number trustworthy', () => {
-        const tool = findTool(getToolDefinitions({ allowDiceTool: false, playerRollFrequency: 'contested' }), 'request_roll');
+        const tool = findTool(getToolDefinitions({ playerRollFrequency: 'contested' }), 'request_roll');
         expect(tool!.function.parameters.required).toEqual(['dice', 'reason', 'success_on', 'failure_means']);
     });
 
     it('exposes no category param — that enum is what leaked "Perception" into the prose', () => {
-        const tool = findTool(getToolDefinitions({ allowDiceTool: false, playerRollFrequency: 'contested' }), 'request_roll');
+        const tool = findTool(getToolDefinitions({ playerRollFrequency: 'contested' }), 'request_roll');
         expect(Object.keys((tool!.function.parameters as unknown as { properties: object }).properties)).not.toContain('category');
     });
 
@@ -117,12 +118,12 @@ describe('getToolDefinitions — the two dice tools are mutually exclusive', () 
         ['consequential', /consequential actions only/i],
         ['critical', /decisive moments only/i],
     ] as const)('the %s threshold selects its own guidance', (frequency, expected) => {
-        const tool = findTool(getToolDefinitions({ allowDiceTool: false, playerRollFrequency: frequency }), 'request_roll');
+        const tool = findTool(getToolDefinitions({ playerRollFrequency: frequency }), 'request_roll');
         expect(tool!.function.description).toMatch(expected);
     });
 
     it('always forbids naming the mechanic in the narration', () => {
-        const tool = findTool(getToolDefinitions({ allowDiceTool: false, playerRollFrequency: 'critical' }), 'request_roll');
+        const tool = findTool(getToolDefinitions({ playerRollFrequency: 'critical' }), 'request_roll');
         expect(tool!.function.description).toMatch(/no faculty, skill or attribute/i);
     });
 });

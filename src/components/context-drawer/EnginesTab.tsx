@@ -1,20 +1,16 @@
 import { useState } from 'react';
-import { Loader2, Sparkles, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, Sparkles, Plus } from 'lucide-react';
 import { useAppStore, DEFAULT_SURPRISE_TYPES, DEFAULT_SURPRISE_TONES, DEFAULT_ENCOUNTER_TYPES, DEFAULT_ENCOUNTER_TONES, DEFAULT_WORLD_WHO, DEFAULT_WORLD_WHERE, DEFAULT_WORLD_WHY, DEFAULT_WORLD_WHAT } from '../../store/useAppStore';
 import { populateEngineTags } from '../../services/chatEngine';
 import { Toggle } from './Toggle';
 import { NPCPressureInspector } from '../NPCPressureInspector';
-import { buildDefaultDiceSystem } from '../../types';
-import { validateBands } from '../../services/engine/diceTier';
 import { countTokens } from '../../services/infrastructure/tokenizer';
 import {
     minifyBookkeepingStub,
     minifySelectedInventory,
     minifySelectedProfile,
 } from '../../services/turn/contextMinifier';
-import type { DieType, OutcomeBand, DiceCategory, CharacterProfile, RollFrequency } from '../../types';
-
-function uid(prefix: string) { return `${prefix}_${Math.random().toString(36).slice(2, 9)}`; }
+import type { CharacterProfile, RollFrequency } from '../../types';
 
 /**
  * The roll-frequency dial. Each option is described by its THRESHOLD — what deserves dice —
@@ -357,7 +353,22 @@ export function EnginesTab() {
     );
 }
 
-// ─── Dice Fairness Section (generalized dice engine) ───────────────────
+// ─── Ask To Roll Section ───────────────────────────────────────────────
+//
+// The one dice mode. ON: the GM states the die and the bar, generation suspends, and the
+// player rolls real dice and types the total. OFF: no dice at all — no tool is offered, and
+// because every "ask the player to roll" imperative lives in that tool's own description,
+// withholding the tool is also what stops the model being told to ask.
+//
+// The stored field is still `diceFairnessActive`, which used to select the opposite thing (an
+// engine-pre-rolled `[DICE OUTCOMES]` pool). The key is kept so no save needs rewriting; the
+// one-time value flip lives in migrateLegacyContext.
+//
+// The die-type/outcome-band registry and the category→die map that used to live here are gone
+// with pool mode: bands existed to turn a rolled number into a label like "Triumph", which is
+// precisely the machinery the player-rolled path refuses to compute. "Dice me" still needs a
+// die to roll, so the built-in registry from buildDefaultDiceSystem() remains — it is just no
+// longer editable, because nothing reads the parts you could edit.
 
 type DiceFairnessSectionProps = {
     context: ReturnType<typeof useAppStore.getState>['context'];
@@ -365,307 +376,54 @@ type DiceFairnessSectionProps = {
 };
 
 function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProps) {
-    const [expandedDie, setExpandedDie] = useState<string | null>(null);
-    const diceSystem = context.diceSystem ?? buildDefaultDiceSystem();
-
-    const updateDiceSystem = (patch: Partial<typeof diceSystem>) => {
-        updateContext({ diceSystem: { ...diceSystem, ...patch } });
-    };
-
-    // ── Die Types helpers ──
-    const addDieType = () => {
-        const newDie: DieType = {
-            id: uid('dt'),
-            name: 'd6',
-            faces: 6,
-            bands: [
-                { id: uid('b'), label: 'Failure', min: 1, max: 3 },
-                { id: uid('b'), label: 'Success', min: 4, max: 6 },
-            ],
-        };
-        updateDiceSystem({ dieTypes: [...diceSystem.dieTypes, newDie] });
-        setExpandedDie(newDie.id);
-    };
-
-    const removeDieType = (id: string) => {
-        // Remove the die type and any categories referencing it (reassign to d20)
-        const fallbackId = diceSystem.dieTypes.find(d => d.name === 'd20')?.id ?? diceSystem.dieTypes[0]?.id;
-        const categories = diceSystem.categories.map(c =>
-            c.dieTypeId === id && fallbackId ? { ...c, dieTypeId: fallbackId } : c
-        );
-        updateDiceSystem({
-            dieTypes: diceSystem.dieTypes.filter(d => d.id !== id),
-            categories,
-        });
-    };
-
-    const updateDieType = (id: string, patch: Partial<DieType>) => {
-        updateDiceSystem({
-            dieTypes: diceSystem.dieTypes.map(d => d.id === id ? { ...d, ...patch } : d),
-        });
-    };
-
-    // ── Band helpers ──
-    const addBand = (dieId: string) => {
-        const die = diceSystem.dieTypes.find(d => d.id === dieId);
-        if (!die) return;
-        const usedMax = die.bands.reduce((m, b) => Math.max(m, b.max), 0);
-        const newMax = Math.min(usedMax + 1, die.faces);
-        const newMin = usedMax + 1;
-        if (newMin > die.faces) return; // no room
-        const band: OutcomeBand = { id: uid('b'), label: 'New Band', min: newMin, max: newMax };
-        updateDieType(dieId, { bands: [...die.bands, band] });
-    };
-
-    const updateBand = (dieId: string, bandId: string, patch: Partial<OutcomeBand>) => {
-        const die = diceSystem.dieTypes.find(d => d.id === dieId);
-        if (!die) return;
-        updateDieType(dieId, {
-            bands: die.bands.map(b => b.id === bandId ? { ...b, ...patch } : b),
-        });
-    };
-
-    const removeBand = (dieId: string, bandId: string) => {
-        const die = diceSystem.dieTypes.find(d => d.id === dieId);
-        if (!die) return;
-        updateDieType(dieId, { bands: die.bands.filter(b => b.id !== bandId) });
-    };
-
-    // ── Category helpers ──
-    const addCategory = () => {
-        if (diceSystem.categories.length >= 10) return;
-        const fallbackId = diceSystem.dieTypes[0]?.id ?? '';
-        const cat: DiceCategory = { id: uid('cat'), name: 'New Category', dieTypeId: fallbackId };
-        updateDiceSystem({ categories: [...diceSystem.categories, cat] });
-    };
-
-    const updateCategory = (id: string, patch: Partial<DiceCategory>) => {
-        updateDiceSystem({
-            categories: diceSystem.categories.map(c => c.id === id ? { ...c, ...patch } : c),
-        });
-    };
-
-    const removeCategory = (id: string) => {
-        updateDiceSystem({ categories: diceSystem.categories.filter(c => c.id !== id) });
-    };
-
-    // ── Roll definition helpers ── (removed: rollDef is per-roll, not global)
+    const askToRoll = context.diceFairnessActive !== false;
 
     return (
-        <div className="space-y-2">
-            <div className="text-[12px] text-ice uppercase tracking-wider font-bold border-b border-ice/20 pb-1 flex items-center justify-between">
+        <div className="border border-border bg-surface p-3 space-y-3">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-ice" />
-                    Dice Fairness Engine
+                    <div className={`w-1.5 h-1.5 rounded-full ${askToRoll ? 'bg-terminal' : 'bg-border'}`} />
+                    <span className="text-[13px] text-text-primary font-bold uppercase tracking-wider">
+                        Ask To Roll
+                    </span>
                 </div>
-                <Toggle active={context.diceFairnessActive ?? true} onChange={() => updateContext({ diceFairnessActive: !(context.diceFairnessActive ?? true) })} />
+                <Toggle active={askToRoll} onChange={() => updateContext({ diceFairnessActive: !askToRoll })} />
             </div>
 
-            {(context.diceFairnessActive ?? true) && (
-                <div className="text-[11px] text-amber-400/70 italic px-1">
-                    ⚡ Pool mode active — pre-rolled dice injected. Its category names (Combat,
-                    Perception, Knowledge…) are handed to the writer every turn and tend to surface
-                    in the prose. Turn OFF for player-rolled resolution.
-                </div>
-            )}
+            <div className="text-[11px] text-text-dim/70 leading-relaxed">
+                {askToRoll
+                    ? 'The GM states the dice and the bar, then stops. You roll real dice and type the total — bonuses included. The bar is committed to before the number exists, and nothing is tracked.'
+                    : 'No dice. The GM narrates outcomes directly and is never asked to call for a roll.'}
+            </div>
 
-            {/* ── Player-rolled resolution ── Only reachable with pool mode off: the two are
-                mutually exclusive, since pool mode has already rolled everything. */}
-            {!(context.diceFairnessActive ?? true) && (
-                <div className="bg-void border border-border p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-text-dim uppercase tracking-wider font-bold">
-                            Ask Me To Roll
-                        </span>
-                        <Toggle
-                            active={context.playerRollActive ?? true}
-                            onChange={() => updateContext({ playerRollActive: !(context.playerRollActive ?? true) })}
-                        />
+            {askToRoll && (
+                <div className="space-y-1 pt-1">
+                    <div className="text-[9px] text-text-dim uppercase tracking-wider">
+                        When to ask
                     </div>
-                    <div className="text-[11px] text-text-dim/70 leading-relaxed">
-                        {(context.playerRollActive ?? true)
-                            ? 'The GM states the dice and the bar, then stops. You roll real dice and type the total — bonuses included. Nothing is tracked.'
-                            : 'The AI calls roll_dice and the engine rolls silently on its behalf.'}
-                    </div>
-
-                    {(context.playerRollActive ?? true) && (
-                        <div className="space-y-1 pt-1">
-                            <div className="text-[9px] text-text-dim uppercase tracking-wider">
-                                When to ask
-                            </div>
-                            {ROLL_FREQUENCY_OPTIONS.map(opt => {
-                                const active = (context.rollFrequency ?? 'contested') === opt.value;
-                                return (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => updateContext({ rollFrequency: opt.value })}
-                                        className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${
-                                            active
-                                                ? 'border-terminal/50 bg-terminal/10'
-                                                : 'border-border/50 hover:border-border'
-                                        }`}
-                                    >
-                                        <div className={`text-[11px] font-bold ${active ? 'text-terminal' : 'text-text-primary'}`}>
-                                            {opt.label}
-                                        </div>
-                                        <div className="text-[10px] text-text-dim/70 leading-snug">
-                                            {opt.detail}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            <div className="bg-void border border-border p-3 space-y-3">
-                {/* ── Die Types Registry ── */}
-                <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-text-dim uppercase tracking-wider font-bold">Die Types</span>
-                        <button onClick={addDieType} className="flex items-center gap-1 text-[11px] text-terminal hover:text-text-primary transition-colors">
-                            <Plus size={9} /> Add
-                        </button>
-                    </div>
-                    {diceSystem.dieTypes.map((die) => {
-                        const isExpanded = expandedDie === die.id;
-                        const validation = validateBands(die.bands, die.faces);
+                    {ROLL_FREQUENCY_OPTIONS.map(opt => {
+                        const active = (context.rollFrequency ?? 'contested') === opt.value;
                         return (
-                            <div key={die.id} className="border border-border/50 rounded bg-surface/30">
-                                <div className="flex items-center gap-2 px-2 py-1.5">
-                                    <button
-                                        onClick={() => setExpandedDie(isExpanded ? null : die.id)}
-                                        className="text-text-dim hover:text-text-primary transition-colors"
-                                    >
-                                        {isExpanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-                                    </button>
-                                    <input
-                                        type="text"
-                                        value={die.name}
-                                        onChange={(e) => updateDieType(die.id, { name: e.target.value })}
-                                        className="w-16 bg-surface border border-border px-1.5 py-1 text-[13px] font-mono text-text-primary focus:border-terminal outline-none"
-                                    />
-                                    <span className="text-[11px] text-text-dim">faces:</span>
-                                    <input
-                                        type="number"
-                                        min={2}
-                                        max={1000}
-                                        value={die.faces}
-                                        onChange={(e) => {
-                                            const faces = parseInt(e.target.value) || 2;
-                                            updateDieType(die.id, { faces });
-                                        }}
-                                        className="w-14 bg-surface border border-border px-1.5 py-1 text-[13px] font-mono text-text-primary focus:border-terminal outline-none"
-                                    />
-                                    {!validation.valid && (
-                                        <span className="text-[11px] text-danger" title={validation.error}>⚠</span>
-                                    )}
-                                    <div className="ml-auto flex items-center gap-1">
-                                        <span className="text-[11px] text-text-dim">{die.bands.length} bands</span>
-                                        <button
-                                            onClick={() => removeDieType(die.id)}
-                                            className="text-text-dim hover:text-danger transition-colors"
-                                            title="Remove die type"
-                                        >
-                                            <Trash2 size={10} />
-                                        </button>
-                                    </div>
+                            <button
+                                key={opt.value}
+                                onClick={() => updateContext({ rollFrequency: opt.value })}
+                                className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${
+                                    active
+                                        ? 'border-terminal/50 bg-terminal/10'
+                                        : 'border-border/50 hover:border-border'
+                                }`}
+                            >
+                                <div className={`text-[11px] font-bold ${active ? 'text-terminal' : 'text-text-primary'}`}>
+                                    {opt.label}
                                 </div>
-                                {isExpanded && (
-                                    <div className="px-2 pb-2 space-y-1.5 border-t border-border/30">
-                                        {!validation.valid && (
-                                            <div className="text-[11px] text-danger px-1 py-1 bg-danger/10 rounded">{validation.error}</div>
-                                        )}
-                                        {die.bands.map((band, i) => (
-                                            <div key={band.id} className="flex items-center gap-1.5">
-                                                <span className="text-[11px] text-text-dim w-4">{i + 1}.</span>
-                                                <input
-                                                    type="text"
-                                                    value={band.label}
-                                                    onChange={(e) => updateBand(die.id, band.id, { label: e.target.value })}
-                                                    placeholder="Label"
-                                                    className="flex-1 bg-surface border border-border px-1.5 py-1 text-[12px] font-mono text-text-primary focus:border-terminal outline-none"
-                                                />
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    max={die.faces}
-                                                    value={band.min}
-                                                    onChange={(e) => updateBand(die.id, band.id, { min: parseInt(e.target.value) || 1 })}
-                                                    className="w-12 bg-surface border border-border px-1 py-1 text-[12px] font-mono text-text-primary focus:border-terminal outline-none text-center"
-                                                    title="Min (inclusive)"
-                                                />
-                                                <span className="text-[11px] text-text-dim">–</span>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    max={die.faces}
-                                                    value={band.max}
-                                                    onChange={(e) => updateBand(die.id, band.id, { max: parseInt(e.target.value) || 1 })}
-                                                    className="w-12 bg-surface border border-border px-1 py-1 text-[12px] font-mono text-text-primary focus:border-terminal outline-none text-center"
-                                                    title="Max (inclusive)"
-                                                />
-                                                <button
-                                                    onClick={() => removeBand(die.id, band.id)}
-                                                    className="text-text-dim hover:text-danger transition-colors"
-                                                >
-                                                    <Trash2 size={9} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                        <button
-                                            onClick={() => addBand(die.id)}
-                                            className="flex items-center gap-1 text-[11px] text-terminal hover:text-text-primary transition-colors py-1"
-                                        >
-                                            <Plus size={9} /> Add Band
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+                                <div className="text-[10px] text-text-dim/70 leading-snug">
+                                    {opt.detail}
+                                </div>
+                            </button>
                         );
                     })}
                 </div>
-
-                {/* ── Categories (up to 10) ── */}
-                <div className="space-y-2 border-t border-border/30 pt-2">
-                    <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-text-dim uppercase tracking-wider font-bold">Categories (max 10)</span>
-                        <button
-                            onClick={addCategory}
-                            disabled={diceSystem.categories.length >= 10}
-                            className="flex items-center gap-1 text-[11px] text-terminal hover:text-text-primary transition-colors disabled:opacity-30"
-                        >
-                            <Plus size={9} /> Add
-                        </button>
-                    </div>
-                    {diceSystem.categories.map((cat) => (
-                        <div key={cat.id} className="flex items-center gap-2">
-                            <input
-                                type="text"
-                                value={cat.name}
-                                onChange={(e) => updateCategory(cat.id, { name: e.target.value })}
-                                className="flex-1 bg-surface border border-border px-1.5 py-1 text-[12px] font-mono text-text-primary focus:border-terminal outline-none"
-                            />
-                            <select
-                                value={cat.dieTypeId}
-                                onChange={(e) => updateCategory(cat.id, { dieTypeId: e.target.value })}
-                                className="w-20 bg-surface border border-border px-1.5 py-1 text-[12px] font-mono text-text-primary focus:border-terminal outline-none"
-                            >
-                                {diceSystem.dieTypes.map(d => (
-                                    <option key={d.id} value={d.id}>{d.name}</option>
-                                ))}
-                            </select>
-                            <button
-                                onClick={() => removeCategory(cat.id)}
-                                className="text-text-dim hover:text-danger transition-colors"
-                            >
-                                <Trash2 size={10} />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            )}
         </div>
     );
 }

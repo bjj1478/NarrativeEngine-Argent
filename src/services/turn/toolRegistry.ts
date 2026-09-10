@@ -1,8 +1,7 @@
-import type { GameContext, DiceSystemConfig, InventoryProposal } from '../../types';
+import type { GameContext, InventoryProposal } from '../../types';
 import {
     handleLoreTool,
     handleNotebookTool,
-    handleDiceTool,
     handleProposeInventoryTool,
     parseRequestRollArgs,
     formatPlayerRollDeclined,
@@ -38,8 +37,6 @@ export type ToolDispatchContext = {
     loreChunks: import('../../types').LoreChunk[];
     /** Current scene notebook (for notebook mutations). */
     notebook: GameContext['notebook'];
-    /** Dice system config (for dice rolls). */
-    diceSystem: DiceSystemConfig | null | undefined;
 };
 
 export type ToolDispatchResult = {
@@ -78,15 +75,6 @@ const handleNotebook: ToolHandlerFn = (ctx) => {
         accumulation: 'overwrite',
         traceResult: true,
         contextPatch: { notebook: updatedNotebook },
-    };
-};
-
-const handleDice: ToolHandlerFn = (ctx) => {
-    const { toolResult } = handleDiceTool(ctx.arguments, { diceSystem: ctx.diceSystem });
-    return {
-        toolResult,
-        accumulation: 'append',
-        traceResult: true,
     };
 };
 
@@ -133,7 +121,6 @@ const handleProposeInventory: ToolHandlerFn = (ctx) => {
 export const TOOL_REGISTRY: Record<string, ToolHandlerFn> = {
     query_campaign_lore: handleLore,
     update_scene_notebook: handleNotebook,
-    roll_dice: handleDice,
     request_roll: handleRequestRoll,
     propose_inventory_change: handleProposeInventory,
 };
@@ -156,7 +143,6 @@ export function validateToolRegistry(): void {
     const expected = [
         'query_campaign_lore',
         'update_scene_notebook',
-        'roll_dice',
         'request_roll',
         'propose_inventory_change',
     ];

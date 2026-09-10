@@ -22,7 +22,6 @@ export function isThinkingEnabled(settings: AppSettings): boolean {
 
 // [FABLE-AUTHORED] — block labels verified against world.ts / volatile.ts:
 //   [ACTIVE NPC CONTEXT] (world.ts:387), [FACTS KNOWN TO ON-STAGE CHARACTERS] (world.ts:439),
-//   [DICE OUTCOMES: ...] (engineRolls.ts:194 — emitted as a user-message prefix, stripped by history.ts),
 //   [LOCATION] (volatile.ts:189). [DIRECTOR BRIEF] does not exist yet — left verbatim per spec
 //   (Director Brief service lands in WO-04); the conditional "if present" wording keeps it forward-compatible.
 //
@@ -43,12 +42,16 @@ export function isThinkingEnabled(settings: AppSettings): boolean {
 // so the framework works for any provider: DeepSeek emits it in `reasoning_content`,
 // Claude in `thinking` blocks, GPT-5 in `reasoning` tokens, Gemini in `thinking_config`
 // parts, and legacy non-thinking models reason silently before the narrative.
-const WRITER_COT = `[WRITER REASONING FRAMEWORK]
+// Exported so builtins.ts's Block View documentation can render the REAL framework instead of
+// keeping a hand-copied duplicate. The duplicate had already drifted (its Step 5 still
+// advertised the retired flat "5-8 beats" quota), which is what UI documentation drifting from
+// the prompt looks like.
+export const WRITER_COT = `[WRITER REASONING FRAMEWORK]
 Work through these steps in your internal reasoning before writing the narrative. Never show the steps in the narrative output. Always produce the full narrative response after your reasoning ends.
 Step 1 — Deconstruct: break the player's input into discrete intents. Judge each against the rules and MC boundaries. Impossible or implausible demands are narrated as attempts with consequences, not successes.
 Step 2 - Director Brief: if a [DIRECTOR BRIEF] block is present, honor its MANDATORY world-law or fair-adjudication corrections and any compatible SUGGESTION. It does not schedule drama or dictate every character's reaction.
 Step 3 - On-stage minds: first state the player's visible action and result without moral interpretation. For each character in [ACTIVE NPC CONTEXT], consider their current goal and emotional state, what they know and do not know (check [FACTS KNOWN TO ON-STAGE CHARACTERS]), their disposition and competence, and their relationship to the player. Then choose a proportionate response: speech, action, observation, help, challenge, humour, silence, withdrawal, or a shared crowd response. Characters may converge when the same event gives them the same reason to react; they may differ when their perspectives differ. Do not force either. A boundary produces push-back only when the concrete action actually crosses it; never infer a larger injury, hostile intent, or moral failing merely to make drama.
-Step 4 — Engine truth: honor [DICE OUTCOMES] exactly as resolved — never soften failures or upgrade successes. Check each on-stage character against their signature kit. Check [LOCATION] logistics: travel time, weather, era-appropriate technology.
+Step 4 — Engine truth: honor every engine-injected fact exactly as given — a reported roll total, a [RESOLVED ROLL], a [LOOT DROP], a [WORLD PRESSURES] entry — and never soften a failure or upgrade a success. Check each on-stage character against their signature kit. Check [LOCATION] logistics: travel time, weather, era-appropriate technology.
 Step 5 - Beat map: draft exactly as many beats as the [BEAT BUDGET] line allows, and no more. Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.
 Step 6 — Final audit: the player's action drives the scene; reactions are grounded in what each character observed and values; no unearned NPC chorus or retroactive moralisation; no cliches or purple prose. Then write the scene.`;
 
@@ -72,9 +75,10 @@ export function buildStable(opts: {
     // stable busts the prefix cache every turn. Only the verbatim full-rules fallback is
     // stable (it's byte-identical across turns). Mirrors mobileApp payloadStableContent.ts.
     //
-    // The user's custom Action Resolution rules are NEVER overwritten — die-type guidance
-    // lives in the roll_dice tool description (toolHandlers.ts). This fixes the issue where
-    // enabling the dice tool silently nuked non-d20 campaign rules.
+    // The user's custom Action Resolution rules are NEVER overwritten. Nor does this block vary
+    // by dice mode: every "ask the player to roll" imperative lives in the request_roll tool
+    // description (toolHandlers.ts), so turning dice off withholds the instructions by
+    // withholding the tool — and this cache-boundary prefix stays byte-constant either way.
     const effectiveRules = context.rulesRaw || DEFAULT_RULES;
 
     const hasRulesRAG = (context.rulesChunks?.length ?? 0) > 0;

@@ -3,7 +3,6 @@ import type { OpenAIMessage } from '../llm/llmService';
 import { sendMessage } from '../chatEngine';
 import { sanitizePayloadForApi } from '../lib/payloadSanitizer';
 import { extractAndStripSceneStakes } from './sceneStakesTag';
-import { getToolDefinitions } from './toolHandlers';
 import { resolveToolHandler } from './toolRegistry';
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -22,8 +21,6 @@ export interface SceneContinueOptions {
     directive: string;
     modelName?: string;
     temperature: number;             // active preset base temperature — NO swipe offset
-    allowDiceTool: boolean;          // context.diceFairnessActive === false (same gate as normal turns)
-    combatModeActive: boolean;       // passed through to getToolDefinitions
     abortSignal?: AbortSignal;
 }
 
@@ -43,9 +40,8 @@ const stripLLMSceneHeader = (text: string): string =>
 export function buildSceneContinueDirective(opts: {
     pcName: string;          // context.characterProfileData?.name ?? '' — empty is a NORMAL case
     targetWords: number;     // word count of the LAST segment only (§4 rule R6)
-    allowDiceTool: boolean;
 }): string {
-    const { pcName, targetWords, allowDiceTool } = opts;
+    const { pcName, targetWords } = opts;
 
     // Target 70–100% of the last segment's length — no ceiling; the continuation
     // should match the passage it extends. The 120-word floor guards the death
@@ -60,9 +56,10 @@ export function buildSceneContinueDirective(opts: {
         ? `- The player character is ${pcName}. Do not act, speak, or decide for ${pcName} beyond what their last input already committed to. End your reply at the point where ${pcName} would next need to choose or respond — a story beat that invites a response, never an explicit prompt for input.`
         : `- Do not act, speak, or decide for the player's character beyond what their last input already committed to. End your reply at the point where the player would next need to choose or respond — a story beat that invites a response, never an explicit prompt for input.`;
 
-    const diceLine = allowDiceTool
-        ? `- If the action already in motion genuinely requires a roll, you may call roll_dice; otherwise do not roll. Never invent dice results.`
-        : `- Do not initiate or invent dice rolls; narrate only from results already in history.`;
+    // Continue never rolls. This dispatch site is SYNCHRONOUS (see the tool-loop note below),
+    // so it cannot suspend into the roll modal the way a normal turn does, and there is no
+    // engine-rolled tool left to fall back on. The line is therefore unconditional.
+    const diceLine = `- Do not initiate or invent dice rolls; narrate only from results already in history.`;
 
     return [
         '[SCENE CONTINUE — the player pressed Continue: they want MORE of the current scene. This is not a new turn and not a new scene.',
@@ -93,10 +90,12 @@ export function buildSceneContinueRequest(opts: {
     basePayload: OpenAIMessage[];
     assistantText: string | null;
     directive: string;
-    allowDiceTool: boolean;
     modelName?: string;
 }): OpenAIMessage[] {
-    const sanitized = sanitizePayloadForApi([...opts.basePayload], opts.allowDiceTool, opts.modelName);
+    // `allowTools: false` — Continue offers no tools at all, so tool-call history is stripped
+    // from the payload too. This is byte-identical to what the previous `allowDiceTool` flag
+    // produced under the shipping default, where it was already false on every path.
+    const sanitized = sanitizePayloadForApi([...opts.basePayload], false, opts.modelName);
     const request: OpenAIMessage[] = [...sanitized];
     if (opts.assistantText !== null) {
         request.push({ role: 'assistant', content: opts.assistantText });
@@ -121,15 +120,6 @@ export function buildMergedContinueView(preContinueContent: string, partial: str
     return `${preContinueContent}${SCENE_CONTINUE_DIVIDER}${partial}`;
 }
 
-// ── Filter to only the roll_dice tool definition ───────────────────────
-// The spec: when allowDiceTool, pass ONLY roll_dice (not lore/notebook/inventory).
-function getRollDiceToolOnly(): unknown[] {
-    return getToolDefinitions({ allowDiceTool: true })
-        .filter((t): t is { type: 'function'; function: { name: string } } =>
-            !!t && typeof t === 'object' && 'function' in (t as object) &&
-            (t as { function: { name: string } }).function?.name === 'roll_dice');
-}
-
 // ── Post-process the final continuation text ───────────────────────────
 // R7: strip scene header, then strip stakes. Stakes is null when no tag was present.
 function postProcessContinuation(text: string): SceneContinueResult {
@@ -142,15 +132,14 @@ function postProcessContinuation(text: string): SceneContinueResult {
 // ── generateSceneContinuation ──────────────────────────────────────────
 // Mirrors generateSwipeVariant's structure (sanitize → sendMessage → strip → resolve),
 // with the additions of: (1) assistant message + directive appended to the payload,
-// (2) optional roll_dice mini tool loop (transient — nothing written to store/history),
+// (2) a defensive tool loop (transient — nothing written to store/history),
 // (3) reasoning_content discarded (R4).
 export function generateSceneContinuation(
     opts: SceneContinueOptions,
     onChunk: (partialText: string) => void,   // continuation text only — caller does the merge
 ): Promise<SceneContinueResult> {
-    const { provider, basePayload, assistantText, directive, modelName, temperature, allowDiceTool, abortSignal } = opts;
+    const { provider, basePayload, assistantText, directive, modelName, temperature, abortSignal } = opts;
 
-    const tools = allowDiceTool ? getRollDiceToolOnly() : undefined;
     const sampling: SamplingConfig = { temperature };
 
     // Build the initial request payload (snapshot path appends assistant + system; fallback skips).
@@ -158,7 +147,6 @@ export function generateSceneContinuation(
         basePayload,
         assistantText,
         directive,
-        allowDiceTool,
         modelName,
     });
 
@@ -180,8 +168,12 @@ export function generateSceneContinuation(
                 abortSignal.addEventListener('abort', () => controller.abort(), { once: true });
             }
 
-            // Only offer tools when allowed AND under the cap.
-            const sendTools = allowDiceTool && toolCallCount < MAX_CONTINUE_TOOL_CALLS ? tools : undefined;
+            // Continue offers NO tools: it dispatches handlers synchronously and so cannot
+            // suspend into the roll modal, and no engine-rolled tool exists any more. The loop
+            // below is kept as a safety net rather than deleted — a model can emit a tool call
+            // even when none were offered, and dropping it silently would end the turn
+            // mid-action. `handleRequestRoll` answers such a call with "no roll happened".
+            const sendTools = undefined;
 
             sendMessage(
                 provider,
@@ -209,16 +201,13 @@ export function generateSceneContinuation(
                         return;
                     }
 
-                    // roll_dice handler is pure (dice + string). Continue has no lore/notebook
-                    // context — pass empty/undefined. diceSystem is not surfaced here (the spec
-                    // gates tools by diceFairnessActive only); the handler still returns a raw
-                    // result, just without tier mapping.
+                    // Registry handlers are pure. Continue carries no lore/notebook context, so
+                    // both are empty — an unsolicited call resolves rather than hanging.
                     try {
                         const dispatchResult = handler({
                             arguments: toolCall.arguments,
                             loreChunks: [],
                             notebook: [],
-                            diceSystem: undefined,
                         });
 
                         // Accumulate the pre-tool-call text (mirrors orchestrator's append mode).

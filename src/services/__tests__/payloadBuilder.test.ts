@@ -798,37 +798,43 @@ describe('buildPayload — scenario 8: thinking mode and tool mode', () => {
         expect(content.endsWith('Hello')).toBe(true);
     });
 
-    it('tool-mode (diceFairnessActive false) preserves user Action Resolution rules — no swap', () => {
+    it("preserves the user's own Action Resolution rules — they are never swapped out", () => {
         const customRules = '### Action Resolution\n\nRoll 2d6. 7 is mixed, 12 is crit, 2 is fumble.';
-        const ctx = {
-            ...baseContext(),
-            diceFairnessActive: false,
-            rulesRaw: customRules,
-        } as GameContext;
+        const ctx = { ...baseContext(), rulesRaw: customRules } as GameContext;
 
         const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'I attack the guard' });
-        const firstSystem = result.messages[0];
-        // User's custom Action Resolution rules must be preserved (not swapped for d20 template)
-        expect(firstSystem.content as string).toContain('Roll 2d6');
-        expect(firstSystem.content as string).toContain('7 is mixed');
-        // Must NOT contain the old hardcoded tool-mode template text
-        expect(firstSystem.content as string).not.toContain('CALL the `roll_dice` tool BEFORE narrating');
+        const content = result.messages[0].content as string;
+        expect(content).toContain('Roll 2d6');
+        expect(content).toContain('7 is mixed');
+        expect(content).not.toContain('CALL the `roll_dice` tool BEFORE narrating');
     });
 
-    it('default (pool) mode preserves user Action Resolution rules too', () => {
-        const customRules = '### Action Resolution\n\nRoll 2d6. 7 is mixed, 12 is crit, 2 is fumble.';
-        const ctx = {
-            ...baseContext(),
-            diceFairnessActive: true,
-            rulesRaw: customRules,
-        } as GameContext;
+    // The load-bearing property of the two-mode design, in executable form.
+    //
+    // Turning dice off must NOT vary the system prompt. Every "ask the player for a roll"
+    // imperative lives in the request_roll tool's own description, so withholding the tool is
+    // what withholds the instructions — which means this block, the FIRST system message, can
+    // carry `cache_control: ephemeral` and stay byte-constant across the toggle. Were the
+    // ruleset made mode-aware instead, `diceFairnessActive` would become a cache-key input and
+    // flipping it would re-bill the whole prefix plus the entire campaign log.
+    it('sends a byte-identical system prompt whether dice are on or off', () => {
+        const build = (diceFairnessActive: boolean) => buildPayload({
+            settings: baseSettings(),
+            context: { ...baseContext(), diceFairnessActive } as GameContext,
+            history: [],
+            userMessage: 'I attack the guard',
+        }).messages[0].content as string;
 
-        const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'I attack the guard' });
-        const firstSystem = result.messages[0];
-        expect(firstSystem.content as string).toContain('Roll 2d6');
-        expect(firstSystem.content as string).toContain('7 is mixed');
-        // The original ACTION RESOLUTION section should NOT contain the tool-mode specific text
-        expect(firstSystem.content as string).not.toContain('CALL the `roll_dice` tool BEFORE narrating');
+        expect(build(false)).toBe(build(true));
+    });
+
+    it('never ships the retired pool-mode vocabulary in the default ruleset', () => {
+        const content = buildPayload({
+            settings: baseSettings(), context: baseContext(), history: [], userMessage: 'Hello',
+        }).messages[0].content as string;
+        expect(content).not.toContain('[DICE OUTCOMES');
+        expect(content).not.toContain('roll_dice');
+        expect(content).not.toContain('The engine resolves the roll');
     });
 });
 

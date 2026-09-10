@@ -125,9 +125,16 @@ export type PlayerRollRequest = {
 
 // Player-called "dice me" arm request (WO-H). Resolved at send time so the result is
 // hidden until the player commits; asserted as fact into the turn.
+//
+// Declared here rather than imported from @narrative/engine on purpose: the engine's copy is
+// shared with the mobile app, and `reason` is a desktop-only addition. Structural typing keeps
+// this assignable to `resolveManualRoll`'s parameter, so nothing shared has to change.
 export type ManualRollRequest = {
     dieTypeId: string;       // which DieType to roll
     rollDef: RollDefinition;  // per-roll 3-gate config (local to this roll)
+    /** The player's own words for what the roll is attempting. Travels into the turn in place
+     *  of the outcome tier the engine used to assert. Optional — legacy armed rolls have none. */
+    reason?: string;
 };
 
 /** @deprecated — kept for migration. Old shape was '1d20' | 'adv' | 'disadv'. */
@@ -248,11 +255,17 @@ export type GameContext = {
     surpriseEngineActive: boolean;
     encounterEngineActive: boolean;
     worldEngineActive: boolean;
+    /**
+     * "Ask To Roll" — the one dice mode. ON (the default) offers the `request_roll` tool: the
+     * GM states the die and the bar, generation suspends, and the player types the total their
+     * physical dice showed. OFF means no dice at all — no tool, and therefore no instruction to
+     * ask for one, since every "ask for a roll" imperative lives in that tool's description.
+     *
+     * The name is historical. It used to mean the opposite thing (an engine-pre-rolled
+     * `[DICE OUTCOMES]` pool); it is kept as the key so no save needs rewriting, and the UI
+     * reads "Ask To Roll". The one-time value flip lives in migrateLegacyContext.
+     */
     diceFairnessActive: boolean;
-    /** Player-rolled resolution: the GM asks, the player rolls real dice and types the
-     *  total. Requires diceFairnessActive === false (pool mode injects pre-rolls instead).
-     *  Optional: absent reads as ON via `?? true` at the use site. */
-    playerRollActive?: boolean;
     /** Threshold for what deserves dice. Absent reads as 'contested' at the use site. */
     rollFrequency?: RollFrequency;
     sceneNote: string;
@@ -689,5 +702,26 @@ export function migrateLegacyContext(ctx: Partial<GameContext>): GameContext {
     if (!merged.diceSystem) {
         merged.diceSystem = migrateDiceConfig(merged);
     }
+    // ── Ask To Roll migration ──
+    // Dice modes collapsed three into two, and `diceFairnessActive` changed meaning: it used to
+    // select the engine-pre-rolled pool, it now selects player-rolled resolution. The field is
+    // REQUIRED, so every save carries an explicit value that wins the spread above — a changed
+    // default cannot reach them.
+    //
+    // The pairing that needs carrying is `diceFairnessActive: false` + `playerRollActive: true`,
+    // which is how "player rolls, ON" was stored for the few days that flag existed. Under the
+    // new reading that `false` means NO DICE, so those campaigns would silently lose dice.
+    //
+    // `false` + `playerRollActive: false` (the legacy engine-rolled mode) correctly lands on
+    // no-dice: the engine no longer rolls on the model's behalf, so that is the honest outcome.
+    // A pre-fork `true` (pool mode) needs nothing — it already reads as ON.
+    //
+    // Self-limiting, so no migration flag is needed: the condition reads `playerRollActive`, and
+    // the delete below removes it, so a second pass cannot re-fire.
+    const legacy = ctx as Partial<GameContext> & { playerRollActive?: boolean };
+    if (legacy.playerRollActive === true && merged.diceFairnessActive === false) {
+        merged.diceFairnessActive = true;
+    }
+    delete (merged as { playerRollActive?: boolean }).playerRollActive;
     return merged;
 }

@@ -22,7 +22,7 @@
 import type { NPCEntry, PayloadTrace, SwipeVariant, EndpointConfig, ThinkingEffort } from '../../types';
 import { uid } from '../../utils/uid';
 import { buildPayload, sendMessage } from '../chatEngine';
-import { rollEngines, rollDiceFairness, resolveManualRoll } from '../engine/engineRolls';
+import { rollEngines, resolveManualRoll } from '../engine/engineRolls';
 import { resolveLootDrop } from '../engine/lootEngine';
 import { buildOneShotDirective } from '../oneshot/oneShotEvents';
 import { toast } from '../../components/Toast';
@@ -109,19 +109,27 @@ export function resolveEngineRolls(
     callbacks.updateContext(engineResult.updatedDCs);
     ctx.historyInput = ctx.finalInput;
 
-    // Player-called dice ("dice me"). When the player armed a roll, resolve REAL dice now
-    // (hidden until this commit), assert the tier as FACT, and SUPPRESS the auto pool menu +
-    // dice tool for this turn so the model gets exactly one signal it cannot cherry-pick.
+    // Player-called dice ("dice me"). The player armed a roll before sending, so resolve REAL
+    // dice now (hidden until this commit) and assert the number as FACT. This also SUPPRESSES
+    // the request_roll tool for the turn, so the model gets exactly one dice signal it cannot
+    // cherry-pick.
+    //
+    // No tier is named. `resolveManualRoll` still computes one (mobile reads it) but the label
+    // was engine-authored machinery — the writer read it straight back out, and it meant the
+    // engine, not the ruleset, decided what the number was worth. What travels instead is the
+    // number plus the player's own words for what they were attempting, judged against whatever
+    // ladder the ruleset defines. The binding language mirrors formatPlayerRollResult so both
+    // dice paths speak with one voice.
     const armed = state.armedRoll;
     if (armed) {
         const r = resolveManualRoll(armed, context.diceSystem);
         const rollsLabel = r.rolls.length > 1 ? ` (rolled ${r.rolls.join(', ')})` : '';
-        const tierLabel = r.tier ?? 'Unmapped';
-        ctx.finalInput += `\n[RESOLVED ROLL — ${r.detail} → ${tierLabel} (${r.faceValue})${rollsLabel}. This HAPPENED. The outcome is fixed — do not re-roll, do not alter the tier, do not skip the roll. Narrate the consequence.]`;
+        // `armedRoll` is `ManualRollRequest | string` — the legacy string form carries no reason.
+        const reason = typeof armed === 'object' && armed.reason?.trim() ? armed.reason.trim() : '';
+        const reasonPart = reason ? ` for: ${reason}` : '';
+        ctx.finalInput += `\n[RESOLVED ROLL — the player rolled ${r.detail} and got ${r.faceValue}${rollsLabel}${reasonPart}. This HAPPENED and the number is final — do not re-roll it, do not move any bar to suit it, do not skip it. Judge it against your Action Resolution rules, then narrate the result as cause in the world. Do not restate the number, the dice, or any skill or attribute name in the prose.]`;
         // Player-facing reveal — shows on their own turn bubble.
-        ctx.displayInputFinal += `\n\n🎲 ${r.detail} → ${tierLabel} (${r.faceValue})`;
-    } else {
-        ctx.finalInput += rollDiceFairness(context);
+        ctx.displayInputFinal += `\n\n🎲 ${r.detail} → ${r.faceValue}${reason ? ` — ${reason}` : ''}`;
     }
 
     // Loot Engine WO-05: player-armed loot drop. Mirrors the dice block above —
@@ -658,28 +666,30 @@ export async function runGenerationStage(
         const allowTools = toolCallCount < MAX_TOOL_CALLS_PER_TURN && apiRetryCount < 2;
         const requestPayload = sanitizePayloadForApi(currentPayload, allowTools, provider?.modelName);
 
-        // Dice availability. THREE mutually exclusive modes, in precedence order:
+        // Dice availability. ONE mode, one switch: Ask To Roll.
         //
-        //   pool        — diceFairnessActive: pre-rolled [DICE OUTCOMES] already in the payload.
-        //                 No tool. (This is the mode whose category names leaked into prose.)
-        //   player-roll — the GM calls request_roll, generation SUSPENDS, the player types the
-        //                 total their physical dice showed. Requires a UI to suspend into.
-        //   engine-roll — legacy roll_dice: the engine rolls silently on the model's request.
+        //   ON  — the GM calls request_roll, generation SUSPENDS, and the player types the total
+        //         their physical dice showed. Requires a UI to suspend into.
+        //   OFF — no dice tool. Every "ask the player for a roll" imperative lives in that
+        //         tool's description, so withholding the tool withholds the instructions too,
+        //         and the model simply narrates. Nothing in the system prompt needs to vary.
         //
-        // A manually armed roll ("dice me") suppresses every tool: the resolved fact is already
-        // in the payload, and offering a tool as well would let the model double-roll (WO-H).
-        const diceToolsAllowed = context.diceFairnessActive === false && !armed;
-        // `playerRollActive` and `rollFrequency` are optional on GameContext and defaulted HERE
-        // rather than in migrateLegacyContext — see the note on those fields. Campaigns created
-        // before this feature therefore opt in automatically, with no migration.
-        const playerRollMode =
-            diceToolsAllowed &&
-            (context.playerRollActive ?? true) &&
-            typeof callbacks.requestPlayerRoll === 'function';
+        // A manually armed roll ("dice me") suppresses the tool: the resolved fact is already in
+        // the payload, and offering the tool too would let the model roll twice for one action.
+        //
+        // `requestPlayerRoll` is deliberately NOT part of this decision. The tools array is part
+        // of the prompt, so a caller with no UI to suspend into — the base-app gate, a facade
+        // run, a test — must send the SAME tools the app sends, or it freezes a payload no user
+        // ever sees. Making availability depend on a callback is exactly the bug the recorder
+        // comment in __tests__/baseAppGate/recorder.ts warns about: absent, the old code silently
+        // swapped in the engine-rolled tool and the gate never noticed. If such a caller does
+        // receive a `request_roll` it cannot suspend for, `handleRequestRoll` in toolRegistry.ts
+        // answers it synchronously with `player_total: null` — "no roll happened, do not invent
+        // one" — which resolves the call and lets the turn finish.
+        const askToRoll = context.diceFairnessActive !== false && !armed;
         const tools = allowTools
             ? getToolDefinitions({
-                allowDiceTool: diceToolsAllowed && !playerRollMode,
-                playerRollFrequency: playerRollMode ? (context.rollFrequency ?? 'contested') : undefined,
+                playerRollFrequency: askToRoll ? (context.rollFrequency ?? 'contested') : undefined,
             })
             : undefined;
 
@@ -719,7 +729,11 @@ export async function runGenerationStage(
                     // to this block. ToolHandlerFn is deliberately left synchronous — see the
                     // note on handleRequestRoll in toolRegistry.ts.
                     let dispatchResult: ToolDispatchResult;
-                    const rollArgs = toolName === 'request_roll' && playerRollMode
+                    // The callback gates SUSPENSION only, never tool availability (see above).
+                    // Absent — gate, facade, test — falls through to the registry handler, which
+                    // reports "no roll happened" synchronously rather than hanging the turn.
+                    const canSuspend = typeof callbacks.requestPlayerRoll === 'function';
+                    const rollArgs = toolName === 'request_roll' && canSuspend
                         ? parseRequestRollArgs(toolCall.arguments)
                         : null;
 
@@ -780,7 +794,7 @@ export async function runGenerationStage(
                             traceResult: true,
                         };
                     } else {
-                        dispatchResult = toolHandler({ arguments: toolCall.arguments, loreChunks, notebook: state.context.notebook, diceSystem: context.diceSystem });
+                        dispatchResult = toolHandler({ arguments: toolCall.arguments, loreChunks, notebook: state.context.notebook });
                     }
 
                     if (dispatchResult.accumulation === 'overwrite') {

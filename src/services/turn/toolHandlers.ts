@@ -1,7 +1,6 @@
-import type { GameContext, LoreChunk, DiceSystemConfig, DieType, InventoryProposal, RollFrequency } from '../../types';
+import type { GameContext, LoreChunk, InventoryProposal, RollFrequency } from '../../types';
 import { searchLoreByQuery } from '../lore/loreRetriever';
 import { uid } from '../../utils/uid';
-import { mapTier } from '../engine/diceTier';
 
 // ── Constants ─────────────────────────────────────────────────────────
 const MAX_NOTEBOOK_OPS = 5;
@@ -21,10 +20,6 @@ export type LoreHandlerResult = {
 export type NotebookHandlerResult = {
     toolResult: string;
     updatedNotebook: GameContext['notebook'];
-};
-
-export type DiceHandlerResult = {
-    toolResult: string;
 };
 
 export type ProposeInventoryHandlerResult = {
@@ -75,45 +70,12 @@ const BASE_TOOLS = [
     },
 ] as const;
 
-const ROLL_DICE_TOOL = {
-    type: 'function' as const,
-    function: {
-        name: 'roll_dice',
-        description:
-            "Roll dice when the player attempts an action with an uncertain outcome — combat hits, ability/skill checks, saves, contested actions. Do NOT call for descriptive moments, dialogue, or trivial actions. Mundane actions resolve as plain success without a roll.\n\n" +
-            "Call roll_dice BEFORE narrating the outcome, then use the returned `tier` to shape the narrative.\n\n" +
-            "Trigger: Player attempts an action with an uncertain outcome — combat hits, skill checks, saves, contested actions.\n" +
-            "1. Identify core intent of the player's action.\n" +
-            "2. If the outcome depends on chance, CALL `roll_dice` BEFORE narrating. Do NOT narrate the outcome first.\n" +
-            "   - `dice`: use the die type appropriate to the category (e.g. Combat→d20, Social→d6, Perception→d6). Use `NdM` form (e.g. 2d6, 1d100). Optionally add `+N` or `-N` modifier.\n" +
-            "   - `reason`: short label (e.g. \"Stealth check vs guard\", \"Longsword attack\")\n" +
-            "   - `category`: one of Combat / Stealth / Social / Perception / Movement / Knowledge / Mundane (used for d20 tier mapping only)\n" +
-            "3. Use the returned `tier` (outcome band label, e.g. Catastrophe / Failure / Success / Triumph / Narrative Boon) to shape the narrative. If no tier is returned (non-d20 rolls without configured bands), interpret the raw `result` per the campaign's Action Resolution rules.\n" +
-            "4. Do NOT call `roll_dice` for descriptive moments, dialogue, or trivial actions.\n\n" +
-            "Advantage: if the player explicitly leverages a known weakness or superior tool, call `roll_dice` twice and use the higher result. If explicitly impaired (blinded, wounded, overwhelmed), call twice and use the lower. Otherwise, single roll.\n\n" +
-            "Outcome band semantics (when tier is returned):\n" +
-            "- Catastrophe: severe unexpected failure, consequences beyond simple loss.\n" +
-            "- Failure: fails. Damage, setback, or resource loss.\n" +
-            "- Success: succeeds exactly as intended.\n" +
-            "- Triumph: succeeds with an unexpected additional benefit.\n" +
-            "- Narrative Boon: flawless. Massive strategic or narrative advantage.\n" +
-            "Other custom bands: interpret per the campaign's Action Resolution rules.",
-        parameters: {
-            type: 'object' as const,
-            properties: {
-                dice:     { type: 'string' as const, description: "Dice expression: '1d20', '2d6', '1d100', '1d4', optionally with '+N' or '-N' modifier. Use the die type matching the action's category." },
-                reason:   { type: 'string' as const, description: "Short label, e.g. 'Stealth check vs guard' or 'Longsword attack'" },
-                category: { type: 'string' as const, enum: ['Combat','Perception','Stealth','Social','Movement','Knowledge','Mundane'], description: 'Skill category for tier mapping (used for d20 only)' }
-            },
-            required: ['dice', 'reason']
-        }
-    }
-} as const;
-
 // ── Player-rolled resolution (request_roll) ───────────────────────────
 //
-// The inverse of ROLL_DICE_TOOL: the engine does not roll. It asks the player,
-// suspends generation, and resumes with the number the player typed.
+// The only dice tool. The engine does not roll: it asks the player, suspends
+// generation, and resumes with the number the player typed. (An engine-rolled
+// `roll_dice` tool used to live above this; it decided outcomes itself and named
+// an outcome band, both of which the writer read straight back out.)
 //
 // The load-bearing property is that `success_on` / `failure_means` are declared
 // in the CALL, before the model can see the number. The bar is committed to
@@ -296,20 +258,16 @@ const PROPOSE_INVENTORY_TOOL = {
 } as const;
 
 export function getToolDefinitions(opts: {
-    /** Offer the ENGINE-rolled `roll_dice`. Ignored when `playerRollFrequency` is set. */
-    allowDiceTool: boolean;
     /**
-     * When set, offer the PLAYER-rolled `request_roll` in place of `roll_dice`, with its
-     * "when to ask" threshold selected by this value. The two dice tools are mutually
-     * exclusive: offering both would let the model roll silently to dodge asking.
+     * When set, offer `request_roll` with its "when to ask" threshold selected by this value.
+     * When absent, NO dice tool is offered — and because every "ask for a roll" imperative
+     * lives in that tool's description, that is also how the model stops being told to ask.
      */
     playerRollFrequency?: RollFrequency;
 }): unknown[] {
     const tools: unknown[] = [...BASE_TOOLS];
     if (opts.playerRollFrequency) {
         tools.push(buildRequestRollTool(opts.playerRollFrequency));
-    } else if (opts.allowDiceTool) {
-        tools.push(ROLL_DICE_TOOL);
     }
     // propose_inventory_change is combat-independent — always offered.
     tools.push(PROPOSE_INVENTORY_TOOL);
@@ -439,47 +397,3 @@ export function handleProposeInventoryTool(
     };
 }
 
-function parseAndRoll(expr: string): { total: number; breakdown: string; sides: number; count: number } {
-    const match = expr.trim().toLowerCase().match(/^(\d+)d(\d+)([+-]\d+)?$/);
-    if (!match) {
-        // Fallback: d20 single roll (legacy default)
-        const single = Math.floor(Math.random() * 20) + 1;
-        return { total: single, breakdown: `${single}`, sides: 20, count: 1 };
-    }
-    const count = Math.min(parseInt(match[1], 10), 100);
-    const sides = parseInt(match[2], 10);
-    const modifier = match[3] ? parseInt(match[3], 10) : 0;
-    const rolls: number[] = [];
-    for (let i = 0; i < count; i++) rolls.push(Math.floor(Math.random() * sides) + 1);
-    const sum = rolls.reduce((a, b) => a + b, 0);
-    const total = sum + modifier;
-    const breakdown = modifier !== 0 ? `[${rolls.join('+')}]${modifier > 0 ? '+' : ''}${modifier} = ${total}` : `[${rolls.join('+')}] = ${total}`;
-    return { total, breakdown, sides, count };
-}
-
-export function handleDiceTool(
-    toolArguments: string,
-    ctx: { diceSystem?: DiceSystemConfig | null }
-): DiceHandlerResult {
-    let args: { dice?: string; reason?: string; category?: string } = {};
-    try { args = JSON.parse(toolArguments); } catch { /* ignore */ }
-
-    const { total, breakdown, sides } = parseAndRoll(args.dice ?? '1d20');
-
-    // Look up the DieType by face count for tier mapping
-    let tier: string | null = null;
-    if (ctx.diceSystem) {
-        const dieType: DieType | undefined = ctx.diceSystem.dieTypes.find(d => d.faces === sides);
-        if (dieType) tier = mapTier(total, dieType);
-    }
-
-    const payload: Record<string, unknown> = {
-        dice: args.dice ?? '1d20',
-        reason: args.reason ?? '',
-        result: total,
-        breakdown
-    };
-    if (tier) payload.tier = tier;
-
-    return { toolResult: JSON.stringify(payload) };
-}

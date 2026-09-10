@@ -81,42 +81,40 @@ function simulateSend(opts: {
 
 describe('buildSceneContinueDirective', () => {
     it('substitutes {N} with targetWords', () => {
-        const out = buildSceneContinueDirective({ pcName: 'Rin', targetWords: 120, allowDiceTool: true });
+        const out = buildSceneContinueDirective({ pcName: 'Rin', targetWords: 120 });
         // Floor-collapsed range (N ≤ ~170): both bounds hit the 120 floor.
         expect(out).toMatch(/roughly 120 words/);
     });
 
     it('targets 70–100% of the last segment with no ceiling', () => {
-        const out = buildSceneContinueDirective({ pcName: 'Rin', targetWords: 1000, allowDiceTool: false });
+        const out = buildSceneContinueDirective({ pcName: 'Rin', targetWords: 1000 });
         expect(out).toMatch(/between 700 and 1000 words/);
     });
 
     it('uses the named-PC line when pcName is non-empty', () => {
-        const out = buildSceneContinueDirective({ pcName: 'Aldric', targetWords: 50, allowDiceTool: false });
+        const out = buildSceneContinueDirective({ pcName: 'Aldric', targetWords: 50 });
         expect(out).toMatch(/The player character is Aldric\./);
         expect(out).toMatch(/End your reply at the point where Aldric would next need to choose/);
     });
 
     it('uses the generic PC line when pcName is empty (NORMAL case)', () => {
-        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50, allowDiceTool: false });
+        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50 });
         expect(out).not.toMatch(/The player character is/);
         expect(out).toMatch(/Do not act, speak, or decide for the player's character/);
         expect(out).toMatch(/End your reply at the point where the player would next need to choose/);
     });
 
-    it('uses the dice-allow line when allowDiceTool is true', () => {
-        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50, allowDiceTool: true });
-        expect(out).toMatch(/you may call roll_dice/);
-        expect(out).not.toMatch(/Do not initiate or invent dice rolls/);
-    });
-
-    it('uses the no-dice line when allowDiceTool is false', () => {
-        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50, allowDiceTool: false });
+    // Continue dispatches tool handlers synchronously, so it can never suspend into the roll
+    // modal — and no engine-rolled tool exists to fall back on. The no-dice line is therefore
+    // unconditional, and there is no longer a branch that invites a roll.
+    it('always tells the model not to roll', () => {
+        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50 });
         expect(out).toMatch(/Do not initiate or invent dice rolls; narrate only from results already in history\./);
+        expect(out).not.toMatch(/you may call roll_dice/);
     });
 
     it('contains the locked scene-continue header and forbidden-restart rule', () => {
-        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50, allowDiceTool: false });
+        const out = buildSceneContinueDirective({ pcName: '', targetWords: 50 });
         expect(out).toMatch(/SCENE CONTINUE/);
         expect(out).toMatch(/Pick up exactly where your previous reply ended/);
         expect(out).toMatch(/Do not open a new scene, skip time/);
@@ -134,7 +132,6 @@ describe('buildSceneContinueRequest', () => {
             basePayload: base,
             assistantText: 'GM reply here.',
             directive: 'directive text',
-            allowDiceTool: false,
         });
         // Original untouched
         expect(base).toHaveLength(2);
@@ -154,7 +151,6 @@ describe('buildSceneContinueRequest', () => {
             basePayload: base,
             assistantText: null,
             directive: 'd',
-            allowDiceTool: false,
         });
         expect(result).toHaveLength(2);
         expect(result[0]).toEqual({ role: 'system', content: 'sys' });
@@ -167,7 +163,6 @@ describe('buildSceneContinueRequest', () => {
             basePayload: base,
             assistantText: null,
             directive: '',
-            allowDiceTool: false,
         });
         expect(result).toHaveLength(1);
     });
@@ -178,7 +173,6 @@ describe('buildSceneContinueRequest', () => {
             basePayload: base,
             assistantText: 'a',
             directive: 'd',
-            allowDiceTool: false,
         });
         expect(result.map(m => m.role)).toEqual(['user', 'assistant', 'user']);
     });
@@ -226,8 +220,6 @@ describe('generateSceneContinuation — post-processing (R7: strip before merge)
             assistantText: 'previous reply',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
         }, () => {});
         expect(result.text).toBe('The tavern door creaks open.');
     });
@@ -241,8 +233,6 @@ describe('generateSceneContinuation — post-processing (R7: strip before merge)
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
         }, () => {});
         // Cross-check: extractAndStripSceneStakes on the raw text returns 'tense'
         const { stakes: refStakes } = extractAndStripSceneStakes(tagText);
@@ -262,8 +252,6 @@ describe('generateSceneContinuation — post-processing (R7: strip before merge)
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
         }, () => {});
         expect(result.stakes).toBeNull();
         expect(result.text).toBe('A quiet evening passes uneventfully.');
@@ -294,8 +282,6 @@ describe('generateSceneContinuation — tool loop (§5)', () => {
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: true,
-            combatModeActive: false,
         }, () => {});
 
         // Two send calls (initial + post-tool).
@@ -338,8 +324,6 @@ describe('generateSceneContinuation — tool loop (§5)', () => {
             assistantText: null,
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: true,
-            combatModeActive: false,
         }, () => {});
 
         // Should have stopped at MAX_CONTINUE_TOOL_CALLS + 1 (one final plain-text send).
@@ -347,7 +331,7 @@ describe('generateSceneContinuation — tool loop (§5)', () => {
         expect(result.text).toContain('final narrative');
     });
 
-    it('does NOT offer tools when allowDiceTool is false', async () => {
+    it('does NOT offer tools', async () => {
         sendMessageMock.mockImplementation(simulateSend({ finalText: 'no tools here' }));
         await generateSceneContinuation({
             provider: fakeProvider() as never,
@@ -355,14 +339,12 @@ describe('generateSceneContinuation — tool loop (§5)', () => {
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
         }, () => {});
         const toolsArg = sendMessageMock.mock.calls[0][5];
         expect(toolsArg).toBeUndefined();
     });
 
-    it('offers ONLY the roll_dice tool when allowDiceTool is true (filtered from the full tool set)', async () => {
+    it('never offers any tool — Continue has no dice path at all', async () => {
         sendMessageMock.mockImplementation(simulateSend({ finalText: 'with tools' }));
         await generateSceneContinuation({
             provider: fakeProvider() as never,
@@ -370,12 +352,8 @@ describe('generateSceneContinuation — tool loop (§5)', () => {
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: true,
-            combatModeActive: false,
         }, () => {});
-        const toolsArg = sendMessageMock.mock.calls[0][5] as Array<{ function: { name: string } }>;
-        expect(toolsArg).toBeDefined();
-        expect(toolsArg.map(t => t.function.name)).toEqual(['roll_dice']);
+        expect(sendMessageMock.mock.calls[0][5]).toBeUndefined();
     });
 });
 
@@ -392,8 +370,6 @@ describe('generateSceneContinuation — onChunk streaming', () => {
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
         }, (p) => seen.push(p));
         expect(seen).toEqual(['Hello ', 'Hello world.']);
     });
@@ -409,8 +385,6 @@ describe('generateSceneContinuation — abort handling', () => {
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
             abortSignal: ac.signal,
         }, () => {})).rejects.toThrow('Aborted');
     });
@@ -440,8 +414,6 @@ describe('Merge semantics (R6 + stakes override)', () => {
             assistantText: 'prev',
             directive: 'd',
             temperature: 0.7,
-            allowDiceTool: false,
-            combatModeActive: false,
         }, () => {});
         // No field on the result carries reasoning — confirm shape is { text, stakes } only.
         expect(Object.keys(result).sort()).toEqual(['stakes', 'text']);

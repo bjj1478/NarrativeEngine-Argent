@@ -1,5 +1,5 @@
 import type { AppSettings, RelationshipStance } from '../../../types';
-import { isThinkingEnabled } from '../stable';
+import { isThinkingEnabled, WRITER_COT } from '../stable';
 import { formatAskGmBrief } from '../../ooc/askGmHandoff';
 import { buildAbsoluteCommandBlock } from '../../turn/absoluteCommand';
 import { createContributionRegistry } from './registry';
@@ -275,7 +275,15 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
             description: 'Asks the writer to work through the reasoning framework before writing.',
             details: {
                 "trigger": "Automatic when the active story provider has Thinking Effort set to Low, Medium, High, or Max.",
-                "prompt": "[WRITER REASONING FRAMEWORK]\nWork through these steps in your internal reasoning before writing the narrative. Never show the steps in the narrative output. Always produce the full narrative response after your reasoning ends.\nStep 1 — Deconstruct: break the player's input into discrete intents. Judge each against the rules and MC boundaries. Impossible or implausible demands are narrated as attempts with consequences, not successes.\nStep 2 - Director Brief: if a [DIRECTOR BRIEF] block is present, honor its MANDATORY world-law or fair-adjudication corrections and any compatible SUGGESTION. It does not schedule drama or dictate every character's reaction.\nStep 3 — On-stage minds: first state the player's visible action and result without moral interpretation. For each character in [ACTIVE NPC CONTEXT], consider their current goal and emotional state, what they know and do not know (check [FACTS KNOWN TO ON-STAGE CHARACTERS]), their disposition and competence, and their relationship to the player. Then choose a proportionate response: speech, action, observation, help, challenge, humour, silence, withdrawal, or a shared crowd response. Characters may converge when the same event gives them the same reason to react; they may differ when their perspectives differ. Do not force either. A boundary produces push-back only when the concrete action actually crosses it; never infer a larger injury, hostile intent, or moral failing merely to make drama.\nStep 4 — Engine truth: honor [DICE OUTCOMES] exactly as resolved — never soften failures or upgrade successes. Check each on-stage character against their signature kit. Check [LOCATION] logistics: travel time, weather, era-appropriate technology.\nStep 5 - Beat map: draft 5-8 beats. Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.\nStep 6 — Final audit: the player's action drives the scene; reactions are grounded in what each character observed and values; no unearned NPC chorus or retroactive moralisation; no cliches or purple prose. Then write the scene.\n\nFinal-turn invocation:\nWork through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.",
+                // Rendered from the live constant, not hand-copied. The copy that used to sit
+                // here had already drifted from what is actually sent — its Step 4 still
+                // described the retired [DICE OUTCOMES] tag and its Step 5 the retired flat
+                // "5-8 beats" quota — so the Block View was documenting a prompt that no
+                // longer existed. Interpolating makes that class of drift impossible.
+                "prompt": `${WRITER_COT}
+
+Final-turn invocation:
+Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.`,
                 "tokenImpact": "The six-step framework is 467 input tokens in the stable prompt. The normal final-turn invocation is 18 more input tokens. There is no separate COT output-token cap; the provider/model controls hidden reasoning and answer limits.",
                 "quietWhen": "Thinking Effort is Off. An Absolute Command swaps the normal invocation for a 38-token instruction that tells the model to follow the command where they conflict."
             },

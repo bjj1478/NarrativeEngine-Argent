@@ -73,16 +73,17 @@ export function fixtureContext(): GameContext {
         surpriseEngineActive: true,
         encounterEngineActive: true,
         worldEngineActive: true,
+        // Ask To Roll ON — the new default, so the gate freezes the configuration users
+        // actually run. `request_roll` is therefore offered, but the canonical GM completion
+        // carries no tool call, so the turn still resolves in a single pass.
         diceFairnessActive: true,
+        rollFrequency: 'contested',
         sceneNote: '',
         sceneNoteActive: false,
         sceneNoteDepth: 3,
-        // diceSystem null = legacy d20 pool path (rollDiceFairnessLegacy).
-        // The new generalized path needs DieType[] + DiceCategory[]; using
-        // null keeps the fixture minimal and exercises the legacy code path
-        // the gate is meant to freeze.
-        diceSystem: null as unknown as GameContext['diceSystem'],
-        diceConfig: { catastrophe: 2, failure: 6, success: 15, triumph: 19, crit: 20 },
+        // No diceSystem / diceConfig. Pool mode is gone from the desktop turn path, so
+        // neither is read here; the only remaining consumer is the armed "dice me" roll,
+        // which this fixture does not exercise (armedRoll: null).
         surpriseConfig: { initialDC: 95, dcReduction: 3, types: [], tones: [] },
         encounterConfig: { initialDC: 198, dcReduction: 2, types: [], tones: [] },
         worldVibe: 'Grim, hopeful.',

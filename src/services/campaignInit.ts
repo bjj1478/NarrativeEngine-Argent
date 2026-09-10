@@ -30,9 +30,9 @@ export const DEFAULT_CONTEXT = {
     canonStateActive: false, headerIndexActive: false, starterActive: false,
     continuePromptActive: false, inventoryActive: false, characterProfileActive: false,
     surpriseEngineActive: false, encounterEngineActive: true, worldEngineActive: true,
-    // Player-rolled resolution is the default for new campaigns: pool mode OFF (no
-    // pre-rolled [DICE OUTCOMES] tag), the GM asks and the player types the total.
-    diceFairnessActive: false, playerRollActive: true, rollFrequency: 'contested' as const,
+    // Ask To Roll is the default and only dice mode: the GM asks, the player rolls real dice
+    // and types the total. OFF means no dice at all — see the field doc on GameContext.
+    diceFairnessActive: true, rollFrequency: 'contested' as const,
     sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     diceSystem: buildDefaultDiceSystem(),
     worldVibe: '',
