@@ -1,19 +1,50 @@
-# Narrative Engine
+# Narrative Engine — Argent
 
-## Version 1.0.4
+## Version 2.0.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Platform: Desktop](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)]()
 [![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25%20Local-brightgreen)]()
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-7289da?logo=discord&logoColor=white)](https://discord.gg/gf3Ntw6pUY)
 
 **Your AI Dungeon Master.** A self-hosted TTRPG engine that runs extended, multi-session campaigns with persistent memory, living NPCs, and automated world management — powered by any OpenAI-compatible LLM or local Ollama model.
 
 No cloud. No subscription. Your campaigns stay on your machine.
 
-> 📱 **Android client available:** [NarrativeEngine-M](https://github.com/Sagesheep/NarrativeEngine-M/releases/tag/v1.6.20)
-> 
-> 💬 **Join our community:** [Discord Server](https://discord.gg/Qp2y7s3X6T)
+> **Argent is a fork of [Narrative Engine](https://github.com/Sagesheep/NarrativeEngine-P) tuned for solo play.** It keeps the upstream memory, NPC, and world-simulation systems and changes how the table feels: the engine decides *when* something is uncertain and states the terms, the player rolls the dice and does the maths, and the prose mentions neither. The full statement of intent is in [`argent_design_goals.md`](argent_design_goals.md).
+>
+> Upstream's [Discord](https://discord.gg/gf3Ntw6pUY) and [Android client](https://github.com/Sagesheep/NarrativeEngine-M) are the place for questions about the base engine. They do not track this fork.
+
+---
+
+## What Argent changes
+
+If you have used the upstream engine, these are the differences that matter:
+
+- **Mechanics stay off the page.** No subsystem is named in narration — no attribute, tier, die, threshold or bonus. Outcomes read as cause in the world ("hinges recently oiled"), never as machinery.
+- **The GM asks; the player rolls.** The old engine-rolled `[DICE OUTCOMES]` pool is gone. When an action needs dice the GM states the die, the reason, the bar to beat and what a miss costs — then stops and waits. You roll real dice and report one total.
+- **Pacing follows the stakes.** Tense scenes run short and hand the turn back the moment a decision lands. Calm scenes may breathe. There is no fixed beat quota in either direction.
+- **Prose is lean.** A sentence that adds no new fact is cut.
+- **No numeric character sheet.** No derived stats, no combat maths layer. Character creation is AI-guided and prose-shaped; the point-buy wizard is gone.
+- **Consequences live in the world, not the engine.** What success and failure *mean* belongs to the ruleset and your world docs. The engine only needs the outcome.
+
+---
+
+## Project status
+
+Honest state of the tree, not a roadmap.
+
+| Area | State |
+|---|---|
+| Memory, archive, condensation | Stable — inherited from upstream, unchanged |
+| NPC agency, goals, relationships | Stable — inherited from upstream, unchanged |
+| Ask To Roll resolution | **Reworked in this fork.** The pre-rolled pool is removed; `request_roll` is the only dice path |
+| Character sheet & creation | **Reworked in this fork.** AI-guided, no point-buy, condition staging instead of stat blocks |
+| Narrative event engines | Working. Seeds are parsed from your lore file's Engine Seed Tags |
+| World Map | **Unfinished — v0.3.0-wip.** Ships enabled because a half-built map is more useful than a hidden one. Read [`public/bundled-mods/worldmap/STATUS.md`](public/bundled-mods/worldmap/STATUS.md) before relying on it |
+| Mod system | Working, documented in [`docs/MODDING.md`](docs/MODDING.md) |
+| Mobile client (`mobile/`) | Present and kept compiling, but unversioned (`0.0.0`) and not released from this fork |
+
+Test suite: 326 files, 4547 tests, all passing. One unrelated unhandled rejection (`indexedDB is not defined`, from settings encryption under jsdom) is reported at the end of a full run; it does not fail any test.
 
 ---
 
@@ -21,8 +52,8 @@ No cloud. No subscription. Your campaigns stay on your machine.
 
 1. **Clone the repo**
    ```bash
-   git clone https://github.com/Sagesheep/NarrativeEngine-P.git
-   cd NarrativeEngine-P
+   git clone https://github.com/bjj1478/NarrativeEngine-Argent.git
+   cd NarrativeEngine-Argent
    ```
 
 2. **Install & run**
@@ -38,11 +69,11 @@ No cloud. No subscription. Your campaigns stay on your machine.
    npm run dev
    ```
 
-3. **Open your browser** at `http://localhost:5173`
+3. **Open your browser** at `http://localhost:5173` (the API runs on `http://localhost:3001`)
 
 4. **Configure your LLM** — open Settings and add your API key + endpoint. Supports OpenAI, Ollama, DeepSeek, and any OpenAI-compatible API.
 
-That's it. Create a campaign, write your world lore, and start playing.
+That's it. Create a campaign, load a world, and start playing.
 
 ---
 
@@ -96,21 +127,90 @@ Your dependency install was incomplete (a known [npm bug](https://github.com/npm
 
 ## Setting Up Your First Campaign
 
-The `Example_Setup/` folder contains ready-to-play campaigns across multiple genres — including a gritty survival fantasy (*Spirit Card World*), a *Naruto*-inspired setting, and more. Each comes with a world bible, a GM ruleset, and an opening prompt.
+Two folders hold ready-to-play material:
 
-### Quick start with an example
+- **`Custom_Setup/Worlds/`** — the worlds this fork is actually tuned against: *Forgotten Realms (Sword Coast)* and *Witch Reverse Isekai*. Each has a world file, and Forgotten Realms adds its own ruleset. These are the reference implementations of the current lore format.
+- **`Example_Setup/`** — the upstream compendium: 24 world folders / 81 Markdown files across genres, plus `Ruleset/` (the `AI_GM_OS_*` GM system prompts) and `Ability Compendium/`.
 
-1. Create a new campaign
-2. Open **World Info (Lore)** and paste the contents of one of the lore files (e.g. `Spirit_Card_World_Lore.md`)
-3. Open **Campaign Settings** and paste the latest ruleset (`AI_GM_OS_v4.5 - Immersive Mode (Hybrid).md`) into the **System Prompt** field
-4. Start a new chat and paste the genre's start prompt as your first message
-5. The GM will walk you through character creation and then drop you into the world
+### Quick start with an existing world
 
-### Writing your own setup
+1. Create a new campaign and give it the lore file (e.g. `Custom_Setup/Worlds/Forgotten Realms/sword_coast_world_engine.md`)
+2. Give it the matching ruleset as the system prompt (`sword_coast_rules.md`, or one of `Example_Setup/Ruleset/AI_GM_OS_*`)
+3. Paste the world's `starter_prompt.md` as your first message
+4. The GM will walk you through character creation and then drop you into the world
 
-- **Lore** — write your world in Markdown with `##` / `###` headers. Each section becomes a lore chunk the GM can recall. Use `[CHUNK: TYPE -- NAME]` prefixes to classify entries (`world_overview`, `faction`, `location`, `character`, `power_system`, `economy`, `event`, `rules`, `culture`, `misc`)
-- **System Prompt** — define how the GM behaves: tone, output format, NPC behaviour rules, dice resolution, event protocols. The engine handles memory and recall — you define the style
-- **First Message** — set the scene, ask for character creation, or simply say "begin"
+### Writing your own world
+
+Start from [`Example_Setup/World_compendium/lore_template.md`](Example_Setup/World_compendium/lore_template.md) — it is a copy-paste prompt that makes an LLM emit a correctly formatted file. The format is machine-parsed, so three rules matter:
+
+**1. Headers carry the type.** `## N. SECTION` for sections, `### TYPE -- Name` for entries (double-hyphen separator). The `TYPE` token is authoritative — it decides the entry's category, its retrieval priority, and whether it feeds the NPC ledger, the place ledger, or the map:
+
+```markdown
+## 2. FACTIONS
+### FACTION -- The Harpers
+```
+
+Recognised types: `OVERVIEW` / `WORLD`, `FACTION` / `ORGANIZATION`, `CHARACTER` / `HERO` / `NPC`, `LOCATION` / `CITY` / `REGION`, `EVENT` / `TIMELINE`, `POWER_SYSTEM` / `POWER` / `MAGIC`, `ECONOMY`, `CULTURE` / `RELIGION`, `RULES` / `MECHANIC`, `RELATIONSHIP`. An unrecognised token is not an error — the entry just falls back to keyword heuristics.
+
+**2. Every entry gets a retrieval directive.** One `<!-- rag: ... -->` comment on the line below the header. The engine strips it before the GM ever sees it. Without one, the engine falls back to guessing keywords from your prose — which shreds names and indexes stopwords.
+
+```markdown
+### FACTION -- The Harpers
+<!-- rag: vector, triggers: harpers, spy, coded message, safe house, priority: 7 -->
+```
+
+- `always` + `priority` — permanently in context. Reserve for the world kernel.
+- `vector` + `triggers` — retrieved by meaning. The default for factions, locations, characters, events.
+- `keyword` + `triggers` — retrieved only on a literal word match. For mechanical tables.
+
+**3. End the file with Engine Seed Tags.** These fill the three narrative event engines. Tier 3's four rows are concatenated verbatim into one sentence — `[WORLD_EVENT: {who} {what} {why} {where}]` — so write each row to fit its slot and read the joined line back:
+
+```markdown
+## 8. ENGINE SEED TAGS (IMPORTANT)
+### SYSTEM -- Engine Seeds
+<!-- rag: always, priority: 10 -->
+**Surprise Types:** TAVERN_RUMOR, MARKET_HAGGLE, STREET_PREACHER
+**Surprise Tones:** MUNDANE, AMUSING, CURIOUS
+**Encounter Types:** HOSTILE_PRESENCE, TERRITORIAL_THREAT, AMBUSH_LAID
+**Encounter Tones:** TENSE, SUDDEN, OMINOUS
+**World Event Who:** the Zhentarim, a Waterdhavian noble house, a hill giant warband
+**World Event What:** seized a caravan depot, broke an old treaty, blockaded a harbour
+**World Event Why:** to corner the caravan trade, to settle a grudge older than the city
+**World Event Where:** along the Trade Way, beneath Waterdeep's Dock Ward
+```
+
+> `**Quest Hook Who/What/Where/Why:**` is the legacy label and is still parsed — those rows are authored in rumour order and the parser swaps Where and Why so the sentence still reads correctly. Prefer `World Event` in new files. If both are present, `World Event` wins.
+
+Each list needs **at least 3 entries** or the engine falls back to its genre-neutral defaults. `Example_Setup/World_compendium/CLAUDE.md` is the condensed authoring spec.
+
+---
+
+## Ask To Roll
+
+Argent's resolution system. The engine does not roll behind the narration — it asks, and waits.
+
+When the GM judges an action uncertain it calls `request_roll` and stops, stating four things:
+
+- **the die** — `2d6`, `1d20`, whatever the ruleset uses
+- **the reason** — why this is in doubt, in world terms
+- **the bar** — `7+`. Committed to *before* the number exists, so it cannot be bent to suit the result
+- **what a miss costs** — named up front, not invented afterwards
+
+You roll physical dice, add your own bonuses, and type one total. The GM narrates the outcome as cause in the world and never names the die, the bar, or the bonus.
+
+**If you would rather not reach for dice**, the "dice me" modal rolls for you: pick a die type, a modifier (advantage / disadvantage / none), a count, and how the dice aggregate, then confirm. That *arms* the roll — the app resolves it at send time and asserts the result as fact. It is an explicit opt-in, and the only path by which the app rolls at all.
+
+**Roll frequency** is a threshold, not a quota. Three settings in Engine Tuning:
+
+| Setting | What deserves dice |
+|---|---|
+| **Any contested action** | Anything meeting real resistance — a lock, a fight, a risky climb, persuasion against a genuine want |
+| **Only when it costs something** | Only when failure leaves a mark. Mere inconvenience resolves in the fiction |
+| **Only decisive moments** | Only a conflict that could genuinely go either way |
+
+Turning Ask To Roll off means **no dice at all** — pure freeform narration.
+
+Die types and their outcome bands (Catastrophe → Failure → Success → Triumph → Narrative Boon) are stored per campaign and honoured by the roller, but the desktop UI no longer exposes an editor for them — only the mobile client does. Campaigns saved under the retired pool are migrated on load.
 
 ---
 
@@ -122,7 +222,7 @@ Narrative Engine was built from the ground up to solve this. Every piece of your
 
 ### Lossless Scene Archive
 
-Every turn — every dice roll, every line of dialogue, every narrative beat — is archived verbatim. Nothing is summarised away. Nothing is discarded.
+Every turn — every roll reported, every line of dialogue, every narrative beat — is archived verbatim. Nothing is summarised away. Nothing is discarded.
 
 ### Two-Phase Deep Archive Search
 
@@ -143,7 +243,7 @@ When approaching the token limit, older turns are compressed automatically using
 | **Smart** | ~75% | Balanced play (default) |
 | **Deep** | Maximum detail | Short campaigns, large context windows |
 
-The most recent 8 messages are always kept verbatim. Dice rolls, HP/MP values, and all proper names are preserved exactly. Dramatic moments are tagged and survive re-compression.
+The most recent 8 messages are always kept verbatim. Reported rolls and all proper names are preserved exactly. Dramatic moments are tagged and survive re-compression.
 
 ### Pinned Memories
 
@@ -167,7 +267,7 @@ NPCs are not static text snippets. They are simulated characters with their own 
 
 ### Auto-Detection & Profiling
 
-NPCs are detected as they appear in the story. The AI generates full profiles: personality, voice, goals, faction, visual description. No manual data entry required.
+NPCs are detected as they appear in the story. The AI generates full profiles: personality, voice, goals, faction, visual description. NPCs written into your lore file as `### CHARACTER -- Name` are seeded into the ledger on import and treated as canon — their authored `PersonalityHex`, `Traits`, and `Tier` override inference.
 
 ### Personality Hexagon
 
@@ -210,7 +310,18 @@ Each turn, a heartbeat roll determines whether an NPC's goal advances. Successes
 
 ### Portrait Generation
 
-Generate NPC portraits on the fly in 5 art styles: Realistic, Anime Realistic, Anime, Western RPG, Chibi. Works with any OpenAI-compatible image API. Images are stored locally.
+Generate NPC portraits on the fly. Eight current art styles — Stylized Game Realism (default), Cinematic Historical Fantasy, Painterly Realism, Classical Ink & Colour, Graphic Novel, Western RPG Concept Art, Stylized Anime, Chibi — plus five legacy styles kept selectable so older campaigns can regenerate consistently. Works with any OpenAI-compatible image API. Images are stored locally.
+
+---
+
+## The Player Character
+
+Argent has no numeric character sheet by design. What it keeps instead:
+
+- **AI-guided creation** — a conversational wizard that builds the character from questions rather than a point-buy budget. Capabilities are stated in the player's own words ("skilled with a blade from years as a Flaming Fist mercenary"), and the player sets their own bonuses to reflect them
+- **Character ledger** — the durable profile the GM reads each turn: who you are, what you carry, what is true about you now
+- **Conditions** — the GM proposes a condition change (wounded, exhausted, marked) and you confirm it. Conditions persist and degrade what they govern until treated
+- **Inventory proposals** — the GM never silently edits your kit; it proposes, you accept
 
 ---
 
@@ -226,13 +337,17 @@ Large-scale storylines — political coups, economic crises, supernatural plague
 
 ### Narrative Event Engines
 
-Three probability engines create emergent storytelling:
+Three probability engines create emergent storytelling. Each is an *escalating* timer, not a flat per-turn chance — the longer nothing happens, the more likely something will:
 
-- **Surprise Engine** — ambient flavour events. Default DC 95, drops by 3 per turn
-- **Encounter Engine** — mid-stakes hooks and challenges. Default DC 198, drops by 2 per turn
-- **World Event Engine** — seismic world shifts. Default DC 498, drops by 2 per turn. Generates a four-part event: who, what, why, where
+| Engine | Die | Start DC | Decay / turn | Produces |
+|---|---|---|---|---|
+| **Surprise** | d100 | 95 | −3 | Ambient flavour — a type and a tone |
+| **Encounter** | d200 | 198 | −2 | A mid-stakes situation that interrupts the scene |
+| **World Event** | d500 | 498 | −2 | A background world shift — who, what, why, where |
 
-The longer nothing happens, the more likely something will. All thresholds, decay rates, and event tables are fully configurable.
+On a miss the DC drops; on a fire it resets. The tag is appended to your turn and the GM narrates it without ever acknowledging it.
+
+The tag vocabulary comes from your lore file's Engine Seed Tags, so a Sword Coast campaign draws on `TAVERN_RUMOR` and the Zhentarim while a modern one draws on `RING_DOORBELL_ALERT` and a Senate subcommittee. Every threshold, decay rate and list is editable live in **Engine Tuning**, and a per-field **Populate** button will regenerate a list from your own lore.
 
 ### Timeskip Simulation
 
@@ -244,14 +359,6 @@ The engine programmatically prevents NPC metagaming:
 
 - **Witness tracking** — every scene records which NPCs were physically present vs. merely mentioned. When recalling past events, witness-matching scenes are ranked higher
 - **Faction scoping** — facts in the Divergence Register carry `knownBy` permissions (`player`, `npc:<id>`, `faction:<name>`). An NPC will never reference a secret they shouldn't know about
-
----
-
-## Dice & Combat Fairness
-
-The **Dice Fairness** system pre-rolls d20 pools each turn and injects structured outcomes for 7 skill categories (Combat, Perception, Stealth, Social, Movement, Knowledge, Mundane) across Disadvantage / Normal / Advantage tiers — ensuring the GM uses real rolls rather than fabricating outcomes.
-
-The GM can also call the `roll_dice` tool mid-response for specific checks, receiving a tier result (Catastrophe → Failure → Success → Triumph → Critical) with configurable breakpoints.
 
 ---
 
@@ -269,13 +376,15 @@ A consistency QA tool you can run on any message:
 
 ## LLM Tool Calls
 
-The GM can use tools mid-conversation:
+The GM can use five tools mid-conversation:
 
-- **Query Campaign Lore** — the GM searches your world bible on the fly when it needs a detail
-- **Update Scene Notebook** — a volatile working memory for tracking active spells, timers, NPC positions, environmental conditions, and combat state
-- **Roll Dice** — request a specific skill check with tier-mapped results
-- **Propose Inventory Change** — suggest adding, removing, or equipping items (player must confirm)
-- **Initiate Combat** — signal that combat is beginning and list hostile combatants
+| Tool | What it does |
+|---|---|
+| `query_campaign_lore` | Searches your world bible on the fly when the GM needs a detail |
+| `update_scene_notebook` | Volatile working memory — active effects, timers, NPC positions, environmental conditions |
+| `request_roll` | Asks the player for a roll, stating die, reason, bar, and cost of a miss |
+| `propose_condition_change` | Suggests a condition on the player character (you confirm) |
+| `propose_inventory_change` | Suggests adding, removing, or equipping items (you confirm) |
 
 Works with OpenAI function calling and DeepSeek models (with DSML fallback parsing).
 
@@ -283,15 +392,15 @@ Works with OpenAI function calling and DeepSeek models (with DSML fallback parsi
 
 ## World Building Tools
 
-### Overworld Map
+### World Map — unfinished, ships enabled
 
-A procedurally generated world map tied to your campaign:
+A bundled mod (`public/bundled-mods/worldmap`, **v0.3.0-wip**) that places your world on a map derived from the relations in your lore, and lets you walk a journey one day at a time.
 
-- Terrain generation using Perlin noise with Voronoi biome clustering (plains, hills, mountains, coast, swamp, forest, deep ocean)
-- Multiple world shapes: single continent, two continents, archipelago, coastal kingdom
-- Named landmarks snap to cardinal anchor positions
-- Player position tracked on the overworld grid
-- Custom map pins for locations, events, or points of interest
+**Working and verified in a real browser:** field solve with terrain-aware placement and cells frozen on visit; twelve biomes with textured variants, hillshade, contour lines and coastal shading; A\* routing over the chunk grid with per-mode impassable sets and terrain-priced day counts; travel as an engine action — one press, one day, one camp, no LLM call.
+
+**Not done:** roads cost the pathfinder nothing, so routes cut across open country beside a road the map itself drew; multi-hop journeys take one press too many; there is nothing to find at a camp yet. The full, honest list is in [`STATUS.md`](public/bundled-mods/worldmap/STATUS.md) — read it before you rely on the map.
+
+Switch the mod off and the ledger goes back to plain topology; every place stays exactly where it was.
 
 ### World Lore Builder
 
@@ -306,6 +415,16 @@ A structured pre-game world editor:
 ### Rules Manager
 
 Your system prompt is automatically chunked and indexed. Each rule chunk gets AI-generated trigger keywords so the engine retrieves only the relevant rules for each turn, keeping token usage efficient.
+
+---
+
+## Mods
+
+The engine has a first-class mod system. A mod is one folder under `mods/` with a `manifest.json` and whatever source it points at; it talks only to the `ModContext` the host hands it and never imports from `src/`.
+
+Three mods ship bundled — **World Map**, **Enemy Compendium**, and a tone example — and `mods/` carries the ability compendium, a skill tree, an NPC tagger, and a set of worked examples covering interceptors, surfaces, windows, facts, and native hooks.
+
+[`docs/MODDING.md`](docs/MODDING.md) is the single author-facing reference, and [`docs/narrative-mod-api.d.ts`](docs/narrative-mod-api.d.ts) is the typed surface every sample compiles against.
 
 ---
 
@@ -326,7 +445,7 @@ Your system prompt is automatically chunked and indexed. Each rule chunk gets AI
 - **Password mode** — PBKDF2 with 100K iterations for full lock-down
 - **Client-side encryption** — API keys are encrypted in the browser before they touch the server
 - **100% local vector search** — all semantic memory, lore queries, and embedding operations run locally via `@huggingface/transformers` (ONNX models) and `sqlite-vec`. No campaign text is sent to third-party vector providers
-- All campaign data stored as local files — no database server, no cloud, no vendor lock-in
+- All campaign data stored as local files under `data/` — no database server, no cloud, no vendor lock-in
 - Export and import your vault for backups
 
 ---
@@ -354,16 +473,23 @@ Works with Ollama for fully local play — no internet required after setup.
 | Action | Command |
 |---|---|
 | Install & run (Windows) | Double-click `Start_Narrative_Engine.bat` |
-| Install & run (Linux) | Run `start.sh` |
+| Install & run (Linux / macOS) | Run `start.sh` |
 | Update to latest (Windows) | Double-click `Update_Narrative_Engine.bat` |
 | Update to latest (manual) | `git pull` then `npm install` |
-| Install manually | `npm install` |
 | Start the app | `npm run dev` |
-| Run tests | `npm run test` |
+| Start with LAN access | `npm run dev:lan` |
+| Build for production | `npm run build` |
+| Run tests (watch) | `npm run test` |
+| Run tests (once) | `npm run test:run` |
+| Run tests with coverage | `npm run test:coverage` |
+| Base-app regression gate | `npm run test:base-app-gate` |
+| Browser end-to-end tests | `npx playwright test` |
 | Lint | `npm run lint` |
 
 ---
 
-## License
+## Credits & License
 
-This project is licensed under the [MIT License](LICENSE) — Copyright (c) 2026 Sagesheep.
+Argent is a fork of [Narrative Engine](https://github.com/Sagesheep/NarrativeEngine-P) by Sagesheep. The memory, NPC agency, and world simulation systems are upstream's work; the resolution, pacing, and character-sheet changes described above are this fork's.
+
+Licensed under the [MIT License](LICENSE) — Copyright (c) 2026 Sagesheep.
