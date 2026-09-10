@@ -25,6 +25,7 @@ import { useChatPersistence } from '../hooks/useChatPersistence';
 import { useAutoresizeInput } from '../hooks/useAutoresizeInput';
 import { useChatKeyboard } from '../hooks/useChatKeyboard';
 import { InventoryStagingBar } from './inventory/InventoryStagingBar';
+import { ConditionStagingBar } from './character/ConditionStagingBar';
 import { IndexingBanner } from './IndexingBanner';
 import { AskGmPanel } from './ooc/AskGmPanel';
 import { ArmedAskGmNote } from './ooc/ArmedAskGmNote';
@@ -137,6 +138,7 @@ export function ChatArea() {
 
     const {
         isStreaming, loadingStatus, pendingProposal, setPendingProposal,
+        pendingConditionProposal, setPendingConditionProposal,
         pendingPcPrompt, resolvePcPrompt,
         pendingRollRequest, resolvePlayerRoll,
         handleSend, handleStop,
@@ -151,6 +153,21 @@ export function ChatArea() {
         sceneContinue,
         checkAndSealChapter,
     });
+
+    // The commit/swipe path has no React state of its own, so `pendingCommit` surfaces
+    // staged proposals as window events. Nothing listened for these until now: the
+    // dispatch at pendingCommit.ts existed, the listener did not, and any proposal raised
+    // on that path was dropped on the floor.
+    useEffect(() => {
+        const onInventory = (e: Event) => setPendingProposal((e as CustomEvent).detail);
+        const onCondition = (e: Event) => setPendingConditionProposal((e as CustomEvent).detail);
+        window.addEventListener('stage-inventory-proposal', onInventory);
+        window.addEventListener('stage-condition-proposal', onCondition);
+        return () => {
+            window.removeEventListener('stage-inventory-proposal', onInventory);
+            window.removeEventListener('stage-condition-proposal', onCondition);
+        };
+    }, [setPendingProposal, setPendingConditionProposal]);
 
     const { isSaving, handleForceSave, handleOpenArchive } = useChatPersistence();
     const { handleKeyDown } = useChatKeyboard(() => handleSend());
@@ -258,6 +275,12 @@ export function ChatArea() {
                     <InventoryStagingBar
                         proposal={pendingProposal}
                         onDone={() => setPendingProposal(null)}
+                    />
+                )}
+                {pendingConditionProposal && (
+                    <ConditionStagingBar
+                        proposal={pendingConditionProposal}
+                        onDone={() => setPendingConditionProposal(null)}
                     />
                 )}
                 <ChatComposer

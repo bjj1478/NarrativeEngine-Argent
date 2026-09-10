@@ -26,9 +26,7 @@ export const inventoryScanTrack: PostTurnTrack<PostCommitTrackContext> = {
             );
             if (!assertStillActive(ctx.activeCampaignId, 'Inventory-Scan')) return;
             ctx.guardedUpdateContext({
-                inventory: newItems.map(it => `- ${it.qty > 1 ? `${it.qty}x ` : ''}${it.name}`).join('\n'),
                 inventoryItems: newItems,
-                inventoryLastScene: ctx.sceneId,
             });
             (ctx.facade?.write.setInventoryItems ?? ctx.guardedSetInventoryItems)(newItems);
             console.log(`[Auto Bookkeeping] Inventory updated at scene #${ctx.sceneId}`);

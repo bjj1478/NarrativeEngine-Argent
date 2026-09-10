@@ -1,6 +1,6 @@
 // ─── Game Context / Pipeline / Session Types ─────────────────────────────
 
-import type { InventoryItem, CharacterProfile, CharacterProfileState, InventoryItemCategory, SceneStakes, NPCEntry, NPCVisualProfile } from './character';
+import type { InventoryItem, InventoryItemCategory, SceneStakes, NPCEntry, NPCVisualProfile } from './character';
 export type { SceneStakes };
 import type { LoreChunk, RuleChunkMeta } from './lore';
 import type { ArcRecord } from './arc';
@@ -14,7 +14,6 @@ import type { TravelMode } from '../services/location/travelModes';
 // keeps the prompt pipeline, sanitization helpers, and hex/traits/wants/kit
 // fields identical between PC and NPC without inventing a parallel schema.
 export type PlayerCharacter = NPCEntry;
-
 
 export type PipelinePhase =
     | 'idle'
@@ -230,15 +229,12 @@ export type GameContext = {
     headerIndex: string;
     starter: string;
     continuePrompt: string;
-    inventory: string; // @deprecated — legacy plain-text. Prefer inventoryItems.
-    inventoryLastScene: string;
-    characterProfile: CharacterProfileState; // WO-G: structured narrative traits (was flat string)
-    characterProfileLastScene: string;
-    // --- Structured replacements ---
+    // The player character lives at `playerCharacter` (below) and nowhere else. Seven
+    // fields used to sit here describing the same person a second and third time —
+    // `characterProfile` (identity + traits), `characterProfileData` (a numeric sheet),
+    // their staleness stamps, a `smartBookkeepingActive` switch choosing between the two,
+    // and the pre-structured `inventory` string. `foldPcRecord` migrates all of them.
     inventoryItems: InventoryItem[];
-    characterProfileData: CharacterProfile;
-    // --- Smart injection toggle ---
-    smartBookkeepingActive: boolean;
     surpriseDC?: number;
     encounterDC?: number;
     worldEventDC?: number;
@@ -250,8 +246,6 @@ export type GameContext = {
     headerIndexActive: boolean;
     starterActive: boolean;
     continuePromptActive: boolean;
-    inventoryActive: boolean;
-    characterProfileActive: boolean;
     surpriseEngineActive: boolean;
     encounterEngineActive: boolean;
     worldEngineActive: boolean;
@@ -400,19 +394,6 @@ export type PayloadTrace = {
 
 // ─── Bookkeeping Defaults & Migration ──────────────────────────────────
 
-export const DEFAULT_CHARACTER_PROFILE: CharacterProfile = {
-    name: '',
-    race: '',
-    class: '',
-    level: 1,
-    hp: { current: 20, max: 20 },
-    stats: {},
-    skills: [],
-    abilities: [],
-    traits: [],
-    notes: '',
-};
-
 export const DEFAULT_INVENTORY: InventoryItem[] = [];
 
 // ─── Dice System Defaults & Migration ──────────────────────────────────
@@ -541,7 +522,7 @@ export function normalizeInventoryItem(item: InventoryItem): InventoryItem {
     };
 }
 
-function parsePlainInventory(text: string): InventoryItem[] {
+export function parsePlainInventory(text: string): InventoryItem[] {
     const items: InventoryItem[] = [];
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
     for (const line of lines) {
@@ -574,31 +555,6 @@ function parsePlainInventory(text: string): InventoryItem[] {
     return items;
 }
 
-function extractHp(str: string): { current: number; max: number } | undefined {
-    const m = str.match(/HP[:\s]*?(\d+)\s*\/\s*(\d+)/i);
-    if (m) return { current: parseInt(m[1], 10), max: parseInt(m[2], 10) };
-    return undefined;
-}
-
-function extractStat(str: string, label: string): number | undefined {
-    const r = new RegExp(`${label}[:\\s]*?(\\d+)`, 'i');
-    const m = str.match(r);
-    if (m) return parseInt(m[1], 10);
-    return undefined;
-}
-
-function extractList(str: string, header: string): string[] {
-    const idx = str.toLowerCase().indexOf(header.toLowerCase());
-    if (idx === -1) return [];
-    const block = str.slice(idx + header.length);
-    const endIdx = block.search(/\n\n|^[A-Z][\w\s]+:/m);
-    const sub = endIdx !== -1 ? block.slice(0, endIdx) : block;
-    return sub
-        .split('\n')
-        .map(l => l.trim().replace(/^[-*•]+\s*/, ''))
-        .filter(Boolean);
-}
-
 export function migrateLegacyContext(ctx: Partial<GameContext>): GameContext {
     // Note: Agency fields (agencyTick, agencyHeartbeatDC, lastSceneStakes, agencyDigest, arcDigest, etc.)
     // are not initialized here; they are lazy-migrated in Phase 2.
@@ -611,19 +567,11 @@ export function migrateLegacyContext(ctx: Partial<GameContext>): GameContext {
         headerIndex: '',
         starter: '',
         continuePrompt: '',
-        inventory: '',
-        inventoryLastScene: 'Never',
-        characterProfile: { identity: {}, activeTraits: [] },
-        characterProfileLastScene: 'Never',
         inventoryItems: DEFAULT_INVENTORY,
-        characterProfileData: DEFAULT_CHARACTER_PROFILE,
-        smartBookkeepingActive: true,
         canonStateActive: false,
         headerIndexActive: false,
         starterActive: false,
         continuePromptActive: false,
-        inventoryActive: false,
-        characterProfileActive: false,
         surpriseEngineActive: false,
         encounterEngineActive: true,
         worldEngineActive: true,
@@ -645,58 +593,10 @@ export function migrateLegacyContext(ctx: Partial<GameContext>): GameContext {
         },
     };
     const merged: GameContext = { ...base, ...ctx };
-    if (!merged.inventoryItems || merged.inventoryItems.length === 0) {
-        if (merged.inventory && merged.inventory.trim()) {
-            merged.inventoryItems = parsePlainInventory(merged.inventory);
-        } else {
-            merged.inventoryItems = DEFAULT_INVENTORY;
-        }
-    } else {
-        merged.inventoryItems = merged.inventoryItems.map(normalizeInventoryItem);
-    }
-    // WO-G: migrate legacy flat-string `characterProfile` → CharacterProfileState.
-    // Old saves have characterProfile as a string; we freeze it into legacyNotes
-    // (never injected) and seed identity from it. The structured parser rebuilds
-    // activeTraits over a few turns. The sheet (characterProfileData) is still
-    // extracted from the legacy blob below for backward compatibility.
-    const legacyProfileString: string | null =
-        typeof (merged as Record<string, unknown>).characterProfile === 'string' ? (merged as Record<string, unknown>).characterProfile as string : null;
-    if (legacyProfileString !== null) {
-        merged.characterProfile = {
-            identity: {},
-            activeTraits: [],
-            legacyNotes: legacyProfileString || undefined,
-        };
-    } else if (!merged.characterProfile || typeof merged.characterProfile !== 'object') {
-        merged.characterProfile = { identity: {}, activeTraits: [] };
-    }
-    if (!merged.characterProfileData || !merged.characterProfileData.name) {
-        if (legacyProfileString && legacyProfileString.trim()) {
-            const prof = legacyProfileString;
-            merged.characterProfileData = {
-                ...DEFAULT_CHARACTER_PROFILE,
-                name: (prof.match(/Name[:\s]*(.+)/i)?.[1] || '').trim(),
-                race: (prof.match(/Race[:\s]*(.+)/i)?.[1] || '').trim(),
-                class: (prof.match(/Class[:\s]*(.+)/i)?.[1] || '').trim(),
-                level: parseInt(prof.match(/Level[:\s]*(\d+)/i)?.[1] || '1', 10),
-                hp: extractHp(prof) || merged.characterProfileData.hp,
-                stats: {
-                    str: extractStat(prof, 'str') ?? extractStat(prof, 'strength') ?? merged.characterProfileData.stats.str,
-                    dex: extractStat(prof, 'dex') ?? extractStat(prof, 'dexterity') ?? merged.characterProfileData.stats.dex,
-                    con: extractStat(prof, 'con') ?? extractStat(prof, 'constitution') ?? merged.characterProfileData.stats.con,
-                    int: extractStat(prof, 'int') ?? extractStat(prof, 'intelligence') ?? merged.characterProfileData.stats.int,
-                    wis: extractStat(prof, 'wis') ?? extractStat(prof, 'wisdom') ?? merged.characterProfileData.stats.wis,
-                    cha: extractStat(prof, 'cha') ?? extractStat(prof, 'charisma') ?? merged.characterProfileData.stats.cha,
-                },
-                skills: extractList(prof, 'skills'),
-                abilities: extractList(prof, 'abilities'),
-                traits: extractList(prof, 'traits'),
-                notes: prof,
-            };
-        } else {
-            merged.characterProfileData = DEFAULT_CHARACTER_PROFILE;
-        }
-    }
+    // Inventory normalization. The legacy free-text `inventory` string is read by
+    // `foldPcRecord` at hydrate; here we only normalize what is already structured.
+    merged.inventoryItems = (merged.inventoryItems ?? DEFAULT_INVENTORY).map(normalizeInventoryItem);
+
     // ── Dice system migration ──
     // Old saves have `diceConfig` (d20 thresholds) but no `diceSystem`. Build one.
     if (!merged.diceSystem) {

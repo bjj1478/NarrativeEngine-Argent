@@ -1,4 +1,4 @@
-import type { PlayerCharacter, CharacterCreationDraft, NPCVisualProfile, InventoryItem, CharacterProfileState } from '../../types';
+import type { PlayerCharacter, CharacterCreationDraft, NPCVisualProfile, InventoryItem } from '../../types';
 import { DEFAULT_VISUAL_PROFILE } from '../../types';
 import { uid } from '../../utils/uid';
 
@@ -28,11 +28,7 @@ export type CommitDeps = {
     setPlayerCharacter: (pc: PlayerCharacter | null) => void;
     setInventoryItems: (items: InventoryItem[]) => void;
     updateContext: (patch: Record<string, unknown>) => void;
-    /** Current characterProfileData (read); seeded with name only. */
-    characterProfileData?: Partial<{ name: string; level: number; hp: { current: number; max: number } }> | null;
 };
-
-const DEFAULT_HP = { current: 20, max: 20 };
 
 /**
  * Assemble a `PlayerCharacter` record from a committed draft, WITHOUT writing
@@ -63,17 +59,14 @@ export function assemblePlayerCharacter(inputs: CommitInputs): PlayerCharacter {
         wants: { short: [], medium: [], long: draft.answers?.[7] || '' },
     };
 
-    // §2.3 slot 4 → signatureKit.abilities + element. Free-text answer is
-    // split into abilities (comma/pipe separated). Element is a single tag
-    // pulled from a trailing " (element: fire)" if present.
+    // §2.3 slot 4 → signatureKit.abilities. Free-text answer, split on comma/pipe.
+    // A trailing " (element: fire)" used to be scraped into its own field; the field is
+    // gone, so the parenthetical is simply left in the ability text where it reads fine.
     const slot4 = draft.answers?.[4] || '';
     if (slot4) {
-        const elemMatch = slot4.match(/\(element:\s*([^)]+)\)/i);
-        const element = elemMatch ? elemMatch[1].trim().slice(0, 20) : undefined;
-        const stripped = slot4.replace(/\(element:\s*[^)]+\)/i, '').trim();
-        const abilities = stripped.split(/[,|]/).map(s => s.trim()).filter(Boolean).slice(0, 8);
-        if (abilities.length || element) {
-            pc.signatureKit = { equipment: [], abilities, element };
+        const abilities = slot4.split(/[,|]/).map(s => s.trim()).filter(Boolean).slice(0, 8);
+        if (abilities.length) {
+            pc.signatureKit = { equipment: [], abilities };
         }
     }
 
@@ -108,42 +101,22 @@ export function parseStartingInventory(raw: string): InventoryItem[] {
 }
 
 /**
- * Commit the draft. Writes `playerCharacter`, seeds `characterProfileData`
- * (name + level 1 + default hp), sets `inventoryItems` from slot 8, mirrors
- * the name into `characterProfile.identity.name`, and clears `creationDraft`.
+ * Commit the draft. Writes `playerCharacter`, sets `inventoryItems` from slot 8, and
+ * clears `creationDraft`. One record, written once.
  *
- * Note: `postTurnPipeline.ts:262` already auto-seeds `characterProfileData`
- * from the PC during play when the profile is inactive, so seed only what
- * play won't.
+ * It used to also seed a `characterProfileData` sheet with `level: 1` and a hardcoded
+ * `HP 20/20`, and mirror the name a third time into `characterProfile.identity.name`.
+ * Nothing ever decremented that HP, and both mirrors reached the model every turn — so
+ * every new character was born with two numbers that were never true and a name the
+ * prompt then repeated three times over.
  */
 export function commitCharacterDraft(inputs: CommitInputs, deps: CommitDeps): void {
     const pc = assemblePlayerCharacter(inputs);
     deps.setPlayerCharacter(pc);
 
-    const existing = deps.characterProfileData || { name: '', race: '', class: '', level: 1, hp: { ...DEFAULT_HP } };
-    deps.updateContext({
-        characterProfileData: {
-            ...existing,
-            name: pc.name,
-            level: existing.level ?? 1,
-            hp: existing.hp ?? { ...DEFAULT_HP },
-        } as never,
-    });
-
     const startItems = parseStartingInventory(inputs.draft.answers?.[8] || '');
     if (startItems.length > 0) deps.setInventoryItems(startItems);
 
-    const profile: CharacterProfileState = (deps as { context?: { characterProfile?: CharacterProfileState } }).context?.characterProfile
-        ?? { identity: {}, activeTraits: [] };
-    deps.updateContext({
-        characterProfileActive: true,
-        characterProfile: {
-            ...profile,
-            identity: { ...profile.identity, name: pc.name },
-        },
-    } as never);
-
-    // Clear the draft (§2.8 step 5). The caller's `updateContext` is the
-    // same path used above, so this rides the same dispatch.
+    // Clear the draft (§2.8 step 5).
     deps.updateContext({ creationDraft: null } as never);
 }

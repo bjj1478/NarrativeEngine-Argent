@@ -123,21 +123,9 @@ export function buildOocContext(snapshot: OocCampaignSnapshot, question: string)
         sources.push({ kind: 'fact', id: label.toLowerCase().replace(/\s+/g, '-'), label, excerpt: valueExcerpt });
     }
 
-    const identity = context.characterProfile?.identity;
-    const identityParts = identity ? [identity.name, identity.race, identity.class, identity.archetype, identity.level !== undefined ? `Level ${identity.level}` : undefined].filter(Boolean) : [];
-    if (identityParts.length > 0) {
-        const line = identityParts.join(' | ');
-        parts.push(`PC identity: ${line}`);
-        sources.push({ kind: 'fact', id: 'pc-identity', label: 'PC identity', excerpt: line });
-    }
-    const stats = Object.entries(context.characterProfile?.stats ?? {}).slice(0, 12);
-    if (stats.length > 0) {
-        const line = stats.map(([name, value]) => `${name.toUpperCase()} ${value}`).join(' | ');
-        parts.push(`PC stats: ${line}`);
-        sources.push({ kind: 'fact', id: 'pc-stats', label: 'PC stats', excerpt: line });
-    }
-
-    // ── Character Ledger — the PC's sheet and curated record, not just the stat block. ──
+    // One PC record, one read. This used to emit `PC identity` and `PC stats` from a
+    // parallel `characterProfile` before falling through to the record below — the same
+    // character described two and a half times, with a stat block in the middle.
     const pc = context.playerCharacter;
     if (pc) {
         const line = characterLine(pc, false);
@@ -146,7 +134,7 @@ export function buildOocContext(snapshot: OocCampaignSnapshot, question: string)
             sources.push({ kind: 'fact', id: 'pc-sheet', label: `PC sheet: ${pc.name}`, excerpt: line });
         }
     }
-    const pcTraits = (context.characterProfile?.activeTraits ?? [])
+    const pcTraits = (pc?.activeTraits ?? [])
         .filter(trait => !trait.superseded && trait.text.trim())
         .sort((a, b) => b.importance - a.importance)
         .slice(0, MAX_PC_TRAITS);

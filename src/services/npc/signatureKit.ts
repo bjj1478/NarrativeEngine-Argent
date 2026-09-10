@@ -8,7 +8,6 @@ import type { NPCSignatureKit } from '../../types';
 
 export const KIT_MAX_ENTRIES = 8;
 export const KIT_ENTRY_MAXLEN = 48;
-export const KIT_ELEMENT_MAXLEN = 20;
 
 function cleanEntries(raw: unknown): string[] {
     if (!Array.isArray(raw)) return [];
@@ -33,16 +32,14 @@ export function sanitizeSignatureKit(
     if (!raw || typeof raw !== 'object') return mergeInto;
     const r = raw as Record<string, unknown>;
     const base: NPCSignatureKit = mergeInto
-        ? { equipment: [...mergeInto.equipment], abilities: [...mergeInto.abilities], element: mergeInto.element }
+        ? { equipment: [...mergeInto.equipment], abilities: [...mergeInto.abilities] }
         : { equipment: [], abilities: [] };
 
     if ('equipment' in r) base.equipment = cleanEntries(r.equipment);
     if ('abilities' in r) base.abilities = cleanEntries(r.abilities);
-    if ('element' in r) {
-        const el = String(r.element ?? '').replace(/\s+/g, ' ').trim();
-        base.element = el ? el.slice(0, KIT_ELEMENT_MAXLEN) : undefined;
-    }
+    // `element` is deliberately not read: the field is gone, and a stale one arriving from
+    // an old save or an older utility model is dropped rather than resurrected.
 
-    if (base.equipment.length === 0 && base.abilities.length === 0 && !base.element) return undefined;
+    if (base.equipment.length === 0 && base.abilities.length === 0) return undefined;
     return base;
 }

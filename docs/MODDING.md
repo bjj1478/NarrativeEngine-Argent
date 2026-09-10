@@ -829,7 +829,6 @@ unfreezing this.
 | `loreChunks` | `readonly LoreChunk[]` | Retrieved lore chunks. |
 | `divergenceRegister` | `DivergenceRegister` | The divergence register. Whole-replacement writable. |
 | `playerCharacter` | `PlayerCharacter \| null` | The PC. |
-| `characterSheet` | `CharacterProfile` | The character sheet. Whole-replacement writable. |
 | `inventory` | `readonly InventoryItem[]` | The inventory. Whole-replacement writable. |
 | `location` | `ModLocation` | `{ currentPlaceId, currentFeature, ledger, travel, worldDay }`. The ledger is whole-replacement writable. `travel`/`worldDay` are read-only journey state (WO 6.2). |
 
@@ -885,7 +884,6 @@ alias so existing JSDoc `@param {NPCEntry}` references keep compiling.
 | `addMessage(msg)` | `ChatMessage` | |
 | `addTimelineEvent(event)` | `TimelineEvent` | Append-only, deduped by `id`. |
 | `updatePlayerCharacter(patch)` | `Partial<PlayerCharacter>` | |
-| `setCharacterSheet(profile)` | `CharacterProfile` | **Whole-replacement** — pair with `data.characterSheet`. |
 | `setInventory(items)` | `InventoryItem[]` | **Whole-replacement** — pair with `data.inventory`. |
 | `setLocationLedger(locations)` | `LocationEntry[]` | **Whole-replacement** — pair with `data.location.ledger`. |
 | `addLocationSuggestions(suggestions)` | `LocationSuggestion[]` | Append-only. |

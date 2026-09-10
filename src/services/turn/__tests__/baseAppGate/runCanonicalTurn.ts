@@ -372,6 +372,7 @@ function buildCallbacks() {
         archiveNPC: (id: string, turn: number, reason: string) => useAppStore.getState().archiveNPC(id, turn, reason),
         restoreNPC: (id: string) => useAppStore.getState().restoreNPC(id),
         stageInventoryProposal: () => {},
+        stageConditionProposal: () => {},
         onDirectorBriefPhase: () => {},
         persistTurnState: () => Promise.resolve(),
     };

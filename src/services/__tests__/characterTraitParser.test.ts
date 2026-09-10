@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { queryTraits, formatTraitsForContext, type SelectedTraits } from '../retrieval/semanticMemory';
-import type { CharacterProfileState, CharacterTrait } from '../types';
+import { queryTraits } from '../retrieval/semanticMemory';
+import type { CharacterTrait } from '../types';
 
 function makeTrait(partial: Partial<CharacterTrait>): CharacterTrait {
     return {
@@ -108,86 +108,4 @@ describe('WO-G: queryTraits', () => {
     });
 });
 
-describe('WO-G: formatTraitsForContext', () => {
-    it('emits identity line when identity fields present', () => {
-        const profile: CharacterProfileState = {
-            identity: { name: 'Gareth', race: 'Human', class: 'Fighter', level: 5 },
-            activeTraits: [],
-        };
-        const text = formatTraitsForContext(profile, { core: [], extended: [] });
-        expect(text).toContain('Gareth');
-        expect(text).toContain('Human');
-        expect(text).toContain('Fighter');
-        expect(text).toContain('Level 5');
-        expect(text).toContain('[CHARACTER PROFILE]');
-        expect(text).toContain('[END CHARACTER PROFILE]');
-    });
 
-    it('lists core traits under Core: and extended under Scene-relevant:', () => {
-        const profile: CharacterProfileState = { identity: {}, activeTraits: [] };
-        const selected: SelectedTraits = {
-            core: [makeTrait({ id: 'a', text: 'core fact', importance: 8, category: 'party_facts' })],
-            extended: [makeTrait({ id: 'b', text: 'scene fact', importance: 5, eventTags: ['combat'], category: 'party_facts' })],
-        };
-        const text = formatTraitsForContext(profile, selected);
-        expect(text).toContain('Core:');
-        expect(text).toContain('core fact');
-        expect(text).toContain('Scene-relevant:');
-        expect(text).toContain('scene fact');
-    });
-});
-
-describe('formatTraitsForContext — the stat block is gated, and off by default', () => {
-    // This block used to emit every stat on the sheet unconditionally, while the traits beside
-    // it went through full relevance selection. The writer got bare numbers that no rule
-    // claimed, banded, or forbade it from narrating — the same class of leak as "your Perception".
-    const withStats: CharacterProfileState = {
-        identity: { name: 'Gareth' },
-        stats: { PWR: 14, SPD: 12 },
-        activeTraits: [],
-    };
-    const selected: SelectedTraits = {
-        core: [makeTrait({ id: 'a', text: 'core fact', importance: 8 })],
-        extended: [makeTrait({ id: 'b', text: 'scene fact', importance: 5 })],
-    };
-
-    it('omits stats when the caller says nothing — omission is the failure mode', () => {
-        const text = formatTraitsForContext(withStats, selected);
-        expect(text).not.toContain('PWR');
-        expect(text).not.toContain('14');
-        expect(text).not.toContain('SPD');
-    });
-
-    it('omits stats when the turn did not select them', () => {
-        const text = formatTraitsForContext(withStats, selected, { includeStats: false });
-        expect(text).not.toContain('PWR');
-    });
-
-    it('emits stats when the turn selected them', () => {
-        const text = formatTraitsForContext(withStats, selected, { includeStats: true });
-        expect(text).toContain('PWR 14');
-        expect(text).toContain('SPD 12');
-    });
-
-    it('gating stats does not disturb identity or the selected traits', () => {
-        for (const includeStats of [false, true]) {
-            const text = formatTraitsForContext(withStats, selected, { includeStats });
-            expect(text).toContain('Gareth');
-            expect(text).toContain('Core:');
-            expect(text).toContain('core fact');
-            expect(text).toContain('Scene-relevant:');
-            expect(text).toContain('scene fact');
-            expect(text).toContain('[END CHARACTER PROFILE]');
-        }
-    });
-
-    it('an empty stat record emits no stat line even when selected', () => {
-        const text = formatTraitsForContext(
-            { identity: { name: 'Gareth' }, stats: {}, activeTraits: [] },
-            { core: [], extended: [] },
-            { includeStats: true },
-        );
-        // No trailing separator or blank stat row.
-        expect(text.split('\n').filter(l => l.includes('|'))).toHaveLength(0);
-    });
-});

@@ -162,6 +162,7 @@ export function wrapCallbacksWithRecorder(
         archiveNPC: wrap('archiveNPC', inner.archiveNPC),
         restoreNPC: wrap('restoreNPC', inner.restoreNPC),
         stageInventoryProposal: wrapOptional('stageInventoryProposal', inner.stageInventoryProposal),
+        stageConditionProposal: wrapOptional('stageConditionProposal', inner.stageConditionProposal),
         requestPlayerRoll: wrapAsync('requestPlayerRoll', inner.requestPlayerRoll),
         onDirectorBriefPhase: wrapOptional('onDirectorBriefPhase', inner.onDirectorBriefPhase),
         persistTurnState: wrapOptional('persistTurnState', inner.persistTurnState),

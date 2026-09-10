@@ -81,7 +81,7 @@ export async function updateExistingNPCs(
         // decide if a narrated event changed it. Absent = no kit (plain character).
         if (npc.signatureKit) {
             const k = npc.signatureKit;
-            data += `SignatureKit: gear=[${k.equipment.join(', ') || 'none'}] powers=[${k.abilities.join(', ') || 'none'}]${k.element ? ` element=${k.element}` : ''}\n`;
+            data += `SignatureKit: gear=[${k.equipment.join(', ') || 'none'}] powers=[${k.abilities.join(', ') || 'none'}]\n`;
         }
 
         if (npc.traits && npc.traits.length > 0) {
@@ -159,7 +159,7 @@ WANTS UPDATE RULES:
   - If the NPC has no "wants" yet, you MUST provide "medium" and "long".
 
 SIGNATURE KIT RULES:
-  - "signatureKit" is this NPC's durable loadout: {"equipment": string[], "abilities": string[], "element": string}. It keeps gear and powers CONSISTENT across the campaign.
+  - "signatureKit" is this NPC's durable loadout: {"equipment": string[], "abilities": string[]}. It keeps gear and powers CONSISTENT across the campaign.
   - Only send it when the scene NARRATES a real change: the NPC gains/loses/breaks a signature item, learns or loses a power, or is transformed. An NPC merely *using* gear they already have is NOT a change — send nothing.
   - Send ONLY the channel that changed. To update gear, send just "equipment" (the full new signature list, max 8); to update powers, send just "abilities". Never re-emit an unchanged channel.
   - Default is NO change. Most turns have no signatureKit update.

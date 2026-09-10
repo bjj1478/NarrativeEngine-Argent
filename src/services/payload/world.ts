@@ -9,6 +9,7 @@ import { isFactActive, renderRegisterForPayload } from '../campaign-state/diverg
 import { isKnownToAnyOnStage, parseKnownByToken } from '../campaign-state/knowledgeScope';
 import { dedupElevatedScenes, type ElevatedScene } from '../archive-memory/dynamicElevation';
 import { renderSlottedRagBlock, type SlottedRagSnippet } from '../archive-memory/slottedRag';
+import { filterPCOut } from '../../utils/ledgerFilters';
 import type { TraceCollector } from './traceCollector';
 
 const RECENT_SCENE_WINDOW = 3;      // mobile used 2; desktop can see a touch deeper
@@ -54,7 +55,6 @@ export function buildCoreDirective(npc: NPCEntry, relationshipMemoryEnabled = fa
         const kitBits: string[] = [];
         if (k.equipment.length) kitBits.push(`KIT: ${k.equipment.join(', ')}`);
         if (k.abilities.length) kitBits.push(`POWERS: ${k.abilities.join(', ')}`);
-        if (k.element) kitBits.push(`element: ${k.element}`);
         if (kitBits.length) parts.push(kitBits.join(' | '));
     }
     return parts.length > 0 ? `PLAY AS: ${parts.join(' | ')}` : '';
@@ -426,13 +426,19 @@ export function buildWorld(opts: {
     if (npcLedger && npcLedger.length > 0) {
         const loreHeadersSet = new Set((relevantLore ?? []).filter(l => l.header).map(l => l.header!.toLowerCase()));
 
+        // The PC is not a cast member. `migratePCIntoContext` normally strips any `isPC` row
+        // from the ledger on hydrate, but nothing on the payload path enforced it — a stray
+        // row would render as an NPC, complete with a PLAY AS: directive and its own KIT
+        // line, right beside the [PLAYER CHARACTER] block describing the same person.
+        const castLedger = filterPCOut(npcLedger);
+
         let activeNPCs: NPCEntry[];
 
         if (recommendedNPCNames && recommendedNPCNames.length > 0) {
             // ── Utility AI Recommender mode ──
             // Use the pre-computed list from contextRecommender.ts
             const recommendedSet = new Set(recommendedNPCNames.map(n => n.toLowerCase()));
-            activeNPCs = npcLedger.filter(npc => {
+            activeNPCs = castLedger.filter(npc => {
                 if (npc.archived) return false;
                 if (!npc.name || loreHeadersSet.has(npc.name.toLowerCase())) return false;
                 const aliases = (npc.aliases || '').split(',').map(a => a.trim().toLowerCase()).filter(Boolean);
@@ -443,7 +449,7 @@ export function buildWorld(opts: {
         } else {
             // ── Legacy substring scan mode ──
             const scanHistory = history.slice(-10).map(m => m.content || '').join(' ') + ' ' + userMessage;
-            activeNPCs = npcLedger.filter(npc => {
+            activeNPCs = castLedger.filter(npc => {
                 if (npc.archived) return false;
                 if (!npc.name || loreHeadersSet.has(npc.name.toLowerCase())) return false;
                 const aliases = (npc.aliases || '').split(',').map(a => a.trim().toLowerCase()).filter(Boolean);

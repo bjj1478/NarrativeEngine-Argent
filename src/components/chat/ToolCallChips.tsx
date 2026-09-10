@@ -1,4 +1,4 @@
-import { Dices, Search, NotebookPen, Wrench } from 'lucide-react';
+import { Dices, Search, NotebookPen, Wrench, Backpack, HeartPulse } from 'lucide-react';
 import type { ChatMessage } from '../../types';
 
 type ToolCall = NonNullable<ChatMessage['tool_calls']>[number];
@@ -100,6 +100,45 @@ function NotebookChip({ args }: { args: Record<string, unknown> }) {
     );
 }
 
+/**
+ * Staged proposals — inventory and body state. Both read as prose rather than as the raw
+ * function name; before this they fell through to the generic wrench chip, which printed
+ * `propose_inventory_change` into the transcript. That is the exact wart PlayerRollChip
+ * exists to avoid, per the note at the top of this file.
+ *
+ * Both say "proposes" rather than announcing the change, because neither is applied until
+ * the player clicks Apply on the banner.
+ */
+function InventoryProposalChip({ args }: { args: Record<string, unknown> }) {
+    const op = typeof args.op === 'string' ? args.op : 'grant';
+    const name = typeof args.name === 'string' ? args.name : 'an item';
+    return (
+        <>
+            <Backpack size={11} className="text-amber-400 shrink-0" />
+            <span className="text-amber-400/90 font-semibold">Inventory</span>
+            <span className="text-text-dim/80 truncate">· proposes {op} {name}</span>
+        </>
+    );
+}
+
+function ConditionProposalChip({ args }: { args: Record<string, unknown> }) {
+    const condition = typeof args.condition === 'string' ? args.condition.trim() : undefined;
+    const status = typeof args.status === 'string' ? args.status : undefined;
+    // An empty-string condition is the model saying "treated, clear it".
+    const label = status
+        ? status
+        : condition === ''
+            ? 'recovered'
+            : condition || 'a change';
+    return (
+        <>
+            <HeartPulse size={11} className="text-amber-400 shrink-0" />
+            <span className="text-amber-400/90 font-semibold">Condition</span>
+            <span className="text-text-dim/80 truncate">· proposes {label}</span>
+        </>
+    );
+}
+
 function ChipBody({ call, toolResult }: { call: ToolCall; toolResult?: string }) {
     const name = call.function.name;
     const args = safeParse(call.function.arguments);
@@ -109,6 +148,8 @@ function ChipBody({ call, toolResult }: { call: ToolCall; toolResult?: string })
     }
     if (name === 'query_campaign_lore') return <LoreChip args={args} result={toolResult} />;
     if (name === 'update_scene_notebook') return <NotebookChip args={args} />;
+    if (name === 'propose_inventory_change') return <InventoryProposalChip args={args} />;
+    if (name === 'propose_condition_change') return <ConditionProposalChip args={args} />;
     return (
         <>
             <Wrench size={11} className="text-text-dim shrink-0" />

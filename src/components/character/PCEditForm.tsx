@@ -25,10 +25,6 @@ import { RelationshipMemoryEditor } from './RelationshipMemoryEditor';
  *  - Save (edit)    → `updatePlayerCharacter(patch)`
  *  - Portrait       → `useNpcPortraits` with the isPC flag (same pattern the
  *                     old PCPanelModal used) for upload + generate.
- *  - Name mirror     → handled by the parent on save (writes
- *                     `context.characterProfile.identity.name` +
- *                     `characterProfileData.name` so the prompt pipeline
- *                     picks up the canonical identity).
  *
  * Out of scope (later phase): the guided step wizard, personality-question →
  * personalityHex/traits derivation, the reveal card. This is baseline
@@ -133,10 +129,6 @@ export function PCEditForm({
         const list = [...(kit[field] || [])].filter((_, i) => i !== index);
         setForm({ ...form, signatureKit: { ...kit, [field]: list } });
     };
-    const setKitElement = (value: string) => {
-        const kit = form.signatureKit ?? emptyKit;
-        setForm({ ...form, signatureKit: { ...kit, element: value } });
-    };
 
     return (
         <div className="flex-1 overflow-y-auto flex flex-col p-6 sm:p-8">
@@ -204,6 +196,28 @@ export function PCEditForm({
                                 <option value="walkon">Walk-on</option>
                             </select>
                         </div>
+                    </div>
+
+                    {/* Condition sits directly under Status because the two are the pair the
+                        player has to keep apart: Status is whether they are alive, dead,
+                        missing or held — a closed list. Condition is whether they are hurt,
+                        and how, in prose. Full width rather than a third cell in the row
+                        above: an injury is a clause, not a dropdown value.
+
+                        The GM proposes changes here through propose_condition_change, but
+                        the field is editable so a stale wound can be corrected or cleared by
+                        hand. Blanking it means healed — empty string and unset are treated
+                        identically everywhere downstream. */}
+                    <div>
+                        <label className="block text-text-dim text-[10px] uppercase tracking-wider mb-1">Condition</label>
+                        <input
+                            type="text"
+                            value={form.condition || ''}
+                            onChange={e => setForm({ ...form, condition: e.target.value })}
+                            disabled={!isEditing}
+                            placeholder="Injury as prose — e.g. gash across the left forearm; favours the right hand"
+                            className="w-full bg-void border border-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-dim/50 disabled:opacity-70 disabled:bg-surface disabled:border-transparent focus:outline-none focus:border-terminal"
+                        />
                     </div>
 
                     <div className="flex gap-4">
@@ -349,17 +363,6 @@ export function PCEditForm({
                             {(form.signatureKit?.abilities || []).length === 0 && (
                                 <p className="text-[10px] text-text-dim/40 italic">No signature powers.</p>
                             )}
-                        </div>
-                        <div>
-                            <label className="block text-amber-300 text-[10px] uppercase tracking-wider mb-1">Element / Affinity</label>
-                            <input
-                                type="text"
-                                value={form.signatureKit?.element || ''}
-                                onChange={e => setKitElement(e.target.value)}
-                                disabled={!isEditing}
-                                placeholder="e.g. fire (optional)"
-                                className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-dim/50 disabled:opacity-70 disabled:bg-void disabled:border-transparent focus:outline-none focus:border-amber-300"
-                            />
                         </div>
                     </div>
 

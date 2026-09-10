@@ -315,8 +315,11 @@ export default async function abilityCompendiumCompute(ctx) {
     let proposals = Array.isArray(proposalsRaw) ? proposalsRaw : [];
     const config = configRaw && typeof configRaw === 'object' && !Array.isArray(configRaw) ? { ...configRaw } : {};
 
+    // The PC's abilities used to live on a separate `characterSheet` record. That record
+    // is gone; the signature kit is where they live now. Shape kept as `{ abilities }` so
+    // `sheetProposals` and the consume path below need no changes.
     const pc = ctx.data.playerCharacter;
-    const profile = ctx.data.characterSheet;
+    const profile = pc ? { abilities: pc.signatureKit?.abilities || [] } : null;
     if (pc && profile) {
         const imported = sheetProposals(profile, pc.id, abilities, assignments, proposals, config.consumedProfileAbilities);
         if (imported.length) proposals = proposals.concat(imported);
@@ -336,7 +339,9 @@ export default async function abilityCompendiumCompute(ctx) {
     if (profile && consumed.size) {
         const nextAbilities = (Array.isArray(profile.abilities) ? profile.abilities : []).filter((source) => !consumed.has(canonical(source)));
         if (nextAbilities.length !== (profile.abilities || []).length) {
-            ctx.write.setCharacterSheet({ ...profile, abilities: nextAbilities });
+            ctx.write.updatePlayerCharacter({
+                signatureKit: { ...(pc.signatureKit || { equipment: [] }), abilities: nextAbilities },
+            });
         }
         config.consumedProfileAbilities = [];
     }

@@ -44,7 +44,6 @@ export function AIGuidedCreationWizard({ onCancel, onCommit }: { onCancel: () =>
     const loreChunks = useAppStore(s => s.loreChunks);
     const setPlayerCharacter = useAppStore(s => s.setPlayerCharacter);
     const setInventoryItems = useAppStore(s => s.setInventoryItems);
-    const characterProfileData = useAppStore(s => s.characterProfileData);
     // Context-window size drives the 20%-floored excerpt budget (floor 1200).
     const maxContextTokens = useAppStore(s => s.settings.contextLimit);
 
@@ -273,7 +272,6 @@ export function AIGuidedCreationWizard({ onCancel, onCommit }: { onCancel: () =>
                 setPlayerCharacter,
                 setInventoryItems,
                 updateContext,
-                characterProfileData,
             },
         );
         toast.success(`Character "${finalDraft.name}" created!`);

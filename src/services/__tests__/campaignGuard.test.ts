@@ -7,12 +7,15 @@ import type { TurnState, TurnCallbacks } from '../turn/turnOrchestrator';
 // The guard reads useAppStore.getState().activeCampaignId. We mock the store
 // so tests can flip the active campaign mid-flight to simulate the race.
 let mockActiveCampaignId: string | null = 'campaign-1';
+const mockUpdatePlayerCharacter = vi.fn();
 vi.mock('../../store/useAppStore', () => ({
     useAppStore: {
         getState: () => ({
             activeCampaignId: mockActiveCampaignId,
             setCharacterProfileData: vi.fn(),
             setInventoryItems: vi.fn(),
+            // Trait scan writes the PC record through this, not through updateContext.
+            updatePlayerCharacter: mockUpdatePlayerCharacter,
         }),
     },
 }));
@@ -53,7 +56,6 @@ vi.mock('../chatEngine', () => ({
     updateExistingNPCs: vi.fn(),
     backfillNPCDrives: vi.fn(),
 }));
-vi.mock('../characterProfileParser', () => ({ scanCharacterProfile: vi.fn() }));
 vi.mock('../characterTraitParser', () => ({ scanCharacterTraits: vi.fn() }));
 vi.mock('../inventoryParser', () => ({ scanInventory: vi.fn() }));
 vi.mock('../archive-memory/sceneEventExtractor', () => ({ extractSceneEvents: vi.fn() }));
@@ -62,14 +64,12 @@ vi.mock('../../store/campaignStore', () => ({ saveDivergenceRegister: vi.fn().mo
 
 import { runPostTurnPipeline } from '../turn/postTurnPipeline';
 import { backgroundQueue } from '../infrastructure/backgroundQueue';
-import { scanCharacterProfile } from '../characterProfileParser';
 import { scanCharacterTraits } from '../characterTraitParser';
 import { scanInventory } from '../inventoryParser';
 import { extractSceneEvents } from '../archive-memory/sceneEventExtractor';
 import { api } from '../llm/apiClient';
 
 const mockApi = vi.mocked(api);
-const mockScanCharacterProfile = vi.mocked(scanCharacterProfile);
 const mockScanCharacterTraits = vi.mocked(scanCharacterTraits);
 const mockScanInventory = vi.mocked(scanInventory);
 const mockExtractSceneEvents = vi.mocked(extractSceneEvents);
@@ -143,8 +143,8 @@ async function waitForBackgroundDrain(): Promise<void> {
     throw new Error('Background queue did not drain');
 }
 
-const EMPTY_PROFILE = { name: '', race: '', class: '', level: 1, hp: { current: 20, max: 20 }, stats: {}, skills: [], abilities: [], traits: [], notes: '' };
-const EMPTY_TRAITS = { identity: {}, activeTraits: [] };
+const EMPTY_TRAITS: unknown[] = [];
+const PC = { id: 'pc1', name: 'Hero', isPC: true };
 
 describe('Campaign-id guard: race condition regression tests', () => {
     beforeEach(() => {
@@ -159,8 +159,6 @@ describe('Campaign-id guard: race condition regression tests', () => {
         mockApi.chapters.list.mockResolvedValueOnce([]);
 
         // Block Profile-Scan on a deferred so we can switch campaigns mid-flight
-        const profileDeferred = deferred<typeof EMPTY_PROFILE>();
-        mockScanCharacterProfile.mockReturnValueOnce(profileDeferred.promise);
         // Trait/Inventory also fire — resolve them quickly (they'll be guarded too)
         const traitDeferred = deferred<typeof EMPTY_TRAITS>();
         mockScanCharacterTraits.mockReturnValueOnce(traitDeferred.promise);
@@ -173,42 +171,24 @@ describe('Campaign-id guard: race condition regression tests', () => {
         // Switch campaign WHILE scans are still pending in the background
         mockActiveCampaignId = 'campaign-2';
         // Now resolve the scans — the guard should drop all updateContext calls
-        profileDeferred.resolve(EMPTY_PROFILE);
         traitDeferred.resolve(EMPTY_TRAITS);
         invDeferred.resolve([]);
         await waitForBackgroundDrain();
 
         // No background-task updateContext should have fired
         const bgContextCalls = callbacks.updateContext.mock.calls.filter(
-            ([p]: [any]) => p?.characterProfileData !== undefined || p?.characterProfile !== undefined || p?.inventoryItems !== undefined,
+            ([p]: [any]) => p?.inventoryItems !== undefined,
         );
         expect(bgContextCalls).toHaveLength(0);
+        // The trait scan writes the PC record, not the context — guard that path too.
+        expect(mockUpdatePlayerCharacter).not.toHaveBeenCalled();
     });
 
-    it('passes updateContext through when campaign stays the same (Profile-Scan)', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
-        const newProfile = { ...EMPTY_PROFILE, name: 'Hero', level: 2 };
-        mockScanCharacterProfile.mockResolvedValueOnce(newProfile);
-        mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
-        mockScanInventory.mockResolvedValueOnce([]);
-
-        const callbacks = makeCallbacks();
-        await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
-        await waitForBackgroundDrain();
-
-        const profilePatch = callbacks.updateContext.mock.calls.find(
-            ([p]: [any]) => p?.characterProfileData !== undefined,
-        );
-        expect(profilePatch).toBeDefined();
-    });
 
     it('drops updateContext when campaign switches during Inventory-Scan', async () => {
         mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
         mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
         mockApi.chapters.list.mockResolvedValueOnce([]);
-        mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
 
         const invDeferred = deferred<{ name: string; qty: number }[]>();
@@ -232,7 +212,6 @@ describe('Campaign-id guard: race condition regression tests', () => {
         mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
         mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
         mockApi.chapters.list.mockResolvedValueOnce([]);
-        mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanInventory.mockResolvedValueOnce([]);
 
         const traitDeferred = deferred<typeof EMPTY_TRAITS>();
@@ -256,7 +235,6 @@ describe('Campaign-id guard: race condition regression tests', () => {
         mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
         mockApi.archive.getIndex.mockResolvedValueOnce([indexEntry]).mockResolvedValueOnce([]);
         mockApi.chapters.list.mockResolvedValueOnce([]);
-        mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
         mockScanInventory.mockResolvedValueOnce([]);
 
@@ -281,7 +259,6 @@ describe('Campaign-id guard: race condition regression tests', () => {
         mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
         mockApi.archive.getIndex.mockResolvedValueOnce([indexEntry]).mockResolvedValueOnce([]);
         mockApi.chapters.list.mockResolvedValueOnce([]);
-        mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
         mockScanInventory.mockResolvedValueOnce([]);
 
@@ -302,22 +279,24 @@ describe('Campaign-id guard: race condition regression tests', () => {
         mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
         mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [], witnesses: [], npcsMentioned: [], keywords: [], userSnippet: '', timestamp: 1, npcStrengths: {}, importance: 3, keywordStrengths: {} }]);
         mockApi.chapters.list.mockResolvedValueOnce([]);
-        mockScanCharacterProfile.mockResolvedValueOnce({ ...EMPTY_PROFILE, name: 'Updated' });
-        mockScanCharacterTraits.mockResolvedValueOnce({ identity: { name: 'Hero' }, activeTraits: [{ id: 't1', text: 'brave', superseded: false }] });
+        // Reset rather than queue: earlier tests leave unconsumed `...Once` values on this
+        // mock, and the leftover would answer this scan instead of the value below.
+        mockScanCharacterTraits.mockReset();
+        mockScanCharacterTraits.mockResolvedValue([{ id: 't1', text: 'brave', superseded: false }]);
         mockScanInventory.mockResolvedValueOnce([{ name: 'Potion', qty: 2 }]);
 
-        const ctx = { ...baseContext(), characterProfileActive: true };
+        const ctx = { ...baseContext(), characterProfileActive: true, playerCharacter: PC };
         const state = makeState({ getFreshContext: vi.fn().mockReturnValue(ctx) });
         const callbacks = makeCallbacks();
         await runPostTurnPipeline(state, callbacks, ASSISTANT_CONTENT, ALL_MSGS);
         await waitForBackgroundDrain();
 
         const calls = callbacks.updateContext.mock.calls;
-        const profilePatch = calls.find(([p]: [any]) => p?.characterProfileData !== undefined);
-        const traitsPatch = calls.find(([p]: [any]) => p?.characterProfile !== undefined);
         const inventoryPatch = calls.find(([p]: [any]) => p?.inventoryItems !== undefined);
-        expect(profilePatch).toBeDefined();
-        expect(traitsPatch).toBeDefined();
         expect(inventoryPatch).toBeDefined();
+        // Traits land on the PC record via a single-key patch, never via updateContext.
+        expect(mockUpdatePlayerCharacter).toHaveBeenCalledWith({
+            activeTraits: [{ id: 't1', text: 'brave', superseded: false }],
+        });
     });
 });

@@ -34,18 +34,24 @@ export type InventoryProposal = {
     locationTag?: string;
 };
 
-export type CharacterProfile = {
-    name: string;
-    race: string;
-    class: string;
-    level: number;
-    hp: { current: number; max: number };
-    mp?: { current: number; max: number };
-    stats: Record<string, number>;
-    skills: string[];
-    abilities: string[];
-    traits: string[];
-    notes: string;
+/**
+ * Staged change to the player character's body state, proposed by the GM via the
+ * `propose_condition_change` tool. Sibling of {@link InventoryProposal}: offered every
+ * turn, staged behind an Apply click, never applied by the engine on its own.
+ *
+ * Two separate axes, and the tool description has to keep them apart or the model
+ * conflates them:
+ *  - `condition` — is the PC hurt, and how. Free prose, and it clears.
+ *  - `status`    — is the PC alive, dead, missing, held. A closed vocabulary.
+ *
+ * `reason` is the one-line justification shown on the banner so the player can judge the
+ * proposal without scrolling back up into the prose.
+ */
+export type ConditionProposal = {
+    /** Absent = not proposing a change. Empty string = clear it (healed). */
+    condition?: string;
+    status?: 'Alive' | 'Deceased' | 'Missing' | 'Unknown' | 'In Custody';
+    reason: string;
 };
 
 // ── Structured PC profile (WO-G — scene-tagged smart injection) ──
@@ -78,35 +84,6 @@ export type CharacterTrait = {
     sceneEstablished: string;          // sceneId where this trait was first recorded
     superseded: boolean;               // true if a newer trait with same subject+category replaced this
     source: 'llm' | 'manual' | 'seed'; // origin: parser / user edit / wizard seed
-};
-
-/**
- * Core identity fields ALWAYS injected for the PC, regardless of scene tags.
- * These live outside the trait list because they're structural (name/race/class
- * don't change per scene and aren't subject to supersession).
- */
-export type CharacterIdentity = {
-    name?: string;
-    race?: string;
-    class?: string;
-    archetype?: string;
-    level?: number;
-};
-
-/**
- * Structured replacement for the flat `characterProfile: string` field.
- * - `identity` is always injected (Tier 1 core).
- * - `activeTraits` are scored + scene-filtered + budget-capped at injection
- *   time by `queryTraits` (the PC analogue of `queryFacts`).
- * - `legacyNotes` is a frozen read-only blob from the old flat-string profile.
- *   NEVER injected into the prompt — kept only so users don't lose data on
- *   upgrade. The parser rebuilds `activeTraits` over a few turns.
- */
-export type CharacterProfileState = {
-    identity: CharacterIdentity;
-    stats?: Record<string, number>;
-    activeTraits: CharacterTrait[];
-    legacyNotes?: string;
 };
 
 /** Number of PC traits always injected regardless of scene tags. */
@@ -171,7 +148,9 @@ export type NpcSuggestion = { name: string; context?: string; firstSeen: number 
 export type NPCSignatureKit = {
     equipment: string[];   // signature gear; <=8 entries; each a short noun phrase, e.g. "Excalibur (holy longsword)"
     abilities: string[];   // signature powers/techniques; <=8 entries, e.g. "fire magic", "regeneration"
-    element?: string;      // optional single affinity/damage-type tag, e.g. "fire"
+    // There used to be a third channel here: `element`, a single affinity/damage-type tag
+    // ("fire"). It was removed — a descriptive ability like "fire magic" already sitting in
+    // `abilities` says everything the tag said, and one bounded list beats two.
 };
 
 export type NPCEntry = {
@@ -193,7 +172,19 @@ export type NPCEntry = {
     // ---- Agency-engine referenced fields (Phase 2 port; all optional → lazy migration) ----
     isPC?: boolean;
     tier?: 'recurring' | 'oneshot' | 'walkon';
-    condition?: 'healthy' | 'wounded' | 'critical' | 'dead';
+    /**
+     * Body state, as prose: what is wrong, where, and what it limits. Absent or empty
+     * means whole.
+     *
+     * This was the union `'healthy' | 'wounded' | 'critical' | 'dead'`, and nothing in
+     * production ever wrote it — every assignment in the repo was in a test. It is widened
+     * because an enum can say *wounded* but not *where* or *what it stops you doing*, and
+     * the design goal is "wounds are locations and limits, not points". For the PC it is
+     * written only by an applied `propose_condition_change` (see ConditionProposal). NPCs
+     * still have no writer; those four words remain their conventional vocabulary, which is
+     * why `agencyLifecycle` compares against 'dead' case-insensitively.
+     */
+    condition?: string;
     previousSnapshot?: {
         personality: string;
         voice: string;
@@ -223,6 +214,24 @@ export type NPCEntry = {
         combatTier?: string;           // Phase 7 wiring; display-only today
         stats?: Record<string, number>;
     };
+    /**
+     * PC-only. The scene-selected narrative record — the facts `queryTraits` scores
+     * and the payload's [PLAYER CHARACTER] block injects. Folded off the retired
+     * `context.characterProfile.activeTraits` by `foldPcRecord`; maintained thereafter
+     * by `traitScanTrack`, which MUST write it via `updatePlayerCharacter({ activeTraits })`
+     * and never as part of a whole-record write (see the write-race rule in pcUpdater).
+     *
+     * Distinct from `traits` below: those are short personality descriptors from the hex
+     * quiz; these are structured, supersedable facts with retrieval metadata.
+     */
+    activeTraits?: CharacterTrait[];
+    /**
+     * PC-only. Frozen blob from the pre-structured flat-string profile, kept so an
+     * upgrade never loses text the user wrote. NEVER injected into the prompt — it is
+     * storage, displayed read-only in the Record tab. Guarded by a test in
+     * services/ooc/__tests__/context.test.ts.
+     */
+    legacyNotes?: string;
     traits?: string[];            // <=5, controlled vocab (see services/npc/agencyPools.ts)
     region?: string;              // coarse location: 'academy' | 'Ryuten' | ...
     haunt?: string;               // flavor only, for reports ('the garden')

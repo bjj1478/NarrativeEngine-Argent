@@ -1,4 +1,4 @@
-import type { GameContext, LoreChunk, InventoryProposal, RollFrequency } from '../../types';
+import type { GameContext, LoreChunk, InventoryProposal, ConditionProposal, RollFrequency } from '../../types';
 import { searchLoreByQuery } from '../lore/loreRetriever';
 import { uid } from '../../utils/uid';
 
@@ -25,6 +25,11 @@ export type NotebookHandlerResult = {
 export type ProposeInventoryHandlerResult = {
     toolResult: string;
     proposal: InventoryProposal;
+};
+
+export type ProposeConditionHandlerResult = {
+    toolResult: string;
+    proposal: ConditionProposal;
 };
 
 // ── Tool Definitions (JSON schemas for LLM tools array) ───────────────
@@ -213,6 +218,50 @@ export function formatPlayerRollResult(args: RequestRollArgs, playerTotal: numbe
     });
 }
 
+// ── Body state (propose_condition_change) ─────────────────────────────
+//
+// Sibling of propose_inventory_change, and deliberately the same shape: offered every
+// turn, staged for the player, never applied by the engine on its own.
+//
+// It exists because a narrated wound had nowhere durable to live. `status` is a liveness
+// enum that cannot say "hurt", and `condition` — the field the payload block renders —
+// had no writer at all. Between them a wound survived only as long as the raw chat
+// history did.
+//
+// The two axes are kept apart on purpose. Fold them together and the model starts
+// writing "wounded" into status, which is the vocabulary for whether you are alive.
+
+const PROPOSE_CONDITION_TOOL = {
+    type: 'function' as const,
+    function: {
+        name: 'propose_condition_change',
+        description:
+            "Propose a change to the player character's body state when the fiction materially changes it: they take a wound, a wound worsens, a wound is treated or heals, or they die, go missing, or are taken into custody. This only *proposes* — the player must confirm before anything changes, so keep narrating the scene as you wrote it and do not treat the change as recorded yet. " +
+            "Use `condition` for injury: name what is wrong, WHERE it is, and what it stops them doing — 'gash across the left forearm; favours the right hand', not 'wounded' and never a number, a hit-point, or a severity score. Replace the whole clause each time rather than appending, and send an EMPTY STRING to clear it when the fiction treats or heals them. " +
+            "Use `status` ONLY for whether they are alive, dead, missing, or held — never for injury. " +
+            "Do not call this for scrapes, fatigue, or anything the next scene would not still care about.",
+        parameters: {
+            type: 'object' as const,
+            properties: {
+                condition: {
+                    type: 'string' as const,
+                    description: "The injury, as one short clause: what, where, and what it limits. Empty string clears it (treated or healed). Omit if only status is changing.",
+                },
+                status: {
+                    type: 'string' as const,
+                    enum: ['Alive', 'Deceased', 'Missing', 'Unknown', 'In Custody'],
+                    description: "Liveness only. Omit if only the injury is changing.",
+                },
+                reason: {
+                    type: 'string' as const,
+                    description: "One in-fiction line naming what caused this, e.g. 'Took the guard's knife across the forearm forcing the shutter.'",
+                },
+            },
+            required: ['reason'],
+        },
+    },
+} as const;
+
 /**
  * The player dismissed the request. The model is told to leave the attempt unresolved
  * rather than inventing a number for it.
@@ -269,8 +318,10 @@ export function getToolDefinitions(opts: {
     if (opts.playerRollFrequency) {
         tools.push(buildRequestRollTool(opts.playerRollFrequency));
     }
-    // propose_inventory_change is combat-independent — always offered.
+    // Both proposal tools are combat-independent — always offered. Neither mutates
+    // anything on its own, so there is no state for a gate to protect.
     tools.push(PROPOSE_INVENTORY_TOOL);
+    tools.push(PROPOSE_CONDITION_TOOL);
     return tools;
 }
 
@@ -393,6 +444,62 @@ export function handleProposeInventoryTool(
 
     return {
         toolResult: JSON.stringify({ status: 'staged', name, op, kind, quality, fromLocationTag, locationTag }),
+        proposal,
+    };
+}
+
+
+const VALID_STATUSES = new Set<string>(['Alive', 'Deceased', 'Missing', 'Unknown', 'In Custody']);
+
+/** Cap on the injury clause. Long enough for "what, where, what it limits"; short enough
+ *  that it cannot turn into a medical report the writer has to wade through. */
+const CONDITION_MAXLEN = 160;
+
+/**
+ * Handles `propose_condition_change`. Pure parsing + clamping — no LLM call, no mutation.
+ * Returns a normalized {@link ConditionProposal} for the caller to stage for confirmation.
+ *
+ * Total function, like its inventory sibling: malformed JSON yields `{}` and falls through
+ * to the defaults rather than throwing and killing the turn.
+ *
+ * The empty string is meaningful and must survive parsing — it is how the model says
+ * "treated, clear it". Only `undefined` means "not proposing a condition change", which is
+ * why this checks `'condition' in args` rather than truthiness.
+ */
+export function handleProposeConditionTool(
+    toolArguments: string
+): ProposeConditionHandlerResult {
+    let args: Record<string, unknown> = {};
+    try { args = JSON.parse(toolArguments); } catch { /* ignore */ }
+
+    let condition: string | undefined;
+    if ('condition' in args && typeof args.condition === 'string') {
+        const trimmed = args.condition.replace(/\s+/g, ' ').trim();
+        condition = trimmed.length > CONDITION_MAXLEN ? trimmed.slice(0, CONDITION_MAXLEN).trim() : trimmed;
+    }
+
+    const rawStatus = typeof args.status === 'string' ? args.status.trim() : '';
+    const status = VALID_STATUSES.has(rawStatus)
+        ? (rawStatus as ConditionProposal['status'])
+        : undefined;
+
+    const reason = typeof args.reason === 'string' && args.reason.trim()
+        ? args.reason.trim()
+        : 'The fiction changed the character\'s condition.';
+
+    const proposal: ConditionProposal = { condition, status, reason };
+
+    return {
+        toolResult: JSON.stringify({
+            status: 'staged',
+            condition,
+            pcStatus: status,
+            binding:
+                'This change is PENDING the player\'s confirmation and is not recorded yet. ' +
+                'Carry on narrating the scene exactly as you wrote it, but do not refer to this ' +
+                'as tracked state. The character block you receive next turn is the authority on ' +
+                'what was actually recorded.',
+        }),
         proposal,
     };
 }

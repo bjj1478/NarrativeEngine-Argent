@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
-import type { ArchiveChapter, ChatMessage, CondenserState, GameContext, LoreChunk, ArchiveIndexEntry, NPCEntry, NpcSuggestion, SemanticFact, EntityEntry, TimelineEvent, InventoryItem, CharacterProfile, PinnedExcerpt, LocationEntry, LocationSuggestion, RelationshipMemoryFault, RelationshipMemoryRecord } from '../../types';
-import { DEFAULT_CHARACTER_PROFILE, DEFAULT_INVENTORY, migrateLegacyContext, buildDefaultDiceSystem, normalizeInventoryItem } from '../../types';
+import type { ArchiveChapter, ChatMessage, CondenserState, GameContext, LoreChunk, ArchiveIndexEntry, NPCEntry, NpcSuggestion, SemanticFact, EntityEntry, TimelineEvent, InventoryItem, PinnedExcerpt, LocationEntry, LocationSuggestion, RelationshipMemoryFault, RelationshipMemoryRecord } from '../../types';
+import { DEFAULT_INVENTORY, migrateLegacyContext, buildDefaultDiceSystem, normalizeInventoryItem } from '../../types';
 import { emitCoreEvent } from '../../services/mods/events';
 import { normalizeRelations } from '../../services/npc/relationDedupe';
 import { toast } from '../../components/Toast';
@@ -224,13 +224,7 @@ export const defaultContext: GameContext = {
     headerIndex: '',
     starter: '',
     continuePrompt: '',
-    inventory: '',
-    inventoryLastScene: 'Never',
-    characterProfile: { identity: {}, activeTraits: [] },
-    characterProfileLastScene: 'Never',
     inventoryItems: DEFAULT_INVENTORY,
-    characterProfileData: DEFAULT_CHARACTER_PROFILE,
-    smartBookkeepingActive: true,
     surpriseDC: 95,
     encounterDC: 198,
     worldEventDC: 498,
@@ -238,8 +232,6 @@ export const defaultContext: GameContext = {
     headerIndexActive: false,
     starterActive: false,
     continuePromptActive: false,
-    inventoryActive: false,
-    characterProfileActive: false,
     surpriseEngineActive: false,
     encounterEngineActive: true,
     worldEngineActive: true,
@@ -353,8 +345,6 @@ export type CampaignSlice = {
     updateInventoryItem: (id: string, patch: Partial<InventoryItem>) => void;
     removeInventoryItem: (id: string) => void;
     addInventoryItem: (item: InventoryItem) => void;
-    characterProfileData: CharacterProfile;
-    setCharacterProfileData: (p: CharacterProfile) => void;
 
     bookkeepingTurnCounter: number;
     autoBookkeepingInterval: number;
@@ -731,12 +721,6 @@ export const createCampaignSlice: StateCreator<CampaignDeps, [], [], CampaignSli
         const newContext = { ...s.context, inventoryItems: newItems };
         debouncedSaveCampaignState();
         return { context: newContext, inventoryItems: newItems };
-    }),
-    characterProfileData: DEFAULT_CHARACTER_PROFILE,
-    setCharacterProfileData: (p) => set((s) => {
-        const newContext = { ...s.context, characterProfileData: p };
-        debouncedSaveCampaignState();
-        return { context: newContext, characterProfileData: p } as Partial<CampaignDeps>;
     }),
 
     // ── Player Character (WO-A rewrite 2 §2) ─────────────────────────────

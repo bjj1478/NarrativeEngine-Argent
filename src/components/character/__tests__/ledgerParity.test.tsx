@@ -38,24 +38,47 @@ describe('WO-A2 §4.1 — ledger parity (source files preserved + ContextDrawer 
         expect(s).toMatch(/InventoryRow/);
     });
 
-    it('the StatsTab still has the Populate Profile button', () => {
-        const s = src('src/components/character/tabs/StatsTab.tsx');
-        expect(s).toMatch(/Populate Profile/);
+    it('the StatsTab is gone (the numeric sheet it edited no longer exists)', () => {
+        let exists = true;
+        try { readFileSync(resolve(ROOT, 'src/components/character/tabs/StatsTab.tsx'), 'utf8'); } catch { exists = false; }
+        expect(exists).toBe(false);
     });
 
-    it('the RecordTab still has the Identity ON/OFF toggle and Bonds section', () => {
+    it('the CharacterLedgerModal is down to three tabs, with no Stats', () => {
+        const s = src('src/components/character/CharacterLedgerModal.tsx');
+        expect(s).not.toMatch(/StatsTab/);
+        const tabKeys = s.match(/key:\s*'([^']+)' as const/g) ?? [];
+        expect(tabKeys.length).toBe(3);
+    });
+
+    it('the RecordTab keeps the trait editor and drops the duplicated relationship UI', () => {
         const s = src('src/components/character/tabs/RecordTab.tsx');
-        expect(s).toMatch(/characterProfileActive/);
-        expect(s).toMatch(/Bonds/);
-        expect(s).toMatch(/selectPcBonds/);
+        expect(s).toMatch(/TraitRow/);
+        expect(s).toMatch(/activeTraits/);
+        // Bonds and the relationship-memory editor live on the Sheet tab only — Record used
+        // to render a second, read-only copy of both over the same store data.
+        // Match imports and JSX, not prose: the tab's doc comment explains what moved,
+        // and a bare /RelationshipMemoryEditor/ would match that explanation.
+        expect(s).not.toMatch(/import .*selectPcBonds/);
+        expect(s).not.toMatch(/<RelationshipMemoryEditor/);
+        // The profile this toggled is gone, so the toggle is too.
+        expect(s).not.toMatch(/updateContext\(\{ characterProfileActive/);
     });
 
-    it('the EnginesTab absorbed TokenGauge + Smart Injection + auto-update', () => {
+    it('the SheetTab is the single home for relationships', () => {
+        const s = src('src/components/character/PCEditForm.tsx');
+        expect(s).toMatch(/RelationshipMemoryEditor/);
+        expect(s).toMatch(/Relationships/);
+    });
+
+    it('the EnginesTab keeps the bookkeeping budget controls', () => {
         const s = src('src/components/context-drawer/EnginesTab.tsx');
         expect(s).toMatch(/BookkeepingBudgetSection/);
-        expect(s).toMatch(/smartBookkeepingActive/);
         expect(s).toMatch(/autoBookkeepingInterval/);
-        expect(s).toMatch(/minifyBookkeepingStub/);
+        // Smart Injection chose between two mutually exclusive character blocks. There is
+        // one block now, so the toggle and its stub-vs-full token comparison are gone.
+        expect(s).not.toMatch(/smartBookkeepingActive/);
+        expect(s).not.toMatch(/minifyBookkeepingStub/);
     });
 
     it('the old BookkeepingTab.tsx is deleted', () => {
@@ -77,11 +100,4 @@ describe('WO-A2 §4.1 — ledger parity (source files preserved + ContextDrawer 
         expect(s).toMatch(/updatePlayerCharacter/);
     });
 
-    it('the CharacterLedgerModal has a 4-tab bar (Sheet/Record/Inventory/Stats)', () => {
-        const s = src('src/components/character/CharacterLedgerModal.tsx');
-        expect(s).toMatch(/'sheet'/);
-        expect(s).toMatch(/'record'/);
-        expect(s).toMatch(/'inventory'/);
-        expect(s).toMatch(/'stats'/);
-    });
 });

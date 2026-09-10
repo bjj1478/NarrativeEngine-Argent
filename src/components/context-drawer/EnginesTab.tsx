@@ -4,13 +4,7 @@ import { useAppStore, DEFAULT_SURPRISE_TYPES, DEFAULT_SURPRISE_TONES, DEFAULT_EN
 import { populateEngineTags } from '../../services/chatEngine';
 import { Toggle } from './Toggle';
 import { NPCPressureInspector } from '../NPCPressureInspector';
-import { countTokens } from '../../services/infrastructure/tokenizer';
-import {
-    minifyBookkeepingStub,
-    minifySelectedInventory,
-    minifySelectedProfile,
-} from '../../services/turn/contextMinifier';
-import type { CharacterProfile, RollFrequency } from '../../types';
+import type { RollFrequency } from '../../types';
 
 /**
  * The roll-frequency dial. Each option is described by its THRESHOLD — what deserves dice —
@@ -430,28 +424,19 @@ function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProp
 
 // ─── Bookkeeping Budget (prompt-budget controls moved out of the old Bookkeeping tab) ─────
 //
-// `TokenGauge` (stub/full token readout), the global Smart Injection ON/OFF
-// (`context.smartBookkeepingActive`), and the Auto-Update interval
-// (`autoBookkeepingInterval` — "scan every N turns") are prompt-budget knobs,
-// not character data, so they live in Engine Tuning. The per-dataset injection
-// toggle that gates a *specific* dataset (`characterProfileActive`) stays
-// glued to its dataset in the Record tab.
-
-const ALL_PROFILE_FIELDS = ['name', 'race', 'class', 'level', 'hp', 'mp', 'stats', 'skills', 'abilities', 'traits', 'notes'];
+// The Auto-Update interval (`autoBookkeepingInterval` — "scan every N turns") is a
+// prompt-budget knob, not character data, so it lives in Engine Tuning.
+//
+// Two controls used to sit beside it and are gone. The Smart Injection ON/OFF toggle chose
+// between two mutually exclusive character blocks; there is one block now, so the choice
+// has no meaning. The stub-vs-full token readout compared those same two renderings of a
+// character sheet that no longer exists.
 
 function BookkeepingBudgetSection() {
-    const context = useAppStore((s) => s.context);
-    const updateContext = useAppStore((s) => s.updateContext);
     const autoBookkeepingInterval = useAppStore((s) => s.autoBookkeepingInterval);
     const setAutoBookkeepingInterval = useAppStore((s) => s.setAutoBookkeepingInterval);
 
-    const inventoryItems = useAppStore((s) => s.inventoryItems ?? s.context.inventoryItems ?? []);
-    const characterProfileData = useAppStore((s) => s.characterProfileData ?? s.context.characterProfileData ?? s.context.characterProfile);
     const [showSettings, setShowSettings] = useState(false);
-
-    const profile = characterProfileData as CharacterProfile;
-    const stub = countTokens(minifyBookkeepingStub(profile, inventoryItems));
-    const full = countTokens(minifySelectedInventory(inventoryItems, ['weapon', 'armor', 'consumable', 'currency', 'key', 'misc', 'equipped']) + '\n' + minifySelectedProfile(profile, ALL_PROFILE_FIELDS));
 
     return (
         <div className="space-y-2">
@@ -463,24 +448,6 @@ function BookkeepingBudgetSection() {
             </div>
 
             <div className="bg-void border border-border p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                    <button
-                        onClick={() => updateContext({ smartBookkeepingActive: !context.smartBookkeepingActive })}
-                        className={`px-3 py-1.5 text-[12px] uppercase tracking-wider rounded transition-colors border ${
-                            context.smartBookkeepingActive
-                                ? 'bg-terminal/10 border-terminal text-terminal'
-                                : 'bg-void border-border text-text-dim'
-                        }`}
-                    >
-                        {context.smartBookkeepingActive ? 'Smart Injection: ON' : 'Smart Injection: OFF'}
-                    </button>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-text-dim/50">
-                    <span>Stub: {stub}t</span>
-                    <span>Full: ~{full}t</span>
-                </div>
-
                 <div>
                     <button
                         onClick={() => setShowSettings(!showSettings)}

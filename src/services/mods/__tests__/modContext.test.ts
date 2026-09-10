@@ -156,7 +156,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 facade: makeFacade(),
             });
             expect(Object.keys(ctx.data).sort()).toEqual(
-                ['archiveIndex', 'campaignId', 'chapters', 'characterSheet', 'divergenceRegister', 'inventory', 'location', 'loreChunks', 'messages', 'npcLedger', 'onStageNpcIds', 'playerCharacter', 'playerInput', 'timeline'].sort(),
+                ['archiveIndex', 'campaignId', 'chapters', 'divergenceRegister', 'inventory', 'location', 'loreChunks', 'messages', 'npcLedger', 'onStageNpcIds', 'playerCharacter', 'playerInput', 'timeline'].sort(),
             );
         });
 
@@ -166,7 +166,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 facade: makeFacade(),
             });
             expect(Object.keys(ctx.write).sort()).toEqual(
-                ['addLocationSuggestions', 'addMessage', 'addNpcSuggestions', 'archiveNPC', 'requestBackup', 'restoreNPC', 'setCharacterSheet', 'setDivergenceRegister', 'setInventory', 'setLocationLedger', 'updateContext', 'updateNPC', 'updatePlayerCharacter'].sort(),
+                ['addLocationSuggestions', 'addMessage', 'addNpcSuggestions', 'archiveNPC', 'requestBackup', 'restoreNPC', 'setDivergenceRegister', 'setInventory', 'setLocationLedger', 'updateContext', 'updateNPC', 'updatePlayerCharacter'].sort(),
             );
         });
 
@@ -234,13 +234,12 @@ describe('Phase 2.3 — buildModContext', () => {
             expect(ctx.data.playerInput).toBe('I draw my sword and advance.');
         });
 
-        it('promotes context.playerCharacter, characterProfileData, and inventoryItems to named entries', () => {
+        it('promotes context.playerCharacter and inventoryItems to named entries', () => {
             const ctx = buildModContext({
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(),
             });
             expect(ctx.data.playerCharacter).toEqual({ id: 'pc-1', name: 'Hero' });
-            expect(ctx.data.characterSheet.name).toBe('Hero');
             expect(ctx.data.inventory).toHaveLength(1);
             expect(ctx.data.inventory[0].name).toBe('Sword');
         });
@@ -364,16 +363,6 @@ describe('Phase 2.3 — buildModContext', () => {
     });
 
     describe('writes — same callbacks the app uses', () => {
-        it('routes setCharacterSheet to the facade setCharacterProfileData callback', () => {
-            const callbacks = makeCallbacks();
-            const ctx = buildModContext({
-                mod: { id: 'm', name: 'M', version: '1.0.0' },
-                facade: makeFacade(makeState(), callbacks),
-            });
-            const profile = { name: 'Hero', hp: 12, stats: { str: 11, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } };
-            ctx.write.setCharacterSheet(profile);
-            expect(callbacks.setCharacterProfileData).toHaveBeenCalledWith(profile);
-        });
 
         it('routes setInventory to the facade setInventoryItems callback', () => {
             const callbacks = makeCallbacks();

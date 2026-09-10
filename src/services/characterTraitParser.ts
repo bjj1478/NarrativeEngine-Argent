@@ -1,23 +1,27 @@
 /**
- * characterTraitParser.ts — WO-G scene-aware structured PC trait parser.
+ * characterTraitParser.ts — scene-aware structured PC trait parser.
  *
- * Replaces the legacy flat-string profile with a bounded, supersession-aware
- * trait list. Reviews recent chat + current structured profile, emits an updated
- * CharacterProfileState as JSON. Sibling to characterProfileParser.ts (the sheet
- * parser) — this one owns the narrative-trait view.
+ * Owns ONE thing: `playerCharacter.activeTraits`, a bounded, supersession-aware list of
+ * narrative facts about the PC. Reviews recent chat plus the current list and emits an
+ * updated one as JSON.
+ *
+ * It used to also write `identity` and `stats` onto a parallel `characterProfile` record.
+ * Both are gone: stats were numbers the prompt must not carry, and identity (name, race,
+ * archetype) is user-authored on the Sheet tab — an LLM overwriting the name the player
+ * typed is a bug, not a feature. This parser stays out of both.
  *
  * Key contracts:
  * 1. REPLACE, don't append. Contradictory facts with the same subject+category
  *    → mark the old one superseded, add the new one.
- * 2. Bounded: activeTraits capped at 10 (excluding superseded).
+ * 2. Bounded: active traits capped at 10 (excluding superseded).
  * 3. Scene-tagged: each trait carries eventTags for retrieval filtering.
  * 4. Merge-by-id backstop (60ae996): traits missing from this turn's output are
  *    preserved unchanged (anti-drop). Protects against silent data loss.
  *
- * Fault tolerance: on any parse failure, returns currentProfile unchanged.
+ * Fault tolerance: on any parse failure, returns the current list unchanged.
  */
 
-import type { ChatMessage, ProviderConfig, EndpointConfig, CharacterProfileState, CharacterTrait, CharacterIdentity, DivergenceCategory, SceneEventType } from '../types';
+import type { ChatMessage, ProviderConfig, EndpointConfig, CharacterTrait, DivergenceCategory, SceneEventType } from '../types';
 import { uid } from '../utils/uid';
 import { llmCall } from '../utils/llmCall';
 import { AI_CALL_TIMEOUT_MS } from './llm/timeouts';
@@ -35,20 +39,19 @@ const TRAIT_CAP = 10;
 export async function scanCharacterTraits(
     provider: ProviderConfig | EndpointConfig | undefined,
     messages: ChatMessage[],
-    currentProfile: CharacterProfileState,
+    currentTraits: CharacterTrait[],
+    pcName: string,
     modelCall?: (request: ModelRequest) => Promise<ModelResponse>
-): Promise<CharacterProfileState> {
+): Promise<CharacterTrait[]> {
     const recentMessages = messages.slice(-15);
-    if (recentMessages.length === 0) return currentProfile;
+    if (recentMessages.length === 0) return currentTraits;
 
     const turns = recentMessages
         .map((m) => `[${m.role.toUpperCase()}]: ${m.content}`)
         .join('\n\n');
 
     const currentProfileJson = JSON.stringify({
-        identity: currentProfile.identity,
-        stats: currentProfile.stats,
-        activeTraits: currentProfile.activeTraits.map(t => ({
+        activeTraits: currentTraits.map(t => ({
             ...t,
             sceneEstablished: undefined,
             source: undefined,
@@ -67,24 +70,21 @@ export async function scanCharacterTraits(
         'You are an AI game engine parser responsible for maintaining the player character\'s structured profile and trait list.',
         `TASK: Review the recent chat history and the current structured profile below. Identify any updates to the character's identity, stats, or narrative traits based on the recent narrative.`,
         `INSTRUCTIONS:
-1. IDENTITY: Update name/race/class/archetype/level only if explicitly revealed or changed in the chat. Otherwise copy through unchanged.
-2. STATS: Update only if the chat explicitly shows a level-up, injury, or stat change. Otherwise copy through.
-3. TRAITS — SUPERSESSION (CRITICAL): If a new fact contradicts an existing trait with the same \`subject\` AND the same \`category\`, you MUST:
+1. TRAITS — SUPERSESSION (CRITICAL): If a new fact contradicts an existing trait with the same \`subject\` AND the same \`category\`, you MUST:
    - Set the existing trait's \`superseded: true\`
    - Add a new trait with the updated fact
    Do NOT append contradictory facts alongside old ones. Do NOT retain superseded traits as active. This is the most important instruction.
-4. TRAITS — BOUND: The \`activeTraits\` array (traits where \`superseded: false\`) must contain AT MOST ${TRAIT_CAP} entries. If adding a new trait would exceed ${TRAIT_CAP}, drop the trait with the lowest \`importance\` (set its \`superseded: true\`).
-5. TRAITS — TAGGING: Every new or updated trait must include \`eventTags\` chosen from: [${eventTagList.join(', ')}]. Tag broadly — a trait can have multiple tags. Examples:
+2. TRAITS — BOUND: The \`activeTraits\` array (traits where \`superseded: false\`) must contain AT MOST ${TRAIT_CAP} entries. If adding a new trait would exceed ${TRAIT_CAP}, drop the trait with the lowest \`importance\` (set its \`superseded: true\`).
+3. TRAITS — TAGGING: Every new or updated trait must include \`eventTags\` chosen from: [${eventTagList.join(', ')}]. Tag broadly — a trait can have multiple tags. Examples:
    - "Lives at Tellis Court" → tags: ["travel", "relationship_shift"]
    - "Wields Frostbite, a enchanted blade" → tags: ["combat", "item_acquired"]
    - "Owes Garrick 200 gold" → tags: ["promise", "betrayal"]
-6. TRAITS — CATEGORY: Each trait's \`category\` must be one of: [${categoryList.join(', ')}]. Use \`party_facts\` for personal attributes/scars/titles/abilities, \`locations\` for residence/travel, \`promises_debts\` for oaths/debts, \`npc_events\` for NPC relationships, \`world_state\` for broad world changes affecting the PC.
-7. TRAITS — IMPORTANCE: Assign 1-10 based on narrative weight. Combat-relevant or plot-critical facts: 7-10. Personal bonds/flavor: 4-6. Minor details: 1-3.
-8. OUTPUT: Emit ONLY a JSON object matching the CharacterProfileState shape below. No prose, no markdown fences, no explanations.`,
+4. TRAITS — CATEGORY: Each trait's \`category\` must be one of: [${categoryList.join(', ')}]. Use \`party_facts\` for personal attributes/scars/titles/abilities, \`locations\` for residence/travel, \`promises_debts\` for oaths/debts, \`npc_events\` for NPC relationships, \`world_state\` for broad world changes affecting the PC.
+5. TRAITS — IMPORTANCE: Assign 1-10 based on narrative weight. Combat-relevant or plot-critical facts: 7-10. Personal bonds/flavor: 4-6. Minor details: 1-3.
+6. NEVER emit identity fields (name, race, class, level) or any stat block. The player authors those; you do not touch them.
+7. OUTPUT: Emit ONLY a JSON object of the shape below. No prose, no markdown fences, no explanations.`,
         `OUTPUT SHAPE:
 {
-  "identity": { "name": "...", "race": "...", "class": "...", "archetype": "...", "level": 1 },
-  "stats": { "str": 8, "dex": 8, "con": 8, "int": 8, "wis": 8, "cha": 8 },
   "activeTraits": [
     {
       "id": "any-unique-string",
@@ -99,9 +99,9 @@ export async function scanCharacterTraits(
     }
   ]
 }`,
-        `If nothing changed, return the current profile as-is (with superseded flags preserved).`,
+        `If nothing changed, return the current list as-is (with superseded flags preserved).`,
         '',
-        '=== CURRENT CHARACTER PROFILE (JSON) ===',
+        '=== CURRENT TRAIT LIST (JSON) ===',
         currentProfileJson,
         '=== RECENT CHAT HISTORY ===',
         turns,
@@ -119,50 +119,33 @@ export async function scanCharacterTraits(
         const braceStart = clean.indexOf('{');
         const braceEnd = clean.lastIndexOf('}');
         if (braceStart === -1 || braceEnd === -1) {
-            console.warn('[CharacterTraitParser] No JSON object found — returning current profile unchanged');
-            return currentProfile;
+            console.warn('[CharacterTraitParser] No JSON object found — returning current traits unchanged');
+            return currentTraits;
         }
         const parsed = JSON.parse(clean.substring(braceStart, braceEnd + 1));
-        return normalizeParsedProfile(parsed, currentProfile);
+        return normalizeParsedTraits(parsed, currentTraits, pcName);
     } catch (e) {
-        console.warn('[CharacterTraitParser] Parse failed — returning current profile unchanged:', e);
-        return currentProfile;
+        console.warn('[CharacterTraitParser] Parse failed — returning current traits unchanged:', e);
+        return currentTraits;
     }
 }
 
 /**
- * Normalize a parsed JSON object into a valid CharacterProfileState.
- * Defensive: fills missing fields, generates IDs for new traits, clamps
- * importance, validates category/eventTags, enforces the 10-trait cap, and
- * merges-by-id with the prior profile (anti-drop backstop).
+ * Normalize a parsed JSON object into a valid trait list.
+ * Defensive: fills missing fields, generates IDs for new traits, clamps importance,
+ * validates category/eventTags, enforces the 10-trait cap, and merges-by-id with the
+ * prior list (anti-drop backstop).
+ *
+ * Any `identity` or `stats` keys the model emits anyway are silently ignored — they are
+ * not this parser to write.
  */
-function normalizeParsedProfile(
+function normalizeParsedTraits(
     parsed: unknown,
-    fallback: CharacterProfileState,
-): CharacterProfileState {
+    fallback: CharacterTrait[],
+    pcName: string,
+): CharacterTrait[] {
     if (!parsed || typeof parsed !== 'object') return fallback;
     const obj = parsed as Record<string, unknown>;
-
-    const identityRaw = obj.identity && typeof obj.identity === 'object' ? obj.identity as Record<string, unknown> : {};
-    const identity: CharacterIdentity = {
-        name: typeof identityRaw.name === 'string' ? identityRaw.name : fallback.identity.name,
-        race: typeof identityRaw.race === 'string' ? identityRaw.race : fallback.identity.race,
-        class: typeof identityRaw.class === 'string' ? identityRaw.class : fallback.identity.class,
-        archetype: typeof identityRaw.archetype === 'string' ? identityRaw.archetype : fallback.identity.archetype,
-        level: typeof identityRaw.level === 'number' ? identityRaw.level : fallback.identity.level,
-    };
-
-    let stats: Record<string, number> | undefined;
-    if (obj.stats && typeof obj.stats === 'object') {
-        const s = obj.stats as Record<string, unknown>;
-        const out: Record<string, number> = { ...(fallback.stats ?? {}) };
-        for (const [k, v] of Object.entries(s)) {
-            if (typeof v === 'number') out[k] = v;
-        }
-        stats = out;
-    } else {
-        stats = fallback.stats;
-    }
 
     const traitsRaw = Array.isArray(obj.activeTraits) ? obj.activeTraits : [];
     const seenIds = new Set<string>();
@@ -180,7 +163,7 @@ function normalizeParsedProfile(
             const importance = typeof t.importance === 'number' ? Math.max(1, Math.min(10, Math.round(t.importance))) : 5;
             return {
                 id,
-                subject: typeof t.subject === 'string' ? t.subject : (identity.name || 'PC'),
+                subject: typeof t.subject === 'string' ? t.subject : (pcName || 'PC'),
                 category,
                 text: typeof t.text === 'string' ? t.text : '',
                 importance,
@@ -195,7 +178,7 @@ function normalizeParsedProfile(
     // Merge-by-id backstop (anti-drop): traits missing from this turn's output
     // are preserved unchanged. Protects against silent data loss.
     const parsedIds = new Set(traits.map(t => t.id));
-    const preserved = fallback.activeTraits.filter(t => !parsedIds.has(t.id));
+    const preserved = fallback.filter(t => !parsedIds.has(t.id));
     const merged = [...traits, ...preserved];
 
     // Enforce the 10-trait cap on non-superseded entries (after merge).
@@ -206,12 +189,5 @@ function normalizeParsedProfile(
         for (const t of active.slice(TRAIT_CAP)) t.superseded = true;
     }
 
-    const finalTraits = [...active, ...superseded];
-
-    return {
-        identity,
-        stats,
-        activeTraits: finalTraits,
-        legacyNotes: fallback.legacyNotes,
-    };
+    return [...active, ...superseded];
 }

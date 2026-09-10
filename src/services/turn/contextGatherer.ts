@@ -51,8 +51,6 @@ export type GatheredContext = {
     relevantLore: LoreChunk[] | undefined;
     semanticArchiveIds: string[] | undefined;
     semanticLoreIds: string[] | undefined;
-    inventoryCategories: string[] | undefined;
-    profileFields: string[] | undefined;
     deepContextSummary?: string;
     semanticFactText?: string;
     relevantRules?: LoreChunk[];
@@ -391,8 +389,6 @@ export async function gatherContext(
         relevantLore,
         semanticArchiveIds: semanticCandidates.semanticArchiveIds,
         semanticLoreIds: semanticCandidates.semanticLoreIds,
-        inventoryCategories: recommender.inventoryCategories,
-        profileFields: recommender.profileFields,
         deepContextSummary,
         semanticFactText,
         relevantRules,

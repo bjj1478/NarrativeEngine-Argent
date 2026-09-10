@@ -1,8 +1,9 @@
-import type { GameContext, InventoryProposal } from '../../types';
+import type { GameContext, InventoryProposal, ConditionProposal } from '../../types';
 import {
     handleLoreTool,
     handleNotebookTool,
     handleProposeInventoryTool,
+    handleProposeConditionTool,
     parseRequestRollArgs,
     formatPlayerRollDeclined,
 } from './toolHandlers';
@@ -50,6 +51,8 @@ export type ToolDispatchResult = {
     contextPatch?: Partial<GameContext>;
     /** Optional inventory proposal to stage for user confirmation. */
     proposal?: InventoryProposal;
+    /** Optional body-state proposal to stage for user confirmation. */
+    conditionProposal?: ConditionProposal;
 };
 
 export type ToolHandlerFn = (
@@ -118,11 +121,24 @@ const handleProposeInventory: ToolHandlerFn = (ctx) => {
     };
 };
 
+// Same contract as the inventory proposal above: pure parse, no mutation, the staging
+// side-effect returned as data for the orchestrator to apply.
+const handleProposeCondition: ToolHandlerFn = (ctx) => {
+    const { toolResult, proposal } = handleProposeConditionTool(ctx.arguments);
+    return {
+        toolResult,
+        accumulation: 'append',
+        traceResult: false,
+        conditionProposal: proposal,
+    };
+};
+
 export const TOOL_REGISTRY: Record<string, ToolHandlerFn> = {
     query_campaign_lore: handleLore,
     update_scene_notebook: handleNotebook,
     request_roll: handleRequestRoll,
     propose_inventory_change: handleProposeInventory,
+    propose_condition_change: handleProposeCondition,
 };
 
 /**
@@ -145,6 +161,7 @@ export function validateToolRegistry(): void {
         'update_scene_notebook',
         'request_roll',
         'propose_inventory_change',
+        'propose_condition_change',
     ];
     for (const name of expected) {
         const handler = TOOL_REGISTRY[name];

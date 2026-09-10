@@ -3,26 +3,21 @@ import { useAppStore } from '../store/useAppStore';
 import { useShallow } from 'zustand/react/shallow';
 import { countTokens } from '../services/infrastructure/tokenizer';
 import { DEFAULT_RULES } from '../services/rules/defaultRules';
-import {
-    minifyBookkeepingStub,
-} from '../services/turn/contextMinifier';
+import { buildPlayerCharacterBlock } from '../services/payload/playerCharacter';
 import { countRegisterTokens } from '../services/campaign-state/divergenceRegister';
 
 export function TokenGauge() {
-    const { context, settings, condenser, inventoryItems, characterProfileData, divergenceRegister } = useAppStore(
+    const { context, settings, condenser, inventoryItems, playerCharacter, divergenceRegister } = useAppStore(
         useShallow(s => ({
             context: s.context,
             settings: s.settings,
             condenser: s.condenser,
             inventoryItems: s.inventoryItems ?? s.context.inventoryItems ?? [],
-            characterProfileData: s.characterProfileData ?? s.context.characterProfileData ?? null,
+            playerCharacter: s.playerCharacter ?? s.context.playerCharacter ?? null,
             divergenceRegister: s.divergenceRegister,
         }))
     );
     const messages = useAppStore(s => s.messages);
-
-    const legacyProfile = context.characterProfileActive && context.characterProfile ? context.characterProfile : '';
-    const legacyInventory = context.inventoryActive && context.inventory ? context.inventory : '';
 
     const systemText = useMemo(() => {
         const parts: string[] = [];
@@ -33,19 +28,15 @@ export function TokenGauge() {
         if (context.starterActive && context.starter) parts.push(context.starter);
         if (context.continuePromptActive && context.continuePrompt) parts.push(context.continuePrompt);
 
-        if (context.smartBookkeepingActive && characterProfileData) {
-            const stub = minifyBookkeepingStub(characterProfileData, inventoryItems || []);
-            if (stub) parts.push(`[CHARACTER]\n${stub}`);
-        } else if (legacyProfile) {
-            parts.push(`[CHARACTER PROFILE]\n${legacyProfile}`);
-        }
-
-        if (!context.smartBookkeepingActive && legacyInventory) {
-            parts.push(`[PLAYER INVENTORY]\n${legacyInventory}`);
-        }
+        // Reuse the real block builder rather than re-deriving its shape here. The gauge
+        // used to hand-roll a `[CHARACTER]` stub plus two legacy branches, which meant this
+        // estimate drifted from the payload every time either changed. It also counted an
+        // object as a string in the legacy branch, so that arm was always contributing zero.
+        const pcBlock = buildPlayerCharacterBlock(playerCharacter, inventoryItems || []);
+        if (pcBlock) parts.push(pcBlock);
 
         return parts.join('\n\n');
-    }, [context, characterProfileData, inventoryItems, legacyProfile, legacyInventory]);
+    }, [context, playerCharacter, inventoryItems]);
 
     const systemTokens = useMemo(() => countTokens(systemText), [systemText]);
 

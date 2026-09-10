@@ -64,7 +64,7 @@ export function useSceneContinue(messageId: string | null) {
         let assistantText: string | null;
         let directive: string;
 
-        const pcName = store.context.characterProfileData?.name ?? '';
+        const pcName = store.context.playerCharacter?.name ?? '';
         const targetWords = computeLastSegmentWordCount(msg.content);
         // Continue never offers a dice tool. It is a second, SYNCHRONOUS tool-dispatch site
         // (sceneContinue.ts) with no modal to suspend into, so request_roll cannot work here —
@@ -356,8 +356,6 @@ async function buildFallbackPayload(opts: {
             semanticFactText: gathered.semanticFactText,
             archiveIndex: store.archiveIndex,
             timelineEvents: gathered.timelineEvents,
-            inventoryCategories: gathered.inventoryCategories as (import('../../types').InventoryItemCategory | 'equipped')[] | undefined,
-            profileFields: gathered.profileFields as string[] | undefined,
             deepContextSummary: gathered.deepContextSummary,
             divergenceRegister: store.divergenceRegister,
             chapters: gathered.relevantRules ? undefined : store.chapters,

@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { runTurn } from '../services/turn/turnOrchestrator';
 import { commitPendingTurn, findRetryableMessage, persistPendingTurn } from '../services/turn/pendingCommit';
 import { debouncedSaveCampaignState } from '../store/slices/campaignSlice';
-import type { InventoryProposal, PlayerRollRequest } from '../types';
+import type { InventoryProposal, ConditionProposal, PlayerRollRequest } from '../types';
 import type { useSceneContinue } from '../components/hooks/useSceneContinue';
 
 /**
@@ -69,6 +69,10 @@ export function useChatOperations({
     const [loadingStatus, setLoadingStatus] = useState<string | null>(null);
     // Phase 6: GM-proposed inventory change awaiting user confirmation.
     const [pendingProposal, setPendingProposal] = useState<InventoryProposal | null>(null);
+    // GM-proposed body-state change awaiting user confirmation. Single slot on purpose:
+    // a fresh proposal replaces an un-actioned one, because the later narration is the
+    // more current account of the body.
+    const [pendingConditionProposal, setPendingConditionProposal] = useState<ConditionProposal | null>(null);
     // WO-A2 §2.1 — first-send intercept modal. `pendingPcPrompt` is set when
     // handleSend blocks on a missing PC; the UI renders a modal and calls
     // `resolvePcPrompt` with 'create' | 'proceed' | 'cancel'.
@@ -296,7 +300,6 @@ export function useChatOperations({
                     context: fresh.context,
                 };
             },
-            setCharacterProfileData: storeSnapshot.setCharacterProfileData,
             setInventoryItems: storeSnapshot.setInventoryItems,
             setLocationLedger: storeSnapshot.setLocationLedger,
             addLocationSuggestions: storeSnapshot.addLocationSuggestions,
@@ -315,6 +318,7 @@ export function useChatOperations({
             archiveNPC: storeSnapshot.archiveNPC,
             restoreNPC: storeSnapshot.restoreNPC,
             stageInventoryProposal: (proposal) => setPendingProposal(proposal),
+            stageConditionProposal: (proposal) => setPendingConditionProposal(proposal),
             requestPlayerRoll,
             // Durable-commit v1: flush the finished turn (text + pendingCommit + swipe
             // set) the moment it is staged, so an improper close or an idle timeout
@@ -387,6 +391,8 @@ export function useChatOperations({
         loadingStatus,
         pendingProposal,
         setPendingProposal,
+        pendingConditionProposal,
+        setPendingConditionProposal,
         pendingPcPrompt,
         resolvePcPrompt,
         pendingRollRequest,

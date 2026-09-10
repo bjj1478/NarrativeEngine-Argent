@@ -10,7 +10,7 @@ import { DEFAULT_CONTEXT, DEFAULT_CONDENSER } from '../services/campaignInit';
 import { migrateLegacyContext } from '../types';
 import type { GameContext, ArchiveChapter, ArchiveIndexEntry, DivergenceRegister, DivergenceEntry, ChatMessage } from '../types';
 import { migrateV1ToV2 } from '../services/campaign-state/divergenceRegister';
-import { migratePCIntoContext } from '../services/character/migratePC';
+import { migratePCIntoContext, foldPcRecord, stripLegacyPcFields } from '../services/character/migratePC';
 import { loadLocationTable } from '../services/tables/locationTable';
 import { hydrateModTables, saveModTable } from '../services/mods/modTables';
 import { fetchMods } from '../services/mods/modClient';
@@ -316,6 +316,38 @@ export async function hydrateCampaign(campaignId: string) {
         }
     }
 
+    // PC record consolidation — fold the retired `characterProfileData` sheet and
+    // `characterProfile` trait-state into `context.playerCharacter`, the one record with
+    // a real owner. Runs HERE and nowhere else: this is the only place the store writes
+    // `context` and the top-level `playerCharacter` mirror in a single `setState`, so
+    // there is no window in which the two can disagree. See `foldPcRecord` for why doing
+    // this inside `migrateLegacyContext` would silently erase the folded data.
+    //
+    // Ordering is load-bearing: it must run AFTER `migrateLegacyContext` (which scrapes
+    // pre-WO-G flat-string profiles into the sheet) and AFTER `migratePCIntoContext`
+    // (which is what puts a PC at `context.playerCharacter` in the first place).
+    // Non-fatal on throw — a failed fold leaves the legacy fields intact and readable,
+    // which is strictly better than persisting a half-folded record.
+    let pcFolded = false;
+    try {
+        const fold = foldPcRecord(finalContext);
+        if (fold.folded) {
+            finalContext = fold.context;
+            pcFolded = true;
+            console.log('[Hydrator] Folded retired characterProfile/characterProfileData into context.playerCharacter');
+        }
+        // Strip only after a clean fold. Separating the two means a fold that threw can
+        // never be followed by the delete that would make the loss permanent — the legacy
+        // fields stay on disk, readable, and the next hydrate tries again.
+        const stripped = stripLegacyPcFields(finalContext);
+        if (JSON.stringify(stripped) !== JSON.stringify(finalContext)) {
+            finalContext = stripped;
+            pcFolded = true;
+        }
+    } catch (e) {
+        console.warn('[Hydrator] PC record fold failed; legacy profile fields left intact:', e);
+    }
+
     // One-time save back if legacy inventory items were normalized during migration
     const inventoryMigrated = JSON.stringify(rawContext.inventoryItems ?? []) !== JSON.stringify(finalContext.inventoryItems ?? []);
     if (inventoryMigrated) {
@@ -335,7 +367,7 @@ export async function hydrateCampaign(campaignId: string) {
         console.log(`[Hydrator] Recovered ${stampsRecovered} scene stamp(s) from the archive index`);
     }
 
-    if (swipeOrphansChanged || inventoryMigrated || stampsRecovered > 0) {
+    if (swipeOrphansChanged || inventoryMigrated || stampsRecovered > 0 || pcFolded) {
         console.log('[Hydrator] Persisting updated context/messages after hydration migration');
         try { await saveCampaignState(campaignId, { context: finalContext, messages: finalMessages, condenser: state?.condenser ?? DEFAULT_CONDENSER, pinnedExcerpts: state?.pinnedExcerpts ?? [] }); } catch (e) {
             console.warn('[Hydrator] Failed to persist state after hydration migration:', e);
@@ -376,7 +408,6 @@ export async function hydrateCampaign(campaignId: string) {
         divergenceRegister: register,
         activeCampaignId: campaignId,
         inventoryItems: finalContext.inventoryItems,
-        characterProfileData: finalContext.characterProfileData,
         playerCharacter: finalContext.playerCharacter ?? null,
         relationshipMemoriesNpcToMc: relationshipMemories.npcToMc,
         relationshipMemoriesNpcToNpc: relationshipMemories.npcToNpc,

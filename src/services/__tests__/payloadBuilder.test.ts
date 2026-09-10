@@ -838,188 +838,145 @@ describe('buildPayload — scenario 8: thinking mode and tool mode', () => {
     });
 });
 
-// ── Scenario 9: Smart bookkeeping vs legacy ───────────────────────────────────
-describe('buildPayload — scenario 9: smart bookkeeping vs legacy', () => {
-    it('smart bookkeeping: [CHARACTER] block appears when smartBookkeepingActive and characterProfileData has a name', () => {
-        const ctx = {
-            ...baseContext(),
-            smartBookkeepingActive: true,
-            characterProfileData: {
-                name: 'Gareth',
-                race: 'Human',
-                class: 'Fighter',
-                level: 5,
-                hp: { current: 40, max: 50 },
-                stats: {},
-                skills: [],
-                abilities: [],
-                traits: [],
-                notes: '',
-            },
-            inventoryItems: [],
-        } as unknown as GameContext;
-
-        const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'What do I have?' });
-        // volatile blocks are folded into the final user message.
-        const allContent = result.messages
-            .map(m => m.content as string)
-            .join('\n');
-        expect(allContent).toContain('[CHARACTER]');
-    });
-
-    it('smart bookkeeping: [INVENTORY] block appears when inventoryCategories provided and items exist', () => {
-        const ctx = {
-            ...baseContext(),
-            smartBookkeepingActive: true,
-            characterProfileData: {
-                name: 'Gareth',
-                race: 'Human',
-                class: 'Fighter',
-                level: 5,
-                hp: { current: 40, max: 50 },
-                stats: {},
-                skills: [],
-                abilities: [],
-                traits: [],
-                notes: '',
-            },
-            inventoryItems: [
-                {
-                    id: 'item1',
-                    name: 'Iron Sword',
-                    qty: 1,
-                    category: 'weapon' as const,
-                    keywords: ['sword'],
-                    equipped: true,
-                    lastUsedScene: '001',
-                    importance: 7,
-                    notes: '',
-                },
-            ],
-        } as unknown as GameContext;
-
-        const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'What weapons do I have?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: undefined, archiveRecall: undefined, recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: undefined, timelineEvents: undefined, inventoryCategories: ['weapon', 'equipped'] });
-        const allContent = result.messages
-            .map(m => m.content as string)
-            .join('\n');
-        expect(allContent).toContain('[INVENTORY]');
-    });
-
-    it('smart bookkeeping: [PROFILE] block appears when profileFields provided', () => {
-        const ctx = {
-            ...baseContext(),
-            smartBookkeepingActive: true,
-            characterProfileData: {
-                name: 'Gareth',
-                race: 'Human',
-                class: 'Fighter',
-                level: 5,
-                hp: { current: 40, max: 50 },
-                stats: { str: 16 },
-                skills: ['Athletics'],
-                abilities: [],
-                traits: [],
-                notes: 'Veteran soldier',
-            },
-            inventoryItems: [],
-        } as unknown as GameContext;
-
-        const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'What are my stats?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: undefined, archiveRecall: undefined, recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: undefined, timelineEvents: undefined, inventoryCategories: undefined, profileFields: ['name', 'class', 'level'] });
-        const allContent = result.messages
-            .map(m => m.content as string)
-            .join('\n');
-        expect(allContent).toContain('[PROFILE]');
-    });
-
-    it('legacy: [CHARACTER PROFILE block appears with staleness tag when characterProfileActive and no smartBookkeeping', () => {
-        const ctx = {
-            ...baseContext(),
-            smartBookkeepingActive: false,
-            characterProfileActive: true,
-            characterProfile: {
-                identity: { name: 'Gareth', class: 'Fighter', level: 5 },
-                activeTraits: [{
-                    id: 't1', subject: 'Gareth', category: 'party_facts', text: 'A seasoned fighter',
-                    importance: 7, eventTags: ['other'], sceneEstablished: '', superseded: false, source: 'seed',
-                }],
-            },
-            characterProfileLastScene: '003',
-        } as unknown as GameContext;
-
-        const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'Who am I?' });
-        const allContent = result.messages
-            .map(m => m.content as string)
-            .join('\n');
-        expect(allContent).toContain('[CHARACTER PROFILE');
-        // should include the last scene reference
-        expect(allContent).toContain('003');
-    });
-
-    it('legacy: structured profile injects [CHARACTER PROFILE] when characterProfileActive and traits exist', () => {
-        const ctx = {
-            ...baseContext(),
-            smartBookkeepingActive: false,
-            characterProfileActive: true,
-            characterProfile: {
-                identity: { name: 'Gareth', class: 'Fighter', level: 5 },
-                activeTraits: [{
-                    id: 't1', subject: 'Gareth', category: 'party_facts', text: 'A seasoned fighter',
-                    importance: 7, eventTags: ['other'], sceneEstablished: '', superseded: false, source: 'seed',
-                }],
-            },
-            characterProfileLastScene: 'Never',
-        } as unknown as GameContext;
-
-        const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'Who am I?' });
-        const allContent = result.messages
-            .map(m => m.content as string)
-            .join('\n');
-        expect(allContent).toContain('[CHARACTER PROFILE]');
-        expect(allContent).toContain('Gareth');
-    });
-
-    // Both character branches must answer to the same authority for stats. Branch A
-    // (smart bookkeeping) has always gated them on profileFields; branch B shipped every
-    // stat every turn until this was fixed.
-    const branchBContext = (): GameContext => ({
+// ── Scenario 9: the single [PLAYER CHARACTER] block ──────────────────────────
+// This replaced [CHARACTER] + [INVENTORY] + [PROFILE] (which between them named the PC
+// three times) and the mutually exclusive [CHARACTER PROFILE] branch that could never
+// actually run. See services/payload/playerCharacter.ts.
+describe('buildPayload — scenario 9: the [PLAYER CHARACTER] block', () => {
+    const pcContext = (pc: Record<string, unknown>, items: unknown[] = []): GameContext => ({
         ...baseContext(),
-        smartBookkeepingActive: false,
-        characterProfileActive: true,
-        characterProfile: {
-            identity: { name: 'Gareth', class: 'Fighter', level: 5 },
-            stats: { PWR: 14, SPD: 12 },
-            activeTraits: [{
-                id: 't1', subject: 'Gareth', category: 'party_facts', text: 'A seasoned fighter',
-                importance: 7, eventTags: ['other'], sceneEstablished: '', superseded: false, source: 'seed',
-            }],
+        playerCharacter: {
+            id: 'pc1', name: 'Gareth', aliases: '', appearance: '', faction: '',
+            storyRelevance: '', disposition: '', status: 'Alive', goals: '', voice: '',
+            personality: '', exampleOutput: '', affinity: 50, isPC: true, populated: true,
+            ...pc,
         },
-        characterProfileLastScene: 'Never',
+        inventoryItems: items,
     } as unknown as GameContext);
 
-    const contentFor = (profileFields: string[] | undefined): string =>
-        buildPayload({
-            settings: baseSettings(), context: branchBContext(), history: [],
-            userMessage: 'Who am I?', profileFields,
-        }).messages.map(m => m.content as string).join('\n');
+    const contentOf = (ctx: GameContext, userMessage = 'Who am I?'): string =>
+        buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage })
+            .messages.map(m => m.content as string).join('\n');
 
-    it('legacy: PC stats stay out of the prompt when the turn did not select them', () => {
-        const allContent = contentFor(['name', 'class']);
-        expect(allContent).toContain('[CHARACTER PROFILE]');
-        expect(allContent).toContain('Gareth');
-        expect(allContent).not.toContain('PWR');
-        expect(allContent).not.toContain('SPD');
+    it('emits exactly one block, naming the PC once', () => {
+        const content = contentOf(pcContext({}));
+        expect(content).toContain('[PLAYER CHARACTER — the human you are playing with]');
+        expect(content).toContain('[END PLAYER CHARACTER]');
+        expect(content.match(/\[PLAYER CHARACTER/g)).toHaveLength(1);
+        expect(content.match(/Gareth/g)).toHaveLength(1);
     });
 
-    it('legacy: PC stats appear when the turn selected them', () => {
-        const allContent = contentFor(['name', 'stats']);
-        expect(allContent).toContain('PWR 14');
-        expect(allContent).toContain('SPD 12');
+    it('retires the three old block markers', () => {
+        const content = contentOf(pcContext({}));
+        for (const marker of ['[CHARACTER]', '[INVENTORY]', '[PROFILE]', '[CHARACTER PROFILE]', 'CHAR:']) {
+            expect(content).not.toContain(marker);
+        }
     });
 
-    it('legacy: no recommender result means no stats, not all of them', () => {
-        // profileFields is undefined whenever the recommender is unavailable, disallowed by
-        // tier, or throws. Failing closed matches branch A, which emits no profile block at all.
-        expect(contentFor(undefined)).not.toContain('PWR');
+    it('sends no numbers — no level, HP, MP or stat block', () => {
+        // The HP 20/20 and Lv1 that used to ship were hardcoded creation defaults that
+        // nothing decremented. "A number in the prompt is a number the writer can read
+        // back out" — argent_design_goals.md.
+        const content = contentOf(pcContext({
+            pcMeta: { archetype: 'Fighter', stats: { PWR: 14, SPD: 12 } },
+        }));
+        expect(content).not.toMatch(/HP:\s*\d/);
+        expect(content).not.toMatch(/\bLv\d/);
+        expect(content).not.toMatch(/\bLevel \d/);
+        expect(content).not.toContain('PWR');
+        expect(content).not.toContain('SPD');
+    });
+
+    it('never renders an unknown descriptor as a placeholder', () => {
+        // The old stub printed `CHAR:Sabrita|? ?|Lv1` when race and class were blank.
+        const content = contentOf(pcContext({ visualProfile: { race: '' }, pcMeta: {} }));
+        expect(content).toContain('Gareth');
+        expect(content).not.toContain('? ?');
+    });
+
+    it('renders race and archetype on the identity line when known', () => {
+        const content = contentOf(pcContext({
+            visualProfile: { race: 'human' },
+            pcMeta: { archetype: 'hedge-witch' },
+        }));
+        expect(content).toContain('Gareth — human, hedge-witch');
+    });
+
+    it('surfaces injury as a word, never as a counter', () => {
+        const content = contentOf(pcContext({ condition: 'wounded' }));
+        expect(content).toContain('Gareth — wounded');
+    });
+
+    it('lists inventory once, marking what is worn', () => {
+        const content = contentOf(pcContext({}, [
+            { id: 'i1', name: 'Iron Sword', qty: 1, category: 'weapon', keywords: [], equipped: true, lastUsedScene: '001', importance: 7, notes: '' },
+            { id: 'i2', name: 'Torch', qty: 2, category: 'misc', keywords: [], equipped: false, lastUsedScene: '001', importance: 3, notes: '' },
+        ]));
+        expect(content).toContain('Carrying: Iron Sword (worn), Torch x2');
+        expect(content.match(/Iron Sword/g)).toHaveLength(1);
+    });
+
+    it('emits the signature kit, and no element tag', () => {
+        const content = contentOf(pcContext({
+            signatureKit: { equipment: ['Excalibur'], abilities: ['fire magic'] },
+        }));
+        expect(content).toContain('Kit: Excalibur | Powers: fire magic');
+        expect(content).not.toContain('element:');
+    });
+
+    it('injects traits as bare sentences, without retrieval metadata', () => {
+        const content = contentOf(pcContext({
+            activeTraits: [{
+                id: 't1', subject: 'Gareth', category: 'party_facts', text: 'A seasoned fighter.',
+                importance: 7, eventTags: ['other'], sceneEstablished: '', superseded: false, source: 'seed',
+            }],
+        }));
+        expect(content).toContain('▸ A seasoned fighter.');
+        // `imp:7` is selection bookkeeping — and one more number for the writer to read out.
+        expect(content).not.toContain('imp:7');
+        expect(content).not.toContain('[party_facts]');
+    });
+
+    it('renders a wound as prose on the identity line', () => {
+        const content = contentOf(pcContext({
+            condition: 'gash across the left forearm; favours the right hand',
+        }));
+        expect(content).toContain('Gareth — gash across the left forearm; favours the right hand');
+    });
+
+    it('renders condition and a non-Alive status as separate clauses', () => {
+        // Two axes: how hurt they are, and whether they are alive/held/missing.
+        const content = contentOf(pcContext({ condition: 'crushed leg', status: 'In Custody' }));
+        expect(content).toContain('Gareth — crushed leg — In Custody');
+    });
+
+    it('says nothing once the wound is healed', () => {
+        // An applied clear writes the empty string; it must not render as a dangling dash.
+        const content = contentOf(pcContext({ condition: '' }));
+        expect(content).toContain('[PLAYER CHARACTER');
+        expect(content).toMatch(/Gareth\s*$/m);
+    });
+
+    it('skips the legacy "healthy" literal from the retired enum', () => {
+        const content = contentOf(pcContext({ condition: 'healthy' }));
+        expect(content).not.toContain('healthy');
+    });
+
+    it('sends appearance back so narrated scars reach the writer', () => {
+        const content = contentOf(pcContext({ appearance: 'lean, dark-haired, a scar across the left eye' }));
+        expect(content).toContain('Looks: lean, dark-haired, a scar across the left eye');
+    });
+
+    it('caps a runaway appearance rather than shipping a paragraph every turn', () => {
+        const content = contentOf(pcContext({ appearance: 'x'.repeat(400) }));
+        const looks = content.split('\n').find(l => l.startsWith('Looks:'))!;
+        expect(looks.length).toBeLessThanOrEqual(210);
+        expect(looks).toContain('…');
+    });
+
+    it('emits nothing at all when the campaign has no player character', () => {
+        const ctx = { ...baseContext(), playerCharacter: null, inventoryItems: [] } as unknown as GameContext;
+        expect(contentOf(ctx)).not.toContain('[PLAYER CHARACTER');
     });
 });
 

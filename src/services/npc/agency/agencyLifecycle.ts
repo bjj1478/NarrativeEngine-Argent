@@ -3,7 +3,9 @@ import type { NPCEntry, NPCWants } from '../../../types';
 export function isAgencyEligible(npc: NPCEntry): boolean {
     if (npc.isPC) return false;
     if ((npc as Record<string, unknown>).agencyLocked === true) return false;
-    if (npc.condition === 'dead') return false;
+    // `condition` is free text now (it carries prose injuries for the PC), so the union no
+    // longer guarantees the casing this check used to rely on.
+    if ((npc.condition ?? '').trim().toLowerCase() === 'dead') return false;
     return true;
 }
 

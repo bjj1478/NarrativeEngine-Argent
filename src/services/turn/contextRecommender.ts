@@ -8,18 +8,19 @@
  * Falls back silently on any error (caller handles fallback to substring scan).
  */
 
-import type { EndpointConfig, NPCEntry, LoreChunk, ChatMessage, ArchiveChapter, InventoryItem, CharacterProfile, InventoryItemCategory } from '../../types';
+import type { EndpointConfig, NPCEntry, LoreChunk, ChatMessage, ArchiveChapter } from '../../types';
 import { llmCall } from '../../utils/llmCall';
 import { AI_CALL_TIMEOUT_MS } from '../llm/timeouts';
-import { buildInventoryIndex, buildProfileIndex } from './contextMinifier';
 import { extractJsonRobust } from '../infrastructure/jsonExtract';
 import type { ModelRequest, ModelResponse } from './hostFacade';
 
+// The recommender used to also pick which inventory categories and character-sheet
+// fields to inject. Both are gone: the sheet no longer exists, and the PC block now
+// renders the whole (bounded) inventory rather than paying a blocking utility round
+// trip each turn to choose between categories. NPCs and lore are what it is for.
 export type RecommenderResult = {
     relevantNPCNames: string[];   // NPC names the model considers relevant
     relevantLoreIds: string[];    // Lore chunk IDs the model considers relevant
-    inventoryCategories: (InventoryItemCategory | 'equipped')[]; // Inventory categories relevant this turn
-    profileFields: string[];      // Profile fields relevant this turn
 };
 
 /**
@@ -78,22 +79,18 @@ function buildPinnedChapterContext(chapters: ArchiveChapter[]): string {
     }).join('\n\n');
 }
 
-const RECOMMENDER_PROMPT = `You are a context selector for a tabletop RPG game engine. Given a conversation excerpt, a roster of NPCs, lore entries, a player inventory index, and a character profile index, determine which items are RELEVANT to the current scene.
+const RECOMMENDER_PROMPT = `You are a context selector for a tabletop RPG game engine. Given a conversation excerpt, a roster of NPCs, and lore entries, determine which items are RELEVANT to the current scene.
 
 RULES:
 1. An NPC is relevant if they are: mentioned by name/alias, physically present in the scene, directly referenced, or their faction/goals are materially involved.
 2. A lore entry is relevant if: its subject matter relates to the current location, active quest, mentioned organizations, or ongoing conflict.
-3. Inventory categories: Return categories that matter this turn. Combat/trading/crafting/environmental = weapon/armor/equipped/consumable. Travel/exploration = misc. Thievery/investigation = key. Default to equipped only if nothing stands out.
-4. Profile fields: Return fields relevant this turn. Combat = hp, stats, abilities. Social = name, race, class, skills, traits. Default to name only if nothing stands out.
-5. DM-PINNED CHAPTERS are manually flagged as important by the DM. Strongly favor NPCs and lore entries mentioned in pinned chapters.
-6. Be SELECTIVE — only include truly relevant entries.
-7. Return ONLY valid JSON in exactly this format, no other text:
+3. DM-PINNED CHAPTERS are manually flagged as important by the DM. Strongly favor NPCs and lore entries mentioned in pinned chapters.
+4. Be SELECTIVE — only include truly relevant entries.
+5. Return ONLY valid JSON in exactly this format, no other text:
 
-{"npcs": ["Name1"], "lore": ["id1"], "inventoryCategories": ["equipped"], "profileFields": ["name"]}
+{"npcs": ["Name1"], "lore": ["id1"]}
 
-Valid inventoryCategories: equipped, weapon, armor, consumable, key, currency, misc.
-Valid profileFields: name, race, class, level, hp, mp, stats, skills, abilities, traits, notes.
-If nothing is relevant, return: {"npcs": [], "lore": [], "inventoryCategories": [], "profileFields": []}`;
+If nothing is relevant, return: {"npcs": [], "lore": []}`;
 
 /**
  * Calls the utility AI endpoint to determine which NPCs and lore chunks
@@ -109,22 +106,18 @@ export async function recommendContext(
     userMessage: string,
     signal?: AbortSignal,
     pinnedChapters?: ArchiveChapter[],
-    inventoryItems?: InventoryItem[],
-    characterProfile?: CharacterProfile,
     timeoutMs?: number,
     modelCall?: (request: ModelRequest) => Promise<ModelResponse>
 ): Promise<RecommenderResult> {
     const npcRoster = buildNPCRoster(npcLedger);
     const loreIndex = buildLoreIndex(loreChunks);
     const conversation = buildConversationExcerpt(messages, userMessage);
-    const inventoryIndex = buildInventoryIndex(inventoryItems || []);
-    const profileIndex = buildProfileIndex(characterProfile || { name: '', race: '', class: '', level: 1, hp: { current: 20, max: 20 }, stats: {}, skills: [], abilities: [], traits: [], notes: '' });
 
     const pinnedSection = (pinnedChapters && pinnedChapters.length > 0)
         ? `\n[DM-PINNED CHAPTERS — manually selected as relevant]\n${buildPinnedChapterContext(pinnedChapters)}\n`
         : '';
 
-    const userContent = `${RECOMMENDER_PROMPT}\n\n[NPC ROSTER — ${npcLedger.length} characters]\n${npcRoster}\n\n[LORE INDEX — ${loreChunks.filter(c => !c.alwaysInclude).length} entries]\n${loreIndex}\n${pinnedSection}[INVENTORY INDEX]\n${inventoryIndex}\n\n[PROFILE INDEX]\n${profileIndex}\n\n[RECENT CONVERSATION]\n${conversation}\n\nRespond with the JSON object now:`;
+    const userContent = `${RECOMMENDER_PROMPT}\n\n[NPC ROSTER — ${npcLedger.length} characters]\n${npcRoster}\n\n[LORE INDEX — ${loreChunks.filter(c => !c.alwaysInclude).length} entries]\n${loreIndex}\n${pinnedSection}[RECENT CONVERSATION]\n${conversation}\n\nRespond with the JSON object now:`;
 
     console.log(`[ContextRecommender] Sending recommendation request...`);
 
@@ -137,28 +130,19 @@ export async function recommendContext(
             : '';
 
     // Parse the JSON response — handle thinker blocks and markdown wrapping
-    type RecommenderRaw = { npcs?: unknown; lore?: unknown; inventoryCategories?: unknown; profileFields?: unknown };
+    type RecommenderRaw = { npcs?: unknown; lore?: unknown };
     const { value: parsed, parseOk } = extractJsonRobust<RecommenderRaw>(rawContent, {});
     if (!parseOk) {
         console.warn('[ContextRecommender] Failed to find JSON in response:', rawContent.slice(0, 200));
         throw new Error('No valid JSON in recommender response');
     }
 
-    const validCats = new Set(['equipped', 'weapon', 'armor', 'consumable', 'key', 'currency', 'misc']);
-    const validFields = new Set(['name', 'race', 'class', 'level', 'hp', 'mp', 'stats', 'skills', 'abilities', 'traits', 'notes']);
-
     const result: RecommenderResult = {
         relevantNPCNames: Array.isArray(parsed.npcs) ? parsed.npcs.filter((n: unknown) => typeof n === 'string') : [],
         relevantLoreIds: Array.isArray(parsed.lore) ? parsed.lore.filter((n: unknown) => typeof n === 'string') : [],
-        inventoryCategories: Array.isArray(parsed.inventoryCategories)
-            ? parsed.inventoryCategories.filter((c: unknown) => typeof c === 'string' && validCats.has(c))
-            : [],
-        profileFields: Array.isArray(parsed.profileFields)
-            ? parsed.profileFields.filter((f: unknown) => typeof f === 'string' && validFields.has(f))
-            : [],
     };
 
-    console.log(`[ContextRecommender] Recommended ${result.relevantNPCNames.length} NPCs, ${result.relevantLoreIds.length} lore entries, ${result.inventoryCategories.length} inv cats, ${result.profileFields.length} profile fields.`);
+    console.log(`[ContextRecommender] Recommended ${result.relevantNPCNames.length} NPCs, ${result.relevantLoreIds.length} lore entries.`);
 
     return result;
 }

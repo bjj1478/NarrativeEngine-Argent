@@ -175,8 +175,6 @@ export function createTurnContext(args: {
             relevantLore: undefined,
             semanticArchiveIds: undefined,
             semanticLoreIds: undefined,
-            inventoryCategories: undefined,
-            profileFields: undefined,
             deepContextSummary: undefined,
             semanticFactText: undefined,
             relevantRules: undefined,

@@ -39,7 +39,6 @@ vi.mock('../chatEngine', () => ({
     generateNPCProfile: vi.fn(),
     updateExistingNPCs: vi.fn(),
 }));
-vi.mock('../characterProfileParser', () => ({ scanCharacterProfile: vi.fn() }));
 vi.mock('../inventoryParser', () => ({ scanInventory: vi.fn() }));
 
 import { runPostTurnPipeline } from '../turn/postTurnPipeline';
@@ -260,7 +259,6 @@ describe('runPostTurnPipeline', () => {
 
         expect(state.incrementBookkeepingTurnCounter).toHaveBeenCalled();
         expect(state.resetBookkeepingTurnCounter).toHaveBeenCalled();
-        expect(mockBQ.push).toHaveBeenCalledWith('Profile-Scan', expect.any(Function));
         expect(mockBQ.push).toHaveBeenCalledWith('Inventory-Scan', expect.any(Function));
     });
 

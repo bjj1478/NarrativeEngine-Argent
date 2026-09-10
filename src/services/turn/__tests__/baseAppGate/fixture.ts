@@ -60,16 +60,27 @@ export function fixtureContext(): GameContext {
         headerIndex: 'CHAPTER 1 — The Road.',
         starter: 'You stand at a crossroads.',
         continuePrompt: 'What do you do?',
-        inventory: 'A worn sword; a healing draught.',
-        inventoryLastScene: '',
-        characterProfile: 'Kael, ranger. Tall, quiet, scarred.',
-        characterProfileLastScene: '',
+        // The canonical turn carries a player character in the shape a hydrated campaign
+        // actually has: one `playerCharacter` record plus structured `inventoryItems`.
+        // This used to be a legacy free-text `inventory` string and a flat-string
+        // `characterProfile`, neither of which survives `migrateLegacyContext` on a real
+        // load — the fixture builds its context directly, so it was exercising a shape no
+        // live campaign still has.
+        inventoryItems: [
+            { id: 'bag1', name: 'worn sword', qty: 1, category: 'weapon', keywords: [], equipped: true, lastUsedScene: '001', importance: 5, notes: '', locationTag: 'inventory' },
+            { id: 'bag2', name: 'healing draught', qty: 1, category: 'consumable', keywords: [], equipped: false, lastUsedScene: '001', importance: 5, notes: '', locationTag: 'inventory' },
+        ],
+        playerCharacter: {
+            id: 'pc_kael', name: 'Kael', aliases: '', appearance: 'Tall, quiet, scarred.',
+            faction: '', storyRelevance: '', disposition: '', status: 'Alive', goals: '',
+            voice: '', personality: '', exampleOutput: '', affinity: 50,
+            isPC: true, populated: true,
+            pcMeta: { archetype: 'ranger' },
+        },
         canonStateActive: true,
         headerIndexActive: true,
         starterActive: true,
         continuePromptActive: true,
-        inventoryActive: true,
-        characterProfileActive: false,
         surpriseEngineActive: true,
         encounterEngineActive: true,
         worldEngineActive: true,

@@ -476,8 +476,6 @@ export function buildTurnPayload(
         semanticFactText: ctx.gathered.semanticFactText,
         archiveIndex,
         timelineEvents: ctx.gathered.timelineEvents,
-        inventoryCategories: ctx.gathered.inventoryCategories as (import('../../types').InventoryItemCategory | 'equipped')[] | undefined,
-        profileFields: ctx.gathered.profileFields as string[] | undefined,
         deepContextSummary: ctx.gathered.deepContextSummary,
         divergenceRegister: state.divergenceRegister,
         chapters: state.chapters,
@@ -830,6 +828,9 @@ export async function runGenerationStage(
                     }
                     if (dispatchResult.proposal) {
                         callbacks.stageInventoryProposal?.(dispatchResult.proposal);
+                    }
+                    if (dispatchResult.conditionProposal) {
+                        callbacks.stageConditionProposal?.(dispatchResult.conditionProposal);
                     }
 
                     const toolMsgId = uid();

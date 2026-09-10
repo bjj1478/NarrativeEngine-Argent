@@ -52,7 +52,6 @@ vi.mock('../chatEngine', () => ({
     generateNPCProfile: vi.fn(),
     updateExistingNPCs: vi.fn(),
 }));
-vi.mock('../characterProfileParser', () => ({ scanCharacterProfile: vi.fn() }));
 vi.mock('../inventoryParser', () => ({ scanInventory: vi.fn() }));
 vi.mock('../characterTraitParser', () => ({ scanCharacterTraits: vi.fn() }));
 vi.mock('../locationParser', () => ({

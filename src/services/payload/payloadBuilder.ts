@@ -1,4 +1,4 @@
-import type { AppSettings, ChatMessage, GameContext, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, PayloadTrace, TimelineEvent, DebugSection, InventoryItemCategory, DivergenceRegister, ArchiveChapter, PinnedExcerpt, SceneEventType, LocationEntry, RelationshipStance } from '../../types';
+import type { AppSettings, ChatMessage, GameContext, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, PayloadTrace, TimelineEvent, DebugSection, DivergenceRegister, ArchiveChapter, PinnedExcerpt, SceneEventType, LocationEntry, RelationshipStance } from '../../types';
 import type { OpenAIMessage } from '../llm/llmService';
 import { createTraceCollector } from './traceCollector';
 import { computeBudgets } from './budgets';
@@ -35,8 +35,6 @@ export type BuildPayloadOptions = {
     semanticFactText?: string;
     archiveIndex?: ArchiveIndexEntry[];
     timelineEvents?: TimelineEvent[];
-    inventoryCategories?: (InventoryItemCategory | 'equipped')[];
-    profileFields?: string[];
     deepContextSummary?: string;
     divergenceRegister?: DivergenceRegister;
     chapters?: ArchiveChapter[];
@@ -130,8 +128,6 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
         semanticFactText,
         archiveIndex,
         timelineEvents,
-        inventoryCategories,
-        profileFields,
         deepContextSummary,
         divergenceRegister,
         chapters,
@@ -172,7 +168,7 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
     const npcFloor = budgetMap.get('npc');
     const { stableContent, stableTokens, retrievedRulesContent } = buildStable({ settings, context, relevantRules, rulesManifest, rulesBudget, budgetStable: stableBudget, collector });
     const { worldContent, currentWorldTokens, divergenceContent, divergenceTokens, plannerEventTypes: resolvedEventTypes, relationsBlock } = buildWorld({ history, userMessage, condensedUpToIndex, relevantLore, npcLedger, archiveRecall, recommendedNPCNames, semanticFactText, archiveIndex, timelineEvents, deepContextSummary, divergenceRegister, chapters, onStageNpcIds, loreRaw: context.loreRaw, agencyDigest: context.agencyDigest, arcDigest: context.arcDigest, budgetWorld: worldBudget, npcBudgetFloor: npcFloor, plannerEventTypes, matureMode: settings.matureMode, isDebug, collector, elevatedScenes, slottedRagSnippets, relationshipMemoryEnabled: context.relationshipMemory === true });
-    const { volatileContent, volatileTokens } = buildVolatile({ context, inventoryCategories, profileFields, budgetVolatile: volatileBudget, collector, plannerEventTypes: resolvedEventTypes, userMessage, history, npcLedger, locationLedger, directorWorldFacts, directorBrief });
+    const { volatileContent, volatileTokens } = buildVolatile({ context, budgetVolatile: volatileBudget, collector, plannerEventTypes: resolvedEventTypes, userMessage, history, npcLedger, locationLedger, directorWorldFacts, directorBrief });
     // Phase 7.5 — subsystem segments. `buildPayload` hands each one its budget
     // (resolved by the segment's own id) plus the two relevance inputs, and
     // gets back text, an optional trace and any facts the segment establishes.

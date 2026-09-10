@@ -262,7 +262,9 @@ describe('parseNPCsFromLore — extended agency fields (tier, region, haunt, bou
     });
 });
 describe('parseNPCsFromLore — signature kit (durable loadout)', () => {
-    it('parses SignatureEquipment / SignatureAbilities / Element into a bounded kit', () => {
+    // An **Element:** line in an authored lore doc is no longer read — the kit has two
+    // channels, and "fire magic" in abilities already carries what the tag carried.
+    it('parses SignatureEquipment / SignatureAbilities into a bounded kit, ignoring Element', () => {
         const body = NARUTO_BLOCK
             + '\n**SignatureEquipment:** [Excalibur (holy longsword), plate armor]'
             + '\n**SignatureAbilities:** [fire magic, holy smite]'
@@ -271,7 +273,7 @@ describe('parseNPCsFromLore — signature kit (durable loadout)', () => {
         expect(npc.signatureKit).toBeDefined();
         expect(npc.signatureKit!.equipment).toEqual(['Excalibur (holy longsword)', 'plate armor']);
         expect(npc.signatureKit!.abilities).toEqual(['fire magic', 'holy smite']);
-        expect(npc.signatureKit!.element).toBe('fire');
+        expect(npc.signatureKit).not.toHaveProperty('element');
     });
 
     it('accepts the author-friendly aliases (Equipment / Abilities / Powers)', () => {
@@ -281,8 +283,6 @@ describe('parseNPCsFromLore — signature kit (durable loadout)', () => {
         const [npc] = parseNPCsFromLore([charChunk('CHARACTER -- Naruto Uzumaki', body)]);
         expect(npc.signatureKit!.equipment).toEqual(['iron spear']);
         expect(npc.signatureKit!.abilities).toEqual(['earth magic']);
-        // Element left unset here — must not leak from the numeric Affinity bullet.
-        expect(npc.signatureKit!.element).toBeUndefined();
     });
 
     it('caps each channel at 8 entries (shared sanitizer bound)', () => {
@@ -299,12 +299,11 @@ describe('parseNPCsFromLore — signature kit (durable loadout)', () => {
         expect(npc.signatureKit).toBeUndefined();
     });
 
-    it('supports an element-only kit (no gear/powers)', () => {
+    it('produces no kit at all from an Element line alone', () => {
+        // An element-only kit used to be valid. With that channel gone there is nothing
+        // left to store, so the shared sanitizer correctly returns undefined.
         const body = NARUTO_BLOCK + '\n**Element:** lightning';
         const [npc] = parseNPCsFromLore([charChunk('CHARACTER -- Naruto Uzumaki', body)]);
-        expect(npc.signatureKit).toBeDefined();
-        expect(npc.signatureKit!.element).toBe('lightning');
-        expect(npc.signatureKit!.equipment).toEqual([]);
-        expect(npc.signatureKit!.abilities).toEqual([]);
+        expect(npc.signatureKit).toBeUndefined();
     });
 });

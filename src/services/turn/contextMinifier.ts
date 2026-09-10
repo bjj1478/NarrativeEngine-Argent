@@ -8,7 +8,7 @@
  * Original lore files stay human-readable; this is transport-only.
  */
 
-import type { LoreChunk, NPCEntry, InventoryItem, InventoryItemCategory, CharacterProfile } from '../../types';
+import type { LoreChunk, NPCEntry, InventoryItem, InventoryItemCategory } from '../../types';
 import { readPcAffinity } from '../npc/affinityAccess';
 
 /**
@@ -209,24 +209,6 @@ export function buildInventoryIndex(items: InventoryItem[]): string {
     return `[INVENTORY INDEX — ${items.length} items]\n${lines.join('\n')}\n[/INVENTORY]`;
 }
 
-export function buildProfileIndex(profile: CharacterProfile): string {
-    const parts: string[] = [];
-    parts.push(`${profile.name || '???'} | ${profile.race || '?'} ${profile.class || '?'} Lv${profile.level}`);
-    if (profile.hp) parts.push(`HP:${profile.hp.current}/${profile.hp.max}`);
-    if (profile.mp) parts.push(`MP:${profile.mp.current}/${profile.mp.max}`);
-    if (Object.keys(profile.stats).length > 0) {
-        const stats = Object.entries(profile.stats)
-            .filter(([, v]) => typeof v === 'number')
-            .map(([k, v]) => `${k.slice(0, 3).toUpperCase()}:${v}`)
-            .join(' ');
-        parts.push(stats);
-    }
-    if (profile.skills.length > 0) parts.push(`Skills: ${profile.skills.join(', ')}`);
-    if (profile.abilities.length > 0) parts.push(`Abilities: ${profile.abilities.join(', ')}`);
-    if (profile.traits.length > 0) parts.push(`Traits: ${profile.traits.join(', ')}`);
-    return `[PROFILE INDEX]\n${parts.join(' | ')}\n[/PROFILE]`;
-}
-
 export function minifySelectedInventory(
     items: InventoryItem[],
     selectedCategories: (InventoryItemCategory | 'equipped')[]
@@ -250,44 +232,3 @@ export function minifySelectedInventory(
     return blocks.join('\n');
 }
 
-export function minifySelectedProfile(
-    profile: CharacterProfile,
-    selectedFields: string[]
-): string {
-    const parts: string[] = [];
-    const want = (k: string) => selectedFields.includes(k);
-    if (want('name')) parts.push(profile.name || '???');
-    if (want('race')) parts.push(profile.race || '?');
-    if (want('class')) parts.push(profile.class || '?');
-    if (want('level')) parts.push(`Lv${profile.level}`);
-    if (want('hp') && profile.hp) parts.push(`HP:${profile.hp.current}/${profile.hp.max}`);
-    if (want('mp') && profile.mp) parts.push(`MP:${profile.mp.current}/${profile.mp.max}`);
-    if (want('stats') && Object.keys(profile.stats).length > 0) {
-        parts.push(Object.entries(profile.stats).map(([k, v]) => `${k.slice(0, 3).toUpperCase()}:${v}`).join('|'));
-    }
-    if (want('skills') && profile.skills.length > 0) parts.push(`SK:${profile.skills.join(',')}`);
-    if (want('abilities') && profile.abilities.length > 0) parts.push(`AB:${profile.abilities.join(',')}`);
-    if (want('traits') && profile.traits.length > 0) parts.push(`TR:${profile.traits.join(',')}`);
-    if (want('notes') && profile.notes) parts.push(`NT:${profile.notes.slice(0, 80)}`);
-    return parts.join(' | ');
-}
-
-export function minifyBookkeepingStub(
-    profile: CharacterProfile,
-    items: InventoryItem[]
-): string {
-    const parts: string[] = [];
-    parts.push(`CHAR:${profile.name || '???'}|${profile.race || '?'} ${profile.class || '?'}|Lv${profile.level}`);
-    if (profile.hp) parts.push(`HP:${profile.hp.current}/${profile.hp.max}`);
-    const currency = items
-        .filter(i => i.category === 'currency')
-        .map(i => `${i.qty}${i.name}`)
-        .join(',');
-    if (currency) parts.push(`CR:${currency}`);
-    const equipped = items
-        .filter(i => i.equipped)
-        .map(i => `${i.name}${i.qty > 1 ? `x${i.qty}` : ''}`)
-        .join(', ');
-    if (equipped) parts.push(`EQP:${equipped}`);
-    return parts.join(' | ');
-}

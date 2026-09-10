@@ -264,19 +264,6 @@ export interface PlayerCharacter {
     name: string;
 }
 
-export interface CharacterProfile {
-    name: string;
-    hp: number;
-    stats: {
-        str: number;
-        dex: number;
-        con: number;
-        int: number;
-        wis: number;
-        cha: number;
-    };
-}
-
 export interface InventoryItem {
     id: string;
     name: string;
@@ -518,7 +505,6 @@ export interface ModData {
     readonly loreChunks: readonly LoreChunk[];
     readonly divergenceRegister: DivergenceRegister;
     readonly playerCharacter: PlayerCharacter | null;
-    readonly characterSheet: CharacterProfile;
     readonly inventory: readonly InventoryItem[];
     readonly location: ModLocation;
 }
@@ -545,7 +531,6 @@ export interface ModConfig {
  * synchronous. A promise here would promise a durability we do not deliver.
  *
  * Whole-replacement writes are paired with their read:
- *   - `setCharacterSheet` ← `data.characterSheet`
  *   - `setInventory` ← `data.inventory`
  *   - `setLocationLedger` ← `data.location.ledger`
  *   - `setDivergenceRegister` ← `data.divergenceRegister`
@@ -573,8 +558,6 @@ export interface ModWrites {
     addNpcSuggestions(names: string[], context?: string): void;
     addMessage(msg: ChatMessage): void;
     updatePlayerCharacter(patch: Partial<PlayerCharacter>): void;
-    /** Whole-replacement — pair with `data.characterSheet`. */
-    setCharacterSheet(profile: CharacterProfile): void;
     /** Whole-replacement — pair with `data.inventory`. */
     setInventory(items: InventoryItem[]): void;
     /** Whole-replacement — pair with `data.location.ledger`. */

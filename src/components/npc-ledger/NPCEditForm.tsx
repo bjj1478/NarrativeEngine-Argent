@@ -121,10 +121,6 @@ export function NPCEditForm({
         const list = [...(kit[field] || [])].filter((_, i) => i !== index);
         setForm({ ...form, signatureKit: { ...kit, [field]: list } });
     };
-    const setKitElement = (value: string) => {
-        const kit = form.signatureKit ?? emptyKit;
-        setForm({ ...form, signatureKit: { ...kit, element: value } });
-    };
 
     if (!selectedId && !isEditing) {
         return (
@@ -388,17 +384,6 @@ export function NPCEditForm({
                             {(form.signatureKit?.abilities || []).length === 0 && (
                                 <p className="text-[10px] text-text-dim/40 italic">No signature powers.</p>
                             )}
-                        </div>
-                        <div>
-                            <label className="block text-amber-300 text-[10px] uppercase tracking-wider mb-1">Element / Affinity</label>
-                            <input
-                                type="text"
-                                value={form.signatureKit?.element || ''}
-                                onChange={e => setKitElement(e.target.value)}
-                                disabled={!isEditing}
-                                placeholder="e.g. fire (optional)"
-                                className="w-full bg-surface border border-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-dim/50 disabled:opacity-70 disabled:bg-void disabled:border-transparent focus:outline-none focus:border-amber-300"
-                            />
                         </div>
                     </div>
 

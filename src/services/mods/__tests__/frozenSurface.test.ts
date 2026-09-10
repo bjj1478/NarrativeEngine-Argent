@@ -83,7 +83,7 @@ describe('Phase 9.2 — the frozen surface: the shipped .d.ts', () => {
     it('exports exactly the frozen type set', () => {
         expect(exportedTypeNames().sort()).toEqual([
             // Host value types a mod reads
-            'AiTier', 'ArchiveIndexEntry', 'ChatMessage', 'CharacterProfile',
+            'AiTier', 'ArchiveIndexEntry', 'ChatMessage',
             'DivergenceEntry', 'DivergenceRegister', 'GameContextPatch',
             'InventoryItem', 'LocationEntry', 'LocationSuggestion', 'LoreChunk',
             'ModChapter', 'ModNpcEntry', 'ModNpcPatch', 'NPCEntry',
@@ -144,7 +144,7 @@ describe('Phase 9.2 — the frozen surface: the shipped .d.ts', () => {
 
     it('pins ModData — every host read a mod may perform', () => {
         expect(membersOf('ModData')).toEqual([
-            'archiveIndex', 'campaignId', 'chapters', 'characterSheet',
+            'archiveIndex', 'campaignId', 'chapters',
             'divergenceRegister', 'inventory', 'location', 'loreChunks',
             'messages', 'npcLedger', 'onStageNpcIds', 'playerCharacter',
             'playerInput', 'timeline',
@@ -154,7 +154,7 @@ describe('Phase 9.2 — the frozen surface: the shipped .d.ts', () => {
     it('pins ModWrites — every host write a mod may perform', () => {
         expect(membersOf('ModWrites')).toEqual([
             'addLocationSuggestions', 'addMessage', 'addNpcSuggestions',
-            'archiveNPC', 'requestBackup', 'restoreNPC', 'setCharacterSheet',
+            'archiveNPC', 'requestBackup', 'restoreNPC',
             'setDivergenceRegister', 'setInventory', 'setLocationLedger',
             'updateContext', 'updateNPC', 'updatePlayerCharacter',
         ].sort());

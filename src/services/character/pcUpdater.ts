@@ -2,10 +2,13 @@ import type { ChatMessage, NPCEntry, PlayerCharacter } from '../../types';
 import type { ModelRequest } from '../turn/hostFacade';
 import { sanitizeSignatureKit } from '../npc/signatureKit';
 
+// `status` used to be here. It moved to the per-turn `propose_condition_change` tool,
+// along with the new `condition` field: body state and liveness now change the turn the
+// fiction changes them, and the player confirms them, rather than being written silently
+// five scenes later. What is left is the slow-moving identity material.
 export const ALLOWED_CHANGE_KEYS = new Set([
     'signatureKit',
     'appearance',
-    'status',
     'faction',
     'wants',
 ]);
@@ -58,7 +61,6 @@ export async function checkCharacterDrift(
     const recentContext = history.slice(-5).map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
 
     let data = `[PLAYER CHARACTER: ${pc.name}]\n` +
-        `Status: ${pc.status || 'Alive'}\n` +
         `Appearance: ${pc.appearance || 'Unknown'}\n` +
         `Disposition: ${pc.disposition || 'Unknown'}\n` +
         `Personality: ${pc.personality || pc.disposition || 'Unknown'}\n` +
@@ -77,16 +79,16 @@ export async function checkCharacterDrift(
     // if a narrated event changed it. Absent = no kit (plain character).
     if (pc.signatureKit) {
         const k = pc.signatureKit;
-        data += `SignatureKit: gear=[${k.equipment.join(', ') || 'none'}] powers=[${k.abilities.join(', ') || 'none'}]${k.element ? ` element=${k.element}` : ''}\n`;
+        data += `SignatureKit: gear=[${k.equipment.join(', ') || 'none'}] powers=[${k.abilities.join(', ') || 'none'}]\n`;
     }
 
-    const prompt = `You are a background game state analyzer. Your job is to read the RECENT CONTEXT of an RPG session and determine if the PLAYER CHARACTER has undergone a shift in their status, appearance, faction, or signature gear/powers.
+    const prompt = `You are a background game state analyzer. Your job is to read the RECENT CONTEXT of an RPG session and determine if the PLAYER CHARACTER has undergone a shift in their appearance, faction, or signature gear/powers.
 
 OUTPUT FORMAT — a single JSON object:
 {"changes": { ...only the fields that changed... }}
 
 Allowed "changes" keys (send ONLY fields that fundamentally changed):
-  status, appearance, faction (can list multiple comma-separated factions), wants (medium/long text only — NEVER include "short"),
+  appearance, faction (can list multiple comma-separated factions), wants (medium/long text only — NEVER include "short"),
   signatureKit.
 DO NOT include attributes that stayed the same. If nothing fundamental changed, "changes" is {}.
 
@@ -95,9 +97,14 @@ DO NOT include attributes that stayed the same. If nothing fundamental changed, 
   - "drives" — superseded by "wants". Never send.
   - "affinity" / "pcRelation" / "relations" — relationship standing is engine-owned and meaningless for the PC. NEVER send.
   - "disposition", "voice", "personality", "storyRelevance", "behavioralTriggers", "hardBoundaries", "softBoundaries", "visualProfile" — out of scope for this updater.
+  - "status" / "condition" — whether the character is alive, dead, missing or held, and whether they are hurt, are proposed to the player turn by turn by a different tool. NEVER send either.
+
+APPEARANCE vs CONDITION — the line that matters here:
+  - "appearance" is what someone LOOKS like once things have settled: build, colouring, dress, and PERMANENT marks. A scar that will outlast healing belongs here.
+  - An active, treatable injury does NOT. "bleeding from the shoulder" is a condition, not an appearance, and it is not yours to record.
 
 SIGNATURE KIT RULES:
-  - "signatureKit" is the player character's durable loadout: {"equipment": string[], "abilities": string[], "element": string}. It keeps gear and powers CONSISTENT across the campaign.
+  - "signatureKit" is the player character's durable loadout: {"equipment": string[], "abilities": string[]}. It keeps gear and powers CONSISTENT across the campaign.
   - Only send it when the scene NARRATES a real change: the PC gains/loses/breaks a signature item, learns or loses a power, or is transformed. The PC merely *using* gear they already have is NOT a change — send nothing.
   - Send ONLY the channel that changed. To update gear, send just "equipment" (the full new signature list, max 8); to update powers, send just "abilities". Never re-emit an unchanged channel.
   - Default is NO change. Most turns have no signatureKit update.
@@ -107,9 +114,6 @@ WANTS UPDATE RULES:
   - You may ONLY revise "medium" and "long". NEVER include "short" — it is engine-managed and always preserved. If you include "short", it will be discarded.
   - "long" is a single overarching life goal — update only if a transformative event reshaped it.
   - "medium" is arc-level goal templates — update if the story moved to a new arc.
-
-GENERAL RULES:
-- Valid statuses: Alive, Deceased, Missing, Unknown, In Custody.
 
 EXAMPLES:
 
@@ -126,10 +130,17 @@ BAD — sending a FORBIDDEN/engine-owned key:
 {"changes": {"personalityHex": {"boldness": +1}, "traits": ["brave"], "pcRelation": +1}}
 Corrected: drop the forbidden keys entirely. The engine owns them.
 
-BAD — re-emitting unchanged attributes (status/faction all unchanged here):
-{"changes": {"status": "Alive", "faction": "Ironspire Knights", "appearance": "tall, dark hair"}}
+GOOD — a healed wound left a permanent mark (the mark is appearance; the wound was never this updater's business):
+{"changes": {"appearance": "now bears a scar across the left eye"}}
+
+BAD — re-emitting unchanged attributes (faction unchanged here):
+{"changes": {"faction": "Ironspire Knights", "appearance": "tall, dark hair"}}
 Corrected: include ONLY the field that changed —
 {"changes": {"appearance": "now bears a scar across the left eye"}}
+
+BAD — sending body state, which belongs to the per-turn proposal tool:
+{"changes": {"status": "Deceased", "condition": "bleeding badly"}}
+Corrected: drop both. This updater does not decide whether the character is hurt or alive.
 
 [RECENT CONTEXT]
 ${recentContext}

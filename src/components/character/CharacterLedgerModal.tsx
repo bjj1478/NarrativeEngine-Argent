@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
-import { FileText, ScrollText, Package, BarChart3, Upload, Download } from 'lucide-react';
+import { FileText, ScrollText, Package, Upload, Download } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { SheetTab, type SheetTabHandle } from './tabs/SheetTab';
 import { RecordTab } from './tabs/RecordTab';
 import { InventoryTab } from './tabs/InventoryTab';
-import { StatsTab } from './tabs/StatsTab';
 import { AIGuidedCreationWizard } from './AIGuidedCreationWizard';
 import { ImportChoiceDialog } from '../npc-ledger/ImportChoiceDialog';
 import { UnsavedChangesDialog } from './UnsavedChangesDialog';
@@ -15,13 +14,12 @@ import { ScreenLightbox } from '../ScreenLightbox';
 import { uid } from '../../utils/uid';
 import type { NPCEntry, PlayerCharacter } from '../../types';
 
-type LedgerTab = 'sheet' | 'record' | 'inventory' | 'stats';
+type LedgerTab = 'sheet' | 'record' | 'inventory';
 
 const TABS: { key: LedgerTab; Icon: typeof FileText; label: string }[] = [
     { key: 'sheet' as const,     Icon: FileText,  label: 'Sheet' },
     { key: 'record' as const,    Icon: ScrollText, label: 'Record' },
     { key: 'inventory' as const, Icon: Package,   label: 'Inventory' },
-    { key: 'stats' as const,     Icon: BarChart3,  label: 'Stats' },
 ];
 
 /**
@@ -29,12 +27,16 @@ const TABS: { key: LedgerTab; Icon: typeof FileText; label: string }[] = [
  *
  * Replaces `pc/PCPanelModal.tsx` (WO-A Phase 2). Pairs with the NPC Ledger:
  * both are owner-grouped modals. Same store wiring (`pcPanelOpen`,
- * `togglePCPanel`), same Escape handling, plus a 4-tab bar:
+ * `togglePCPanel`), same Escape handling, plus a 3-tab bar:
  *
- *   Sheet     — user authors (PCEditForm: identity, kit, hex, wants, portrait)
- *   Record    — engine writes, user curates (active traits, superseded, bonds, events)
+ *   Sheet     — user authors (PCEditForm: identity, kit, hex, wants, relationships, portrait)
+ *   Record    — engine writes, user curates (active traits, superseded, established events)
  *   Inventory — engine scans, user edits (the inventory grid)
- *   Stats     — engine scans, user edits (characterProfileData: hp/level/skills)
+ *
+ * There was a fourth tab, Stats, editing hp/level/skills on a parallel character sheet.
+ * Both the sheet and those numbers are gone — see services/payload/playerCharacter.ts.
+ * Relationships live on Sheet only; Record used to render a second, read-only copy of the
+ * same bonds plus a duplicate RelationshipMemoryEditor over the same store data.
  *
  * The old `pc` and `book` drawer tabs are gone; their editors moved in here.
  * Prompt-budget controls (TokenGauge, Smart Injection global toggle,
@@ -237,7 +239,6 @@ export function CharacterLedgerModal() {
                             {activeTab === 'sheet' && <SheetTab ref={sheetRef} onStartGuidedCreation={() => setGuidedMode(true)} />}
                             {activeTab === 'record' && <RecordTab />}
                             {activeTab === 'inventory' && <InventoryTab />}
-                            {activeTab === 'stats' && <StatsTab />}
                         </div>
                     </>
                 )}

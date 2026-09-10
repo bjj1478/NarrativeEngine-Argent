@@ -119,7 +119,7 @@ export function createNativeApi(ctx) {
             }
             if (request.capability === 'campaign.read') {
                 if (request.resource === 'characters') return buildCharacters(ctx.data);
-                if (request.resource === 'character-sheet') return ctx.data.characterSheet;
+                if (request.resource === 'character-sheet') return { abilities: ctx.data.playerCharacter?.signatureKit?.abilities || [] };
                 if (request.resource === 'inventory') return ctx.data.inventory;
                 if (request.resource === 'recent-play') return (ctx.data.messages || []).slice(-20);
             }

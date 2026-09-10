@@ -15,17 +15,17 @@ function createComputeHarness(overrides = {}) {
         ['proposals', []], ['config', null], ['prompt-index', []],
         ...Object.entries(overrides.tables || {}),
     ]);
-    const setCharacterSheet = vi.fn();
+    const updatePlayerCharacter = vi.fn();
     const ctx = {
-        data: { messages: [], npcLedger: [], playerCharacter: null, characterSheet: null, inventory: [], ...(overrides.data || {}) },
+        data: { messages: [], npcLedger: [], playerCharacter: null, inventory: [], ...(overrides.data || {}) },
         table: {
             read: vi.fn(async (name) => structuredClone(rows.get(name))),
             write: vi.fn(async (name, value) => rows.set(name, structuredClone(value))),
         },
-        write: { setCharacterSheet },
+        write: { updatePlayerCharacter },
         model: { available: vi.fn(() => false), callJson: vi.fn() },
     };
-    return { ctx, rows, setCharacterSheet };
+    return { ctx, rows, updatePlayerCharacter };
 }
 
 describe('Ability & Power Compendium v2 module', () => {
@@ -52,7 +52,7 @@ describe('Ability & Power Compendium v2 module', () => {
 
     it('queues sheet abilities for approval and removes only approved source lines', async () => {
         const first = createComputeHarness({
-            data: { playerCharacter: { id: 'pc1', name: 'Mira' }, characterSheet: { name: 'Mira', abilities: ['Cantrip: Mage Hand'] } },
+            data: { playerCharacter: { id: 'pc1', name: 'Mira', signatureKit: { equipment: [], abilities: ['Cantrip: Mage Hand'] } } },
         });
         await runAbilityCompendium(first.ctx);
         expect(first.rows.get('proposals')).toEqual([
@@ -61,10 +61,14 @@ describe('Ability & Power Compendium v2 module', () => {
 
         const second = createComputeHarness({
             tables: { config: { consumedProfileAbilities: ['Cantrip: Mage Hand'] } },
-            data: { playerCharacter: { id: 'pc1', name: 'Mira' }, characterSheet: { name: 'Mira', abilities: ['Cantrip: Mage Hand', 'Darkvision'] } },
+            data: { playerCharacter: { id: 'pc1', name: 'Mira', signatureKit: { equipment: [], abilities: ['Cantrip: Mage Hand', 'Darkvision'] } } },
         });
         await runAbilityCompendium(second.ctx);
-        expect(second.setCharacterSheet).toHaveBeenCalledWith({ name: 'Mira', abilities: ['Darkvision'] });
+        // The PC's abilities now live on the signature kit, so the consume path patches
+        // that channel instead of replacing a whole character sheet.
+        expect(second.updatePlayerCharacter).toHaveBeenCalledWith({
+            signatureKit: { equipment: [], abilities: ['Darkvision'] },
+        });
         expect(second.rows.get('config').consumedProfileAbilities).toEqual([]);
     });
 });

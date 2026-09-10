@@ -1,4 +1,4 @@
-import type { SemanticFact, NPCEntry, CharacterTrait, CharacterProfileState, SceneEventType } from '../../types';
+import type { SemanticFact, NPCEntry, CharacterTrait, SceneEventType } from '../../types';
 import { CORE_FLOOR_TRAITS } from '../../types';
 import { countTokens } from '../infrastructure/tokenizer';
 import { PROPER_NOUN_STOP_WORDS } from '../../utils/stopWords';
@@ -96,19 +96,20 @@ export function formatFactsForContext(facts: SemanticFact[]): string {
 // tags, or when plannerEventTypes is empty, bypass the tag filter (fault
 // tolerance — missing planner output degrades to "inject best by score").
 
-/** Caller-supplied gates for {@link formatTraitsForContext}. */
-export type FormatTraitsOptions = {
-    /**
-     * Emit the PC's stat block. Defaults to FALSE — the caller must opt in, normally by
-     * asking whether the turn's recommender put `'stats'` in `profileFields`.
-     */
-    includeStats?: boolean;
-};
-
 export type SelectedTraits = {
     core: CharacterTrait[];
     extended: CharacterTrait[];
 };
+
+/**
+ * The exact line the payload emits for a trait, so the budget below measures the string
+ * that actually ships. It used to carry `[category]` and `[imp:N tags:…]` — selection
+ * bookkeeping the writer had no use for, and one more number in the prompt.
+ * See services/payload/playerCharacter.ts.
+ */
+function formatTraitLine(trait: CharacterTrait): string {
+    return `▸ ${trait.text}`;
+}
 
 export function queryTraits(
     traits: CharacterTrait[],
@@ -182,64 +183,4 @@ export function queryTraits(
     }
 
     return { core, extended };
-}
-
-function formatTraitLine(trait: CharacterTrait): string {
-    return `\u25b8 [${trait.category}] ${trait.text} [imp:${trait.importance}${trait.eventTags.length > 0 ? ` tags:${trait.eventTags.join(',')}` : ''}]`;
-}
-
-export function formatTraitsForContext(
-    profile: CharacterProfileState,
-    selected: SelectedTraits,
-    opts: FormatTraitsOptions = {},
-): string {
-    // WO-A rewrite 2 §2: strengthened the persona label so the LLM treats this
-    // block as the human's player character (the protagonist), not just a
-    // generic "character profile" blob. The legacy `[CHARACTER PROFILE]`
-    // marker is kept as the second line so existing tests + any external
-    // parsers that grep for it still match.
-    const parts: string[] = [
-        '[PLAYER CHARACTER — the human you are playing with]',
-        '[CHARACTER PROFILE]',
-    ];
-
-    const id = profile.identity;
-    const idParts: string[] = [];
-    if (id.name) idParts.push(id.name);
-    if (id.race) idParts.push(id.race);
-    if (id.class) idParts.push(id.class);
-    if (id.archetype) idParts.push(id.archetype);
-    if (id.level !== undefined) idParts.push(`Level ${id.level}`);
-    if (idParts.length > 0) parts.push(idParts.join(' | '));
-
-    // Stats are gated, and default to OFF. This block used to emit every stat on the sheet
-    // unconditionally — `PWR 14 | SPD 12` — while the traits three lines below went through
-    // full relevance selection. That asymmetry was the bug: the writer got a set of bare
-    // numbers no rule claimed, banded, or forbade it from reading back out into the prose.
-    //
-    // The gate is the caller's, because the authority already exists: the recommender's
-    // `profileFields` decides this for the smart-bookkeeping branch (contextMinifier's
-    // `minifySelectedProfile`, `want('stats')`). Now both branches answer to it.
-    //
-    // Defaulting to false makes omission the failure mode, matching that branch — where an
-    // absent `profileFields` yields no profile block at all — and the engine's standing
-    // convention that an unknown fact does not satisfy a condition.
-    if (opts.includeStats && profile.stats) {
-        const s = profile.stats;
-        const statParts = Object.entries(s).map(([k, v]) => `${k.toUpperCase()} ${v}`);
-        if (statParts.length > 0) parts.push(statParts.join(' | '));
-    }
-
-    if (selected.core.length > 0) {
-        parts.push('Core:');
-        for (const t of selected.core) parts.push(formatTraitLine(t));
-    }
-
-    if (selected.extended.length > 0) {
-        parts.push('Scene-relevant:');
-        for (const t of selected.extended) parts.push(formatTraitLine(t));
-    }
-
-    parts.push('[END CHARACTER PROFILE]');
-    return parts.join('\n');
 }

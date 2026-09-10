@@ -31,7 +31,6 @@ import type {
     ArchiveChapter,
     PinnedExcerpt,
     SceneEventType,
-    InventoryItemCategory,
     LocationEntry,
     ChatMessage,
     EndpointConfig,
@@ -51,8 +50,10 @@ function baseContext(): GameContext {
         headerIndex: 'CHAPTER 1 — The Road.',
         starter: 'You stand at a crossroads.',
         continuePrompt: 'What do you do?',
-        inventory: 'A worn sword; a healing draught.',
-        inventoryLastScene: 'Scene 5',
+        inventoryItems: [
+            { id: 'g1', name: 'worn sword', qty: 1, category: 'weapon', keywords: [], equipped: true, lastUsedScene: '005', importance: 5, notes: '', locationTag: 'inventory' },
+            { id: 'g2', name: 'healing draught', qty: 1, category: 'consumable', keywords: [], equipped: false, lastUsedScene: '005', importance: 5, notes: '', locationTag: 'inventory' },
+        ],
         characterProfile: 'Kael, ranger. Tall, quiet, scarred.',
         characterProfileLastScene: 'Scene 5',
         canonStateActive: true,
@@ -181,8 +182,6 @@ const SLOTTED: SlottedRagSnippet[] = [
     { sceneId: '001', chapterId: 'CH01', snippet: 'A hidden vault beneath the chapel.', witnessedBy: 'all' },
 ];
 
-const INVENTORY_CATEGORIES: (InventoryItemCategory | 'equipped')[] = ['weapon'];
-const PROFILE_FIELDS: string[] = ['appearance', 'personality'];
 const LOCATION_LEDGER: LocationEntry[] = [
     { id: 'loc1', name: 'The Crossed Swords Tavern', aliases: '', description: '', connections: [] } as LocationEntry,
 ];
@@ -213,8 +212,6 @@ function buildFullPayloadPositional() {
         semanticFactText: SEMANTIC_FACT_TEXT,
         archiveIndex: ARCHIVE_INDEX,
         timelineEvents: TIMELINE,
-        inventoryCategories: INVENTORY_CATEGORIES,
-        profileFields: PROFILE_FIELDS,
         deepContextSummary: DEEP_CONTEXT_SUMMARY,
         divergenceRegister: makeRegister(),
         chapters: CHAPTERS,
@@ -320,7 +317,7 @@ describe('WO-P1-01 — buildPayload golden snapshot (byte-identical pre/post ref
             settings: baseSettings(), context: baseContext(), history: HISTORY, userMessage: USER_MESSAGE,
             condensedUpToIndex: 2, relevantLore: LORE, npcLedger: NPCS, archiveRecall: ARCHIVE_RECALL,
             recommendedNPCNames: ['Aldric'], semanticFactText: SEMANTIC_FACT_TEXT, archiveIndex: ARCHIVE_INDEX,
-            timelineEvents: TIMELINE, inventoryCategories: INVENTORY_CATEGORIES, profileFields: PROFILE_FIELDS,
+            timelineEvents: TIMELINE,
             deepContextSummary: DEEP_CONTEXT_SUMMARY, divergenceRegister: makeRegister(), chapters: CHAPTERS,
             onStageNpcIds: ['npc_a'], relevantRules: RULES, rulesManifest: RULES_MANIFEST,
             pinnedExcerpts: PINNED, plannerEventTypes: PLANNER_EVENT_TYPES, locationLedger: LOCATION_LEDGER,
@@ -331,7 +328,7 @@ describe('WO-P1-01 — buildPayload golden snapshot (byte-identical pre/post ref
             settings: baseSettings(), context: baseContext(), history: HISTORY, userMessage: USER_MESSAGE,
             condensedUpToIndex: 2, relevantLore: LORE, npcLedger: NPCS, archiveRecall: ARCHIVE_RECALL,
             recommendedNPCNames: ['Aldric'], semanticFactText: SEMANTIC_FACT_TEXT, archiveIndex: ARCHIVE_INDEX,
-            timelineEvents: TIMELINE, inventoryCategories: INVENTORY_CATEGORIES, profileFields: PROFILE_FIELDS,
+            timelineEvents: TIMELINE,
             deepContextSummary: DEEP_CONTEXT_SUMMARY, divergenceRegister: makeRegister(), chapters: CHAPTERS,
             onStageNpcIds: ['npc_a'], relevantRules: RULES, rulesManifest: RULES_MANIFEST,
             pinnedExcerpts: PINNED, plannerEventTypes: PLANNER_EVENT_TYPES, locationLedger: LOCATION_LEDGER,
@@ -349,7 +346,7 @@ describe('WO-P1-01 — buildPayload golden snapshot (byte-identical pre/post ref
             settings: baseSettings(), context: baseContext(), history: HISTORY, userMessage: USER_MESSAGE,
             condensedUpToIndex: 2, relevantLore: LORE, npcLedger: NPCS, archiveRecall: ARCHIVE_RECALL,
             recommendedNPCNames: ['Aldric'], semanticFactText: SEMANTIC_FACT_TEXT, archiveIndex: ARCHIVE_INDEX,
-            timelineEvents: TIMELINE, inventoryCategories: INVENTORY_CATEGORIES, profileFields: PROFILE_FIELDS,
+            timelineEvents: TIMELINE,
             deepContextSummary: DEEP_CONTEXT_SUMMARY, divergenceRegister: makeRegister(),
             // chapters omitted — sceneContinue passes undefined when relevantRules present
             onStageNpcIds: ['npc_a'], relevantRules: RULES, rulesManifest: RULES_MANIFEST,
@@ -381,8 +378,6 @@ const gatherContextMock = vi.fn(async () => ({
     relevantLore: LORE,
     semanticArchiveIds: ['s1'],
     semanticLoreIds: ['l1'],
-    inventoryCategories: ['weapon'],
-    profileFields: ['appearance'],
     deepContextSummary: DEEP_CONTEXT_SUMMARY,
     semanticFactText: SEMANTIC_FACT_TEXT,
     relevantRules: RULES,
@@ -555,10 +550,9 @@ describe('WO-P1-01 — runTurn pre-payload path golden (byte-identical pre/post 
             expect(opts.archiveIndex).toBe(ARCHIVE_INDEX);
             // timelineEvents
             expect(opts.timelineEvents).toBe(TIMELINE);
-            // inventoryCategories
-            expect(opts.inventoryCategories).toEqual(['weapon']);
-            // profileFields
-            expect(opts.profileFields).toEqual(['appearance']);
+            // The recommender no longer selects inventory categories or sheet fields.
+            expect(opts).not.toHaveProperty('inventoryCategories');
+            expect(opts).not.toHaveProperty('profileFields');
             // deepContextSummary
             expect(opts.deepContextSummary).toBe(DEEP_CONTEXT_SUMMARY);
             // divergenceRegister (from state.divergenceRegister)

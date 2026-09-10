@@ -22,13 +22,11 @@ import { buildDefaultDiceSystem } from '../types';
 
 export const DEFAULT_CONTEXT = {
     loreRaw: '', rulesRaw: '', canonState: '', headerIndex: '',
-    starter: '', continuePrompt: '', inventory: '', characterProfile: { identity: {}, activeTraits: [] },
+    starter: '', continuePrompt: '',
     inventoryItems: [],
-    characterProfileData: { name: '', race: '', class: '', level: 1, hp: { current: 20, max: 20 }, stats: {}, skills: [], abilities: [], traits: [], notes: '' },
-    smartBookkeepingActive: true,
     surpriseDC: 95, encounterDC: 198, worldEventDC: 498,
     canonStateActive: false, headerIndexActive: false, starterActive: false,
-    continuePromptActive: false, inventoryActive: false, characterProfileActive: false,
+    continuePromptActive: false,
     surpriseEngineActive: false, encounterEngineActive: true, worldEngineActive: true,
     // Ask To Roll is the default and only dice mode: the GM asks, the player rolls real dice
     // and types the total. OFF means no dice at all — see the field doc on GameContext.

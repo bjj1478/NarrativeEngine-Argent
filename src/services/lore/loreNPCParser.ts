@@ -252,12 +252,11 @@ export function parseNPCsFromLore(chunks: LoreChunk[]): NPCEntry[] {
 
         // ---- Signature Kit (durable loadout — anti-drift for gear + powers). ----
         // Zero-LLM: parsed straight from lore bullets and bounded by the shared sanitizer
-        // (cap 8/channel, entry+element length caps) so a lore-seeded kit is identical in
+        // (cap 8/channel, entry length cap) so a lore-seeded kit is identical in
         // shape to one the post-turn updater would accept. Absent fields → undefined kit.
         const signatureKit = sanitizeSignatureKit({
             equipment: getStringList('SignatureEquipment') ?? getStringList('Equipment'),
             abilities: getStringList('SignatureAbilities') ?? getStringList('Abilities') ?? getStringList('Powers'),
-            element: getAny(['Element', 'SignatureElement']),
         });
 
         npcs.push({

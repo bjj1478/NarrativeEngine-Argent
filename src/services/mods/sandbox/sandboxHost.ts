@@ -34,7 +34,6 @@ const WRITE_NAMES = [
     'archiveNPC',
     'restoreNPC',
     'updatePlayerCharacter',
-    'setCharacterSheet',
     'setInventory',
     'setLocationLedger',
     'addLocationSuggestions',
@@ -216,12 +215,11 @@ export function applyJournal(
 
 /**
  * `API.md` §8.2 — the two renamed writes. The mod surface uses the new names
- * (`setCharacterSheet`, `setInventory`); the host facade still exposes the
+ * (`setInventory`); the host facade still exposes the
  * old names. This map is the single point of translation so a mod's
- * `ctx.write.setCharacterSheet(...)` reaches `facade.write.setCharacterProfileData(...)`.
+ * `ctx.write.setInventory(...)` reaches `facade.write.setInventoryItems(...)`.
  */
 const SANDBOX_WRITE_TO_FACADE_NAME: Record<string, string> = {
-    setCharacterSheet: 'setCharacterProfileData',
     setInventory: 'setInventoryItems',
 };
 

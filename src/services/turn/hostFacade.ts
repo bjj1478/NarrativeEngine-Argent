@@ -2,7 +2,6 @@ import type {
     AiTier,
     ArchiveChapter,
     ArchiveIndexEntry,
-    CharacterProfile,
     InventoryItem,
     LocationEntry,
     LocationSuggestion,
@@ -122,7 +121,6 @@ export interface FacadeWrites {
     readonly restoreNPC: (id: string) => void;
     readonly onDirectorBriefPhase: (phase: 'running' | 'done') => void;
     readonly updatePlayerCharacter: (patch: Partial<PlayerCharacter>) => void;
-    readonly setCharacterProfileData: (profile: CharacterProfile) => void;
     readonly setInventoryItems: (items: InventoryItem[]) => void;
     readonly setLocationLedger: (locations: LocationEntry[]) => void;
     readonly addLocationSuggestions: (suggestions: LocationSuggestion[]) => void;
@@ -401,7 +399,6 @@ export function buildHostFacade(
             case 'divergenceRegister': return live?.divergenceRegister ?? data.divergenceRegister;
             case 'chapters': return live?.chapters ?? data.chapters;
             case 'playerCharacter': return live?.playerCharacter ?? context.playerCharacter ?? null;
-            case 'characterSheet': return live?.characterProfileData ?? context.characterProfileData;
             case 'inventory': return live?.inventoryItems ?? context.inventoryItems;
             case 'location': {
                 // Phase 4.0 / `API.md` §8.6 item 7 — the reactive path and
@@ -462,7 +459,7 @@ export function buildHostFacade(
         return wrapped as T;
     };
     const write: FacadeWrites = Object.freeze({
-        updateContext: writeAfter(callbacks.updateContext, ['location', 'playerCharacter', 'characterSheet', 'inventory']) as FacadeWrites['updateContext'],
+        updateContext: writeAfter(callbacks.updateContext, ['location', 'playerCharacter', 'inventory']) as FacadeWrites['updateContext'],
         updateNPC: writeAfter(callbacks.updateNPC, ['npcLedger']) as FacadeWrites['updateNPC'],
         addMessage: writeAfter(callbacks.addMessage, ['messages']) as FacadeWrites['addMessage'],
         setDivergenceRegister: writeAfter(callbacks.setDivergenceRegister ?? (() => undefined), ['divergenceRegister']) as FacadeWrites['setDivergenceRegister'],
@@ -471,7 +468,6 @@ export function buildHostFacade(
         restoreNPC: writeAfter(callbacks.restoreNPC, ['npcLedger']) as FacadeWrites['restoreNPC'],
         onDirectorBriefPhase: callbacks.onDirectorBriefPhase ?? (() => undefined),
         updatePlayerCharacter: writeAfter(options.updatePlayerCharacter ?? (() => undefined), ['playerCharacter']) as FacadeWrites['updatePlayerCharacter'],
-        setCharacterProfileData: writeAfter(callbacks.setCharacterProfileData, ['characterSheet']) as FacadeWrites['setCharacterProfileData'],
         setInventoryItems: writeAfter(callbacks.setInventoryItems, ['inventory']) as FacadeWrites['setInventoryItems'],
         setLocationLedger: writeAfter(callbacks.setLocationLedger, ['location']) as FacadeWrites['setLocationLedger'],
         addLocationSuggestions: callbacks.addLocationSuggestions,

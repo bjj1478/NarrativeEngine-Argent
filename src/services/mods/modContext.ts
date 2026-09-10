@@ -24,7 +24,6 @@ import type {
     AiTier,
     ArchiveChapter,
     ArchiveIndexEntry,
-    CharacterProfile,
     ChatMessage,
     DivergenceRegister,
     GameContext,
@@ -165,7 +164,9 @@ export interface ModData {
     readonly loreChunks: readonly LoreChunk[];
     readonly divergenceRegister: DivergenceRegister;
     readonly playerCharacter: PlayerCharacter | null;
-    readonly characterSheet: CharacterProfile;
+    // `characterSheet: CharacterProfile` sat here — a numeric character sheet parallel to
+    // `playerCharacter`. It is gone, along with the level/HP/stats it carried. Mods that
+    // want the PC's signature abilities read `playerCharacter.signatureKit.abilities`.
     readonly inventory: readonly InventoryItem[];
     readonly location: ModLocation;
 }
@@ -212,7 +213,7 @@ export interface ModConfig {
  * `API.md` §5 — writes. Twelve of `FacadeWrites`' fourteen. Every one goes
  * through the same callback the app itself uses (`hostFacade.ts:298-313`) — no
  * direct store writes, ever (2.3 §3). Whole-replacement writes
- * (`setCharacterSheet`, `setInventory`, `setLocationLedger`,
+ * (`setInventory`, `setLocationLedger`,
  * `setDivergenceRegister`) are paired with their reads.
  *
  * Writes on `ctx.write` stay **synchronous and void**: the store callbacks are
@@ -227,7 +228,6 @@ export interface ModWrites {
     addNpcSuggestions(names: string[], context?: string): void;
     addMessage(msg: ChatMessage): void;
     updatePlayerCharacter(patch: Partial<PlayerCharacter>): void;
-    setCharacterSheet(profile: CharacterProfile): void;
     setInventory(items: InventoryItem[]): void;
     setLocationLedger(locations: LocationEntry[]): void;
     addLocationSuggestions(suggestions: LocationSuggestion[]): void;
@@ -880,7 +880,6 @@ function buildModData(
         loreChunks: facadeData.loreChunks,
         divergenceRegister: facadeData.divergenceRegister,
         playerCharacter: context.playerCharacter ?? null,
-        characterSheet: context.characterProfileData,
         inventory: context.inventoryItems,
         location,
     };
@@ -890,7 +889,7 @@ function buildModData(
  * Build the `ModWrites` view from the facade's `FacadeWrites`. Eleven of the
  * facade's twelve writes — `onDirectorBriefPhase` is deliberately absent
  * (`API.md` §5.1). The two renamed writes (`setCharacterProfileData` →
- * `setCharacterSheet`, `setInventoryItems` → `setInventory`) map to the
+ * `setInventoryItems` → `setInventory`) map to the
  * same callbacks, so the capability string, the write, and the read all
  * agree (`API.md` §8.2). Phase 8.2 §3 added `requestBackup` (twelfth),
  * wrapping the host's `preOpBackup` endpoint. Phase 8.3 removed
@@ -906,7 +905,6 @@ function buildModWrites(facade: HostFacade): ModWrites {
         addNpcSuggestions: (names, context) => facade.write.addNpcSuggestions(names, context),
         addMessage: (msg) => facade.write.addMessage(msg),
         updatePlayerCharacter: (patch) => facade.write.updatePlayerCharacter(patch),
-        setCharacterSheet: (profile) => facade.write.setCharacterProfileData(profile),
         setInventory: (items) => facade.write.setInventoryItems(items),
         setLocationLedger: (locations) => facade.write.setLocationLedger(locations),
         addLocationSuggestions: (suggestions) => facade.write.addLocationSuggestions(suggestions),

@@ -239,7 +239,6 @@ export function buildCommitCallbacks(
                 context: fresh.context,
             };
         },
-        setCharacterProfileData: store.setCharacterProfileData,
         setInventoryItems: store.setInventoryItems,
         setLocationLedger: store.setLocationLedger,
         addLocationSuggestions: store.addLocationSuggestions,
@@ -283,11 +282,16 @@ export function buildCommitCallbacks(
                 body: JSON.stringify({ trigger, isAuto: true }),
             }).catch(e => console.warn('[requestBackup] Failed:', e));
         },
+        // The commit path has no React state to write, so both staging callbacks surface
+        // through a custom event that ChatArea listens for. Unlikely to fire (swipes send
+        // `tools: undefined`), but wired so a late proposal reaches the player instead of
+        // vanishing. The listener was missing until now — the event was dispatched into
+        // nothing, and any proposal raised here was silently dropped.
         stageInventoryProposal: (proposal) => {
-            // No direct store slot; surface via a custom event the ChatArea listens to.
-            // For the commit path this is unlikely (swipes send tools: undefined), but
-            // wire it for parity so a late proposal doesn't crash.
             window.dispatchEvent(new CustomEvent('stage-inventory-proposal', { detail: proposal }));
+        },
+        stageConditionProposal: (proposal) => {
+            window.dispatchEvent(new CustomEvent('stage-condition-proposal', { detail: proposal }));
         },
     };
 }

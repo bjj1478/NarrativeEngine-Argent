@@ -27,7 +27,7 @@
     "capabilities": [
       "table:read:mod.ability-compendium.abilities", "table:read:mod.ability-compendium.assignments", "table:read:mod.ability-compendium.runtime", "table:read:mod.ability-compendium.proposals", "table:read:mod.ability-compendium.config",
       "table:write:mod.ability-compendium.proposals", "table:write:mod.ability-compendium.config", "table:write:mod.ability-compendium.prompt-index",
-      "write:setCharacterSheet", "model:utility"
+      "write:updatePlayerCharacter", "model:utility"
     ]
   },
   "native": {

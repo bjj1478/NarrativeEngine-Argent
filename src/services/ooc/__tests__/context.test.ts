@@ -16,7 +16,13 @@ const snapshot = {
     campaignId: 'campaign-1', provider: undefined, messages: [], semanticFacts: [], loreChunks: [], archiveIndex: [], npcLedger: [], locationLedger: [],
     context: {
         canonStateActive: false, canonState: '', sceneNoteActive: false, sceneNote: '', currentFeature: null, worldVibe: '',
-        characterProfile: { identity: { name: 'Ari', race: 'Elf', class: 'Ranger', level: 4 }, stats: { dex: 16, wis: 14 }, activeTraits: [], legacyNotes: 'Do not include me.' },
+        playerCharacter: {
+            id: 'pc-1', name: 'Ari', aliases: '', appearance: '', storyRelevance: '',
+            disposition: '', status: '', goals: '', voice: '', personality: '', exampleOutput: '',
+            affinity: 0, isPC: true, activeTraits: [], faction: 'Wardens',
+            // The one guard on the frozen-blob invariant: legacyNotes is storage, never prompt.
+            legacyNotes: 'Do not include me.',
+        },
         inventoryItems: Array.from({ length: 13 }, (_, index) => ({ id: `item-${index}`, name: `Item ${index}`, qty: index + 1, category: 'misc', equipped: index === 0, status: index === 1 ? 'damaged' : undefined })),
         notebookActive: true,
         notebook: Array.from({ length: 10 }, (_, index) => ({ id: `note-${index}`, text: `Note ${index}`, timestamp: index })),
@@ -40,15 +46,18 @@ const withLedgers = (patch: Partial<OocCampaignSnapshot>, contextPatch: Record<s
 describe('buildOocContext', () => {
     it('includes bounded data-only PC, inventory, and active notebook state', () => {
         const result = buildOocContext(snapshot, 'What equipment does Ari have?');
-        expect(result.text).toContain('PC identity: Ari | Elf | Ranger | Level 4');
-        expect(result.text).toContain('PC stats: DEX 16 | WIS 14');
+        // `PC identity` and `PC stats` are gone: they came from a parallel character record
+        // that described the same person the PC sheet below already describes, with a stat
+        // block in between. One record, one read.
+        expect(result.text).not.toContain('PC identity:');
+        expect(result.text).not.toContain('PC stats:');
         expect(result.text).toContain('Item 11 x12');
         expect(result.text).not.toContain('Item 12 x13');
         expect(result.text).toContain('Note 9');
         expect(result.text).not.toContain('Note 3');
         expect(result.text).not.toContain('Do not include me.');
         expect(result.sources).toEqual(expect.arrayContaining([
-            expect.objectContaining({ id: 'pc-identity' }),
+            expect.objectContaining({ id: 'pc-sheet' }),
             expect.objectContaining({ id: 'inventory-item-0' }),
             expect.objectContaining({ id: 'notebook-note-9' }),
         ]));
@@ -60,14 +69,12 @@ describe('buildOocContext', () => {
                 faction: 'Wardens',
                 signatureKit: { equipment: ['Yew longbow'], abilities: ['hunters mark'] },
                 pcRelation: 3,
-            }),
-            characterProfile: {
-                ...snapshot.context.characterProfile,
+                legacyNotes: 'Do not include me.',
                 activeTraits: [
                     { id: 't1', subject: 'Ari', text: 'Sworn to the Wardens', importance: 9, superseded: false },
                     { id: 't2', subject: 'Ari', text: 'Stale oath', importance: 10, superseded: true },
                 ],
-            },
+            }),
         }), 'Who am I loyal to?');
         expect(result.text).toContain('PC sheet (Ari): faction: Wardens');
         expect(result.text).toContain('kit: Yew longbow');

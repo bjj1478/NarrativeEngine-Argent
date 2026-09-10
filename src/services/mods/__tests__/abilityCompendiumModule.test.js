@@ -20,7 +20,6 @@ function harness(overrides = {}) {
     const ctx = {
         data: {
             playerCharacter: null,
-            characterSheet: { name: '', hp: 0, stats: {} },
             inventory: [],
             messages: [],
             npcLedger: [],
@@ -71,7 +70,7 @@ describe('Ability & Power Compendium Generation 1 module', () => {
     });
 
     it('does not attempt the removed character-sheet write surface', async () => {
-        const { ctx } = harness({ data: { characterSheet: { name: 'Mira', hp: 10, stats: {} } } });
+        const { ctx } = harness({ data: { playerCharacter: { id: 'pc1', name: 'Mira', signatureKit: { equipment: [], abilities: [] } } } });
         await runAbilityCompendium(ctx);
         expect(ctx.write).toBeUndefined();
     });

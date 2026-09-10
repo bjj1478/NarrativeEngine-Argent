@@ -293,18 +293,15 @@ async function runArchiveTrack(
     const bkProvider = state.getFreshProvider();
     const bkAvailable = facade ? hasHostModelRole(facade, 'story') : Boolean(bkProvider);
     const snapshotContext = facade?.data.context;
-    const freshContext = snapshotContext?.characterProfileActive ? snapshotContext : state.getFreshContext();
+    // Prefer the turn's frozen snapshot when it actually carries the PC, else re-read live
+    // state. This used to key off `characterProfileActive`, a flag that no longer exists —
+    // the PC record's own presence is the same signal without the indirection.
+    const freshContext = snapshotContext?.playerCharacter ? snapshotContext : state.getFreshContext();
     const inventoryItems = freshContext.inventoryItems || [];
-    const profileData = freshContext.characterProfileData || { name: '', race: '', class: '', level: 1, hp: { current: 20, max: 20 }, stats: {}, skills: [], abilities: [], traits: [], notes: '' };
     const scanMessages = facade?.data.messages ?? state.getMessages();
     const storyModelCall = facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('story', request) : undefined;
 
     const guardedUpdateContext = makeGuarded(facade?.write.updateContext ?? callbacks.updateContext, activeCampaignId, 'updateContext (bookkeeping scan)');
-    const guardedSetCharacterProfileData = makeGuarded(
-        callbacks.setCharacterProfileData,
-        activeCampaignId,
-        'setCharacterProfileData (Profile-Scan)',
-    );
     const guardedSetInventoryItems = makeGuarded(
         callbacks.setInventoryItems,
         activeCampaignId,
@@ -347,11 +344,9 @@ async function runArchiveTrack(
         snapshotContext,
         freshContext,
         inventoryItems,
-        profileData,
         scanMessages,
         storyModelCall,
         guardedUpdateContext,
-        guardedSetCharacterProfileData,
         guardedSetInventoryItems,
         guardedSetLocationLedger,
         guardedAddLocationSuggestions,

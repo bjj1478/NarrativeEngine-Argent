@@ -67,7 +67,6 @@ vi.mock('../../../../store/campaignStore', () => ({
     saveDivergenceRegister: vi.fn(),
 }));
 
-vi.mock('../../../characterProfileParser', () => ({ scanCharacterProfile: vi.fn() }));
 vi.mock('../../../characterTraitParser', () => ({ scanCharacterTraits: vi.fn() }));
 vi.mock('../../../inventoryParser', () => ({ scanInventory: vi.fn() }));
 vi.mock('../../../locationParser', () => ({ mergeLocationScanLedger: vi.fn(), scanLocation: vi.fn() }));
@@ -79,7 +78,6 @@ import { runPostTurnPipeline } from '../../postTurnPipeline';
 import { inventoryScanTrack } from '../postCommit/inventoryScanTrack';
 import { locationScanTrack } from '../postCommit/locationScanTrack';
 import { pcDriftTrack } from '../postCommit/pcDriftTrack';
-import { profileScanTrack } from '../postCommit/profileScanTrack';
 import { traitScanTrack } from '../postCommit/traitScanTrack';
 
 function makeGateContext(tier: 'lite' | 'pro' | 'max'): PostCommitTrackContext {
@@ -101,7 +99,9 @@ function makeGateContext(tier: 'lite' | 'pro' | 'max'): PostCommitTrackContext {
         bkProvider: undefined,
         bkAvailable: true,
         snapshotContext: undefined,
-        freshContext: { characterProfileActive: true } as PostCommitTrackContext['freshContext'],
+        // Trait scan now gates on the PC record existing, not on a `characterProfileActive`
+        // flag — the flag and the parallel profile it guarded are both gone.
+        freshContext: { playerCharacter: { id: 'pc1', name: 'Kael' } } as unknown as PostCommitTrackContext['freshContext'],
         inventoryItems: [],
         profileData: {} as PostCommitTrackContext['profileData'],
         scanMessages: [],
@@ -194,7 +194,6 @@ describe('Stage C bookkeeping tracks', () => {
     });
 
     it.each([
-        ['profile scan', profileScanTrack],
         ['trait scan', traitScanTrack],
         ['inventory scan', inventoryScanTrack],
         ['location scan', locationScanTrack],

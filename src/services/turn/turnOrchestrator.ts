@@ -1,5 +1,5 @@
 import { useAppStore } from '../../store/useAppStore';
-import type { AppSettings, GameContext, ChatMessage, NPCEntry, LoreChunk, CondenserState, ArchiveIndexEntry, TimelineEvent, EndpointConfig, ProviderConfig, ArchiveChapter, SamplingConfig, PipelinePhase, DivergenceRegister, InventoryProposal, PayloadTrace, SemanticFact } from '../../types';
+import type { AppSettings, GameContext, ChatMessage, NPCEntry, LoreChunk, CondenserState, ArchiveIndexEntry, TimelineEvent, EndpointConfig, ProviderConfig, ArchiveChapter, SamplingConfig, PipelinePhase, DivergenceRegister, InventoryProposal, ConditionProposal, PayloadTrace, SemanticFact } from '../../types';
 import type { OneShotEventId } from '../oneshot/oneShotEvents';
 import { createTurnContext } from './turnContext';
 import { buildHostFacade } from './hostFacade';
@@ -40,7 +40,6 @@ export type TurnCallbacks = {
         locationLedger: import('../../types').LocationEntry[];
         context: GameContext;
     };
-    setCharacterProfileData: (profile: import('../../types').CharacterProfile) => void;
     setInventoryItems: (items: import('../../types').InventoryItem[]) => void;
     setLocationLedger: (locations: import('../../types').LocationEntry[]) => void;
     addLocationSuggestions: (suggestions: import('../../types').LocationSuggestion[]) => void;
@@ -61,6 +60,10 @@ export type TurnCallbacks = {
     /** Stage a GM-proposed inventory change for user confirmation (Phase 6). The
      *  proposal does not mutate inventory until the user confirms it in the UI. */
     stageInventoryProposal?: (proposal: InventoryProposal) => void;
+    /** Stage a GM-proposed change to the PC's body state (injury, liveness) for user
+     *  confirmation. Same contract as the inventory proposal: nothing is written until
+     *  the user applies it in the UI. */
+    stageConditionProposal?: (proposal: ConditionProposal) => void;
     /**
      * Player-rolled resolution: the GM called `request_roll`, so generation SUSPENDS here
      * until the player types the total their physical dice showed. Resolve with the number,

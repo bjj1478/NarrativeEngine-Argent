@@ -127,10 +127,7 @@ function InventoryRow({
  * half of the old ContextDrawer `book` tab (BookkeepingTab.tsx).
  */
 export function InventoryTab() {
-    const context = useAppStore((s) => s.context);
-    const updateContext = useAppStore((s) => s.updateContext);
     const messages = useAppStore((s) => s.messages);
-    const archiveIndex = useAppStore((s) => s.archiveIndex);
 
     const inventoryItems = useAppStore((s) => s.inventoryItems ?? s.context.inventoryItems ?? []);
     const setInventoryItems = useAppStore((s) => s.setInventoryItems);
@@ -141,10 +138,6 @@ export function InventoryTab() {
     const [rawEdit, setRawEdit] = useState(false);
     const [isScanningInventory, setIsScanningInventory] = useState(false);
 
-    const getCurrentSceneId = (): string => {
-        if (archiveIndex.length === 0) return '1';
-        return archiveIndex[archiveIndex.length - 1].sceneId;
-    };
 
     const handleCheckInventory = async () => {
         if (isScanningInventory) return;
@@ -154,7 +147,6 @@ export function InventoryTab() {
             if (!provider) return;
             const newItems = await scanInventory(provider as ProviderConfig | EndpointConfig, messages, inventoryItems);
             setInventoryItems(newItems);
-            updateContext({ inventoryLastScene: getCurrentSceneId() });
         } catch (e) {
             console.error('Failed to scan inventory:', e);
             toast.error('Inventory scan failed');
@@ -298,7 +290,7 @@ export function InventoryTab() {
                 )}
 
                 <div className="mt-2 flex items-center justify-between">
-                    <span className="text-[9px]"><SceneTag lastScene={context.inventoryLastScene} /></span>
+                    <span className="text-[9px]"><SceneTag lastScene={'—'} /></span>
                     <button
                         onClick={handleCheckInventory}
                         disabled={isScanningInventory}

@@ -3,7 +3,6 @@ import { createPostTurnTrackRegistry, enablementFromSettings } from '../runner';
 import type { PostCommitTrackContext } from '../types';
 import { eventExtractionTrack } from './eventExtractionTrack';
 import { chapterSealTrack } from './chapterSealTrack';
-import { profileScanTrack } from './profileScanTrack';
 import { traitScanTrack } from './traitScanTrack';
 import { inventoryScanTrack } from './inventoryScanTrack';
 import { locationScanTrack } from './locationScanTrack';
@@ -16,7 +15,6 @@ export const postCommitTracks = createPostTurnTrackRegistry<PostCommitTrackConte
 
 postCommitTracks.register(eventExtractionTrack);
 postCommitTracks.register(chapterSealTrack);
-postCommitTracks.register(profileScanTrack);
 postCommitTracks.register(traitScanTrack);
 postCommitTracks.register(inventoryScanTrack);
 postCommitTracks.register(locationScanTrack);

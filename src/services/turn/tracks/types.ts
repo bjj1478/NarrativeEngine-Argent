@@ -1,7 +1,6 @@
 import type {
     ArchiveChapter,
     ArchiveIndexEntry,
-    CharacterProfile,
     ChatMessage,
     EndpointConfig,
     GameContext,
@@ -147,11 +146,9 @@ export interface PostCommitTrackContext {
     snapshotContext: GameContext | undefined;
     freshContext: GameContext;
     inventoryItems: InventoryItem[];
-    profileData: CharacterProfile;
     scanMessages: ChatMessage[];
     storyModelCall: ((request: ModelRequest) => Promise<ModelResponse>) | undefined;
     guardedUpdateContext: (patch: Partial<GameContext>) => void;
-    guardedSetCharacterProfileData: (profile: CharacterProfile) => void;
     guardedSetInventoryItems: (items: InventoryItem[]) => void;
     guardedSetLocationLedger: (locations: LocationEntry[]) => void;
     guardedAddLocationSuggestions: (suggestions: LocationSuggestion[]) => void;

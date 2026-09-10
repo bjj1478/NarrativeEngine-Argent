@@ -276,14 +276,17 @@ describe('WO-A2 §4.7 — commitCharacterDraft', () => {
         expect(parseStartingInventory(big).length).toBe(30);
     });
 
-    it('assemblePlayerCharacter extracts element from "(element: fire)" suffix', () => {
+    it('assemblePlayerCharacter keeps an "(element: fire)" suffix as ability text', () => {
+        // `signatureKit.element` is gone — a descriptive ability already says what the tag
+        // said. The parenthetical is no longer scraped into its own field; it just stays
+        // in the ability where it reads fine.
         const draft: CharacterCreationDraft = {
             name: 'Mage',
             answers: { 4: 'fire magic, ice bolts (element: fire)' },
         };
         const pc = assemblePlayerCharacter({ draft });
-        expect(pc.signatureKit?.element).toBe('fire');
-        expect(pc.signatureKit?.abilities).toEqual(['fire magic', 'ice bolts']);
+        expect(pc.signatureKit).not.toHaveProperty('element');
+        expect(pc.signatureKit?.abilities).toEqual(['fire magic', 'ice bolts (element: fire)']);
     });
 });
 
@@ -306,8 +309,13 @@ describe('WO-A2 §4.8 — pcUpdater whitelist', () => {
             affinity: 99,
         };
         const stripped = stripBlockedKeys(changes);
-        // Only the 5 allowed keys survive.
+        // Only the 4 allowed keys survive.
         expect(Object.keys(stripped).sort()).toEqual([...ALLOWED_CHANGE_KEYS].sort());
+        // `status` left this whitelist when body state moved to the per-turn
+        // propose_condition_change tool. Asserted explicitly because the key-count
+        // comparison above happens to balance either way.
+        expect(stripped.status).toBeUndefined();
+        expect((stripped as Record<string, unknown>).condition).toBeUndefined();
         expect(stripped.personalityHex).toBeUndefined();
         expect(stripped.traits).toBeUndefined();
         expect((stripped as Record<string, unknown>).relations).toBeUndefined();

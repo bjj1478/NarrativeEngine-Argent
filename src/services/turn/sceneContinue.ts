@@ -204,6 +204,11 @@ export function generateSceneContinuation(
                     // Registry handlers are pure. Continue carries no lore/notebook context, so
                     // both are empty — an unsolicited call resolves rather than hanging.
                     try {
+                        // Only `toolResult` is used here. Continue sanitizes with
+                        // `allowTools: false` and offers no tools at all, so a handler that
+                        // returns a staged proposal (inventory or condition) cannot be
+                        // reached on this path; if that ever changes, the proposal channels
+                        // need wiring rather than silently dropping.
                         const dispatchResult = handler({
                             arguments: toolCall.arguments,
                             loreChunks: [],

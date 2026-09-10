@@ -2,12 +2,13 @@ import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../../store/useAppStore';
-import type { PlayerCharacter, CharacterProfileState, NPCEntry } from '../../../types';
+import type { PlayerCharacter, NPCEntry } from '../../../types';
 import { DEFAULT_VISUAL_PROFILE } from '../../../types';
 import { toast } from '../../Toast';
 import { PCEditForm } from '../PCEditForm';
 import { useNpcPortraits } from '../../hooks/useNpcPortraits';
 import { uid } from '../../../utils/uid';
+import { pickSheetFields } from '../../../services/character/sheetFields';
 
 /**
  * Imperative handle exposed to the Character Ledger host so it can guard the
@@ -29,32 +30,24 @@ export interface SheetTabHandle {
  *  - No PC → create mode (empty draft) → `setPlayerCharacter` on save.
  *  - PC exists → view mode with an Edit toggle → `updatePlayerCharacter` on save.
  *
- * The read-only Bonds section + established-events list live in the Record tab;
- * the inventory grid lives in the Inventory tab; the stat block lives in the
- * Stats tab. This is the user-authored mechanical sheet only.
+ * The narrative record (traits, established events) lives in the Record tab and the
+ * inventory grid in the Inventory tab. Relationships live HERE and only here — Record
+ * used to render a second, read-only copy of the same bonds.
  *
- * On save the PC's name is mirrored into `context.characterProfile.identity.name`
- * + `characterProfileData.name` so the prompt pipeline picks up the canonical
- * identity (the persona block sources from `characterProfile`; the kit line
- * sources from `playerCharacter.signatureKit`).
+ * Nothing is mirrored on save any more. The name used to be copied into
+ * `characterProfile.identity.name` and `characterProfileData.name` as well, because the
+ * prompt sourced the persona block from one of those and the kit line from this record.
+ * There is one record and one block now: services/payload/playerCharacter.ts.
  */
 export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () => void }>(function SheetTab({ onStartGuidedCreation }, ref) {
     const {
         playerCharacter,
         setPlayerCharacter,
         updatePlayerCharacter,
-        context,
-        updateContext,
-        characterProfileData,
-        setCharacterProfileData,
     } = useAppStore(useShallow((s) => ({
         playerCharacter: s.playerCharacter,
         setPlayerCharacter: s.setPlayerCharacter,
         updatePlayerCharacter: s.updatePlayerCharacter,
-        context: s.context,
-        updateContext: s.updateContext,
-        characterProfileData: s.characterProfileData,
-        setCharacterProfileData: s.setCharacterProfileData,
     })));
 
     const portraits = useNpcPortraits();
@@ -86,27 +79,19 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
         }
     }
 
-    const mirrorName = useCallback((name: string) => {
-        const profile: CharacterProfileState = context.characterProfile ?? { identity: {}, activeTraits: [] };
-        updateContext({
-            characterProfileActive: true,
-            characterProfile: {
-                ...profile,
-                identity: { ...profile.identity, name },
-            },
-        });
-        if (characterProfileData) {
-            setCharacterProfileData({ ...characterProfileData, name });
-        }
-    }, [context, characterProfileData, updateContext, setCharacterProfileData]);
-
     const handleSave = useCallback((): boolean => {
         if (!form.name?.trim()) {
             toast.error('Your character needs a name.');
             return false;
         }
         if (playerCharacter) {
-            updatePlayerCharacter(form as PlayerCharacter);
+            // Patch only what this form owns. `form` is seeded from the whole PC record, so
+            // a `updatePlayerCharacter(form)` whole-record write sends fields the form never
+            // shows — `activeTraits` above all — straight back from a snapshot taken when the
+            // panel opened. The trait scan and the PC-drift check run in the background
+            // against this same record, and an applied condition proposal writes it too; any
+            // of those landing while the panel is open would be silently undone on save.
+            updatePlayerCharacter(pickSheetFields(form));
         } else {
             const newPc: PlayerCharacter = {
                 ...(form as NPCEntry),
@@ -116,11 +101,13 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
             };
             setPlayerCharacter(newPc);
         }
-        mirrorName(form.name.trim());
+        // `mirrorName` used to run here, copying the name into `characterProfile.identity`
+        // and `characterProfileData` as well. Both records are gone — the PC record written
+        // just above is the only place the name lives now.
         setIsEditing(false);
         toast.success(playerCharacter ? 'Character updated.' : `Character "${form.name.trim()}" created!`);
         return true;
-    }, [form, playerCharacter, mirrorName, updatePlayerCharacter, setPlayerCharacter]);
+    }, [form, playerCharacter, updatePlayerCharacter, setPlayerCharacter]);
 
     const handleDiscard = useCallback(() => {
         if (playerCharacter) {
