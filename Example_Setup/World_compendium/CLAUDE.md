@@ -20,6 +20,17 @@ Every world lore file **must** follow the structure in [lore_template.md](lore_t
 
 **Section numbers** (`## 1. WORLD OVERVIEW`, `## 2. FACTIONS`, etc.) must be present and in order.
 
+**Retrieval directives** — every `###` header needs a `<!-- rag: ... -->` comment on the line
+directly below it. Without one the engine guesses keywords from prose, which shreds names
+(`TikTok` → `tik`/`tok`) and indexes stopwords. Modes: `always` + `priority` for kernel
+sections, `vector` + `triggers` for factions/locations/characters/events, `keyword` +
+`triggers` for mechanical tables. `priority` is 1–10. See
+`Custom_Setup/Worlds/Forgotten Realms/sword_coast_world_engine.md` for a fully tagged file.
+
+**`**Key Members:**`** is split on commas — names only, no parenthetical containing its own
+comma, no trailing "and others". **`**Goals:**`** should be a bare clause with no leading
+"To".
+
 **CHARACTER entries** must include all bolded fields in this exact order:
 `Aliases`, `Appearance`, `Disposition`, `Personality`, `Voice`, `Status`, `Faction`, `Goals`, `StoryRelevance`, `Example Output`, `Affinity`
 
@@ -42,12 +53,23 @@ Every world lore file **must** follow the structure in [lore_template.md](lore_t
 **Encounter Types:** [5-10 threat situation archetypes — write SITUATIONS not enemy names]
 **Encounter Tones:** [5-10 tones]
 
-**── TIER 3: QUEST HOOK ENGINE (world rumours & local hooks) ──**
-**Quest Hook Who:** [5-10 rumour sources]
-**Quest Hook What:** [5-10 inciting events]
-**Quest Hook Where:** [5-10 local areas]
-**Quest Hook Why:** [5-10 stakes/hooks]
+**── TIER 3: WORLD ENGINE (background world events) ──**
+**World Event Who:** [5-10 actors — bare noun phrases]
+**World Event What:** [5-10 past-tense verb phrases]
+**World Event Why:** [5-10 to… / because… clauses]
+**World Event Where:** [5-10 prepositional phrases]
 ```
+
+Tier 3's four rows are concatenated verbatim into one sentence, in this order:
+`[WORLD_EVENT: {who} {what} {why} {where}]` — e.g. *"a major faction declared open
+hostilities to seize power in a neighboring city"*. Write each row to fit its slot and read
+the joined sentence back before committing. The event is TRUE and moves the campaign
+baseline; it reaches the player as news, rumour, or environmental consequence.
+
+`**Quest Hook Who/What/Where/Why:**` is the legacy label and is still parsed. Those rows are
+authored in rumour order (who + what + WHERE + why), and the parser swaps Where and Why so
+the sentence still reads correctly. Use `World Event` in new files. If a file carries both
+label sets, `World Event` wins and the Quest Hook rows are ignored.
 
 The tier header lines (`**── TIER X: ... ──**`) must be present verbatim — they are parsed as delimiters. The section number for Engine Seed Tags varies (it comes after Economy/Events) — just keep it as the final `##` section.
 

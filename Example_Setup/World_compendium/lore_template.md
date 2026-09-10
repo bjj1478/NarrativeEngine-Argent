@@ -12,7 +12,25 @@ You are an expert worldbuilder for a tabletop RPG engine. I need you to generate
 
 You **MUST** format the output exactly according to the structured template below.
 Do not deviate from the `### Category -- Title` header structure (note the double-hyphen `--` separator), as it is parsed programmatically by the engine's RegEx.
-For characters, you MUST include the expected bolded fields (Aliases, Appearance, Disposition, Goals, Faction, Status, Axes). Where a character is known for signature gear or powers, also fill the optional **SignatureEquipment / SignatureAbilities / Element** fields — these are the character's durable loadout and keep their equipment and abilities consistent across the whole campaign.
+For characters, you MUST include the expected bolded fields (Aliases, Appearance, Disposition, Personality, Voice, Status, Faction, Goals, StoryRelevance, Example Output, Affinity). The optional **PersonalityHex / Traits / Tier** fields are authoritative when present — they stop the engine inferring a personality for a character you have already written. Where a character is known for signature gear or powers, also fill the optional **SignatureEquipment / SignatureAbilities / Element** fields — these are the character's durable loadout and keep their equipment and abilities consistent across the whole campaign.
+
+**Retrieval directives.** Put one `<!-- rag: ... -->` comment on the line immediately below
+every `###` header. The engine strips it before the GM AI ever sees it, and it decides how
+that section reaches the prompt. Without one, the engine falls back to guessing keywords from
+your prose — which shreds names ("TikTok" becomes "tik" and "tok") and fills the index with
+stopwords. Three modes:
+
+- `<!-- rag: always, priority: 10 -->` — permanently in context. Use for the world kernel,
+  the core premise, and campaign-wide operating rules. Keep this to a handful of sections.
+- `<!-- rag: vector, triggers: harpers, spy, safe house, priority: 7 -->` — retrieved by
+  meaning. The default for factions, locations, characters, and events. `triggers:` are the
+  words you would expect in play when this section becomes relevant.
+- `<!-- rag: keyword, triggers: persuade, haggle, bribe, priority: 9 -->` — retrieved only on
+  a literal word match. Use for mechanical tables and lookup blocks.
+
+`priority:` is 1–10 and breaks ties when the context budget is tight. `secondary: a, b` adds
+a second gate: the section is only retrieved when a secondary word matches too.
+See `Custom_Setup/Worlds/Forgotten Realms/sword_coast_world_engine.md` for a fully tagged file.
 
 Here is the exact structure you must use:
 
@@ -21,24 +39,28 @@ Here is the exact structure you must use:
 
 ## 1. WORLD OVERVIEW
 ### OVERVIEW -- [Core Premise or Intro]
+<!-- rag: always, priority: 10 -->
 [Describe the fundamental premise, era, and core conflict of the world. State the genre and tone clearly.]
 **Tone:** [e.g. GRIM, NOIR, COMEDIC, EPIC]
 
 ## 2. FACTIONS
 ### FACTION -- [Faction Name]
+<!-- rag: vector, triggers: [3-8 words that should surface this faction], priority: 7 -->
 **Type:** [Military Order / Megacorp / Guild / Cult]
-**Key Members:** [Leader Name, Notable Member]
+**Key Members:** [Leader Name, Notable Member — names only. This line is split on commas, so never put a parenthetical containing its own comma here, and do not end it with "and others".]
 **Stance:** [Pro-establishment, Hostile, Neutral]
 [Describe the faction's goals, methods, and relationship to the world.]
 
 ## 3. LOCATIONS
 ### LOCATION -- [Location Name]
+<!-- rag: vector, triggers: [3-8 place names, districts, landmarks], priority: 7 -->
 **Type:** [City / Region / Landmark]
 **Status:** [Flourishing / Ruined / Contested]
 [Describe the key features, atmosphere, and importance of this location.]
 
 ## 4. CHARACTERS
 ### CHARACTER -- [Character Name]
+<!-- rag: vector, triggers: [name, alias, role, faction], priority: 7 -->
 **Aliases:** [aka..., The Title]
 **Appearance:** [Describe visual features — used by AI for image/description generation.]
 **Disposition:** [Stoic, Protective, Ambitious]
@@ -46,7 +68,7 @@ Here is the exact structure you must use:
 **Voice:** [How they speak — cadence, vocabulary, verbal tics, speech pattern.]
 **Status:** [Alive / Deceased / Missing]
 **Faction:** [Faction Name or None]
-**Goals:** [Describe what they want to achieve.]
+**Goals:** [Describe what they want to achieve. Write it as a bare clause with no leading "To" — "Hold the northern marches", not "To hold the northern marches."]
 **StoryRelevance:** [Why this character matters to the plot or world.]
 **Example Output:** [One line of dialogue that perfectly captures their voice.]
 **Affinity:** [0–100] (0 = hostile, 50 = neutral, 100 = devoted)
@@ -69,18 +91,22 @@ Here is the exact structure you must use:
 
 ## 5. POWER SYSTEM & RULES
 ### POWER_SYSTEM -- [Name of Magic/Tech]
+<!-- rag: vector, triggers: [3-8 words for this power system], priority: 7 -->
 [Explain how magic, technology, or special abilities work. What are the limitations?]
 
 ## 6. ECONOMY
 ### ECONOMY -- [Currency / Trade]
+<!-- rag: vector, triggers: [coin, price, trade, cost], priority: 6 -->
 [Detail the monetary system, rare resources, and general cost of living.]
 
 ## 7. EVENTS
 ### EVENT -- [Significant Event]
+<!-- rag: vector, triggers: [3-8 words tied to this event], priority: 6 -->
 [Summarize a major historical or plot event that shapes the current state.]
 
-## ENGINE SEED TAGS (IMPORTANT)
+## 8. ENGINE SEED TAGS (IMPORTANT)
 ### SYSTEM -- Engine Seeds
+<!-- rag: always, priority: 10 -->
 
 > The engine has 3 tiers. Read the guidance for each carefully — the tag format matters.
 
@@ -98,14 +124,27 @@ Here is the exact structure you must use:
 **Encounter Types:** [List 5-10 threat situation archetypes e.g. HOSTILE_PRESENCE, TERRITORIAL_THREAT, PATROL_CONFRONTATION, AMBUSH_LAID, SCAVENGING_PREDATOR]
 **Encounter Tones:** [List 5-10 tones e.g. TENSE, DESPERATE, SUDDEN, PREDATORY, GRIM]
 
-**── TIER 3: QUEST HOOK ENGINE (world rumours & local hooks) ──**
-> Generates a rumour or hook that players hear — NOT a canon world-state change.
-> Purpose: create quests and dynamic local news. Bandits spotted, treasure rumoured, person missing.
-> Keep scope LOCAL and UNCERTAIN (it's a rumour — may not even be true).
-**Quest Hook Who:** [List 5-10 rumour sources e.g. a frightened merchant, a local guard, a travelling hermit]
-**Quest Hook What:** [List 5-10 inciting events e.g. spotted raiders near, claims something was found at, says a person went missing from]
-**Quest Hook Where:** [List 5-10 local areas e.g. on the northern road, near the old ruins, at the river crossing]
-**Quest Hook Why:** [List 5-10 stakes/hooks e.g. and a reward is offered, and locals are too frightened to investigate, hinting at treasure involved]
+**── TIER 3: WORLD ENGINE (background world events) ──**
+> A shift in the world that is TRUE and moves the campaign baseline — a faction leader
+> replaced, a trade route claimed, a bridge destroyed. It reaches the player as news,
+> rumour, or environmental consequence, but the event itself happened.
+> The four rows are concatenated verbatim, in this order, into one sentence:
+>     [WORLD_EVENT: {who} {what} {why} {where}]
+> So write each row to fit its slot, and read the joined sentence back before you commit:
+>     who   — a bare noun phrase          "a major faction"
+>     what  — a PAST-TENSE verb phrase    "declared open hostilities"
+>     why   — a to… / because… clause     "to seize power"
+>     where — a prepositional phrase      "in a neighboring city"
+>   → "a major faction declared open hostilities to seize power in a neighboring city"
+**World Event Who:** [List 5-10 actors e.g. a major faction, a rogue splinter group, a desperate individual]
+**World Event What:** [List 5-10 past-tense actions e.g. declared open hostilities, seized a trade route, assassinated a key figure]
+**World Event Why:** [List 5-10 motives e.g. to seize power, for brutal vengeance, to protect a dangerous secret]
+**World Event Where:** [List 5-10 prepositional phrases e.g. in a neighboring city, along a main trade route, in a forgotten ruin]
+
+> Legacy: `**Quest Hook Who/What/Where/Why:**` is still accepted. Those rows are authored
+> in rumour order (who + what + WHERE + why), and the parser swaps Where and Why so the
+> sentence still reads correctly. Prefer the `World Event` labels in new files — if both
+> label sets are present, `World Event` wins and the Quest Hook rows are ignored.
 
 ```
 
@@ -212,9 +251,9 @@ Magic in Neo-Veridya requires blood—either drawn from the caster or a victim. 
 **Encounter Types:** HOSTILE_PRESENCE, PATROL_CONFRONTATION, TERRITORIAL_THREAT, AMBUSH_LAID, DESPERATE_ATTACKER, CORNERED_ENTITY, RIVAL_CLAIM, SCAVENGING_PREDATOR, TRAP_TRIGGERED, ENVIRONMENTAL_THREAT
 **Encounter Tones:** TENSE, DESPERATE, SUDDEN, GRIM, CALCULATED, PREDATORY, CHAOTIC, CLINICAL
 
-**── TIER 3: QUEST HOOK ENGINE ──**
-**Quest Hook Who:** a bruised dockworker, a nervous street medic, a Syndicate runner gone quiet, a CorpSec deserter, a Sanguine addict with a clear head, an old archivist
-**Quest Hook What:** spotted armed strangers near, claims something was buried at, says someone they know vanished from, found a partial data-shard pointing to, overheard a deal involving, is offering a bounty for information about
-**Quest Hook Where:** the lower processing vaults, a flooded sub-district, the old transit hub, a decommissioned med-facility, a rooftop black market, the Syndicate's neutral ground
-**Quest Hook Why:** and nobody official will touch it, suggesting a payout for the right people, and the trail goes cold at CorpSec's door, hinting the target is still alive somewhere, and someone powerful wants it buried
+**── TIER 3: WORLD ENGINE ──**
+**World Event Who:** the Crimson Syndicate, a CorpSec board faction, a rogue ripperdoc collective, the Sanguine cartels, an offworld investor bloc, a Layer Zero squatter council
+**World Event What:** seized a transit chokepoint, choked off a district's blood supply, bought out a rival clinic chain, assassinated a district administrator, lifted a quarantine early, published a rival's stolen ledgers
+**World Event Why:** to corner the Sanguine trade, to bury an audit before it lands, for a decade-old betrayal, to force a price war, because a debt finally came due, to keep Chrome and magic apart
+**World Event Where:** in the lower processing vaults, across a flooded sub-district, at the old transit hub, inside a decommissioned med-facility, on the rooftop black markets, along the Syndicate's neutral ground
 ```

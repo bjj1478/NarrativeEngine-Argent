@@ -115,7 +115,17 @@ export function classifyCategory(header: string, content: string, parentHeader?:
     // (no `WORLD OVERVIEW` substring) and dumped ~40% of chunks into misc. Parse the type
     // token out of the marker and map known types to categories before any other check.
     // Unknown tokens fall through to the heuristics below (regression path preserved).
-    const typeMatch = /\[CHUNK:\s*([A-Z_]+)/i.exec(header || '');
+    //
+    // The bare `TYPE -- Name` dialect is authoritative too. It is what lore_template.md
+    // mandates and what every shipped world file uses, but only the `[CHUNK:]` marker
+    // form was being parsed, so the declared type was thrown away and the substring
+    // heuristics below decided instead — badly, because they match anywhere in the
+    // header: `LOCATION -- Waterdeep` hit `ERD` (wat-ERD-eep) and classified as
+    // `relationship`; `MECHANIC -- Magic Backlash Table` hit `MAGIC` and became
+    // `power_system`; `POWER_SYSTEM -- Divine and Primal Power` matched nothing at all
+    // (the check looks for "POWER SYSTEM" with a space) and fell into `misc`.
+    const typeMatch = /\[CHUNK:\s*([A-Z_]+)/i.exec(header || '')
+        ?? /^\s*([A-Z][A-Z_]*)\s*(?:--|[—–])/.exec(header || '');
     if (typeMatch) {
         const t = typeMatch[1].toUpperCase();
         const TYPE_MAP: Record<string, LoreCategory> = {
@@ -125,7 +135,7 @@ export function classifyCategory(header: string, content: string, parentHeader?:
             LOCATION: 'location', CITY: 'location', REGION: 'location',
             EVENT: 'event', TIMELINE: 'event',
             RELATIONSHIP: 'relationship',
-            POWER: 'power_system', MAGIC: 'power_system',
+            POWER: 'power_system', POWER_SYSTEM: 'power_system', MAGIC: 'power_system',
             ECONOMY: 'economy', CULTURE: 'culture', RELIGION: 'culture',
             RULES: 'rules', MECHANIC: 'rules',
         };
@@ -195,8 +205,8 @@ function generateSummary(_header: string, content: string): string | undefined {
     return cleanLines.length > 0 ? cleanLines[0].substring(0, 100) : undefined;
 }
 
-function extractEntityName(header: string): string {
-    let name = header.replace(/\[CHUNK:\s*[A-Z_]+[—\-\s]*\]/i, '').trim();
+export function extractEntityName(header: string): string {
+    const name = header.replace(/\[CHUNK:\s*[A-Z_]+[—\-\s]*\]/i, '').trim();
     // Strip TYPE -- Name or TYPE — Name
     const prefixMatch = name.match(/^[A-Z][A-Z_\s]*(?:--|[—–])\s*(.+)/);
     if (prefixMatch) {

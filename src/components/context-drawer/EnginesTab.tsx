@@ -4,7 +4,23 @@ import { useAppStore, DEFAULT_SURPRISE_TYPES, DEFAULT_SURPRISE_TONES, DEFAULT_EN
 import { populateEngineTags } from '../../services/chatEngine';
 import { Toggle } from './Toggle';
 import { NPCPressureInspector } from '../NPCPressureInspector';
-import type { RollFrequency } from '../../types';
+import type { RollFrequency, LoreCategory } from '../../types';
+
+type PopulateField =
+    | 'surpriseTypes' | 'surpriseTones' | 'encounterTypes' | 'encounterTones'
+    | 'worldWho' | 'worldWhere' | 'worldWhy' | 'worldWhat';
+
+/** Which lore categories carry the answer for each populated field. */
+const POPULATE_CATEGORIES: Record<PopulateField, LoreCategory[]> = {
+    surpriseTypes: ['world_overview', 'culture', 'location', 'economy'],
+    surpriseTones: ['world_overview', 'culture'],
+    encounterTypes: ['world_overview', 'location', 'faction', 'power_system'],
+    encounterTones: ['world_overview', 'faction'],
+    worldWho: ['faction', 'character'],
+    worldWhere: ['location', 'world_overview'],
+    worldWhy: ['faction', 'event', 'world_overview'],
+    worldWhat: ['event', 'faction'],
+};
 
 /**
  * The roll-frequency dial. Each option is described by its THRESHOLD — what deserves dice —
@@ -51,6 +67,25 @@ export function EnginesTab() {
             Populate
         </button>
     );
+
+    /**
+     * Source text for the AI tag populator.
+     *
+     * This used to read `context.loreRaw`, which is initialised to '' and never written by
+     * any code path — the lore file is chunked on import, not stored raw — so every Populate
+     * call silently fell through to `rulesRaw` and asked the model to invent world tags from
+     * the GM ruleset. Build the text from the campaign's own lore chunks instead, narrowed to
+     * the categories that actually carry the answer for the field being generated.
+     */
+    const loreTextFor = (field: PopulateField): string => {
+        const chunks = useAppStore.getState().loreChunks;
+        if (chunks.length === 0) return context.loreRaw || context.rulesRaw || '';
+        const wanted = POPULATE_CATEGORIES[field];
+        const relevant = chunks.filter((c) => wanted.includes(c.category));
+        return (relevant.length > 0 ? relevant : chunks)
+            .map((c) => `### ${c.header}\n${c.content}`)
+            .join('\n\n');
+    };
 
     const surpriseDefaults = { types: DEFAULT_SURPRISE_TYPES, tones: DEFAULT_SURPRISE_TONES, initialDC: 95, dcReduction: 3 };
     const encounterDefaults = { types: DEFAULT_ENCOUNTER_TYPES, tones: DEFAULT_ENCOUNTER_TONES, initialDC: 198, dcReduction: 2 };
@@ -111,7 +146,7 @@ export function EnginesTab() {
                                     {renderPopulateButton('surpriseTypes', async () => {
                                         const provider = useAppStore.getState().getActiveStoryEndpoint();
                                         if (!provider) return;
-                                        const lore = context.loreRaw || context.rulesRaw || '';
+                                        const lore = loreTextFor('surpriseTypes');
                                         const current = context.surpriseConfig?.types || DEFAULT_SURPRISE_TYPES;
                                         const result = await populateEngineTags(provider, lore, current, 'surpriseTypes');
                                         updateContext({ surpriseConfig: { ...(context.surpriseConfig || surpriseDefaults), types: result } });
@@ -137,7 +172,7 @@ export function EnginesTab() {
                                     {renderPopulateButton('surpriseTones', async () => {
                                         const provider = useAppStore.getState().getActiveStoryEndpoint();
                                         if (!provider) return;
-                                        const lore = context.loreRaw || context.rulesRaw || '';
+                                        const lore = loreTextFor('surpriseTones');
                                         const current = context.surpriseConfig?.tones || DEFAULT_SURPRISE_TONES;
                                         const result = await populateEngineTags(provider, lore, current, 'surpriseTones');
                                         updateContext({ surpriseConfig: { ...(context.surpriseConfig || surpriseDefaults), tones: result } });
@@ -203,7 +238,7 @@ export function EnginesTab() {
                                     {renderPopulateButton('encounterTypes', async () => {
                                         const provider = useAppStore.getState().getActiveStoryEndpoint();
                                         if (!provider) return;
-                                        const lore = context.loreRaw || context.rulesRaw || '';
+                                        const lore = loreTextFor('encounterTypes');
                                         const current = context.encounterConfig?.types || DEFAULT_ENCOUNTER_TYPES;
                                         const result = await populateEngineTags(provider, lore, current, 'encounterTypes');
                                         updateContext({ encounterConfig: { ...(context.encounterConfig || encounterDefaults), types: result } });
@@ -229,7 +264,7 @@ export function EnginesTab() {
                                     {renderPopulateButton('encounterTones', async () => {
                                         const provider = useAppStore.getState().getActiveStoryEndpoint();
                                         if (!provider) return;
-                                        const lore = context.loreRaw || context.rulesRaw || '';
+                                        const lore = loreTextFor('encounterTones');
                                         const current = context.encounterConfig?.tones || DEFAULT_ENCOUNTER_TONES;
                                         const result = await populateEngineTags(provider, lore, current, 'encounterTones');
                                         updateContext({ encounterConfig: { ...(context.encounterConfig || encounterDefaults), tones: result } });
@@ -304,9 +339,10 @@ export function EnginesTab() {
                                             {renderPopulateButton(`world${field.charAt(0).toUpperCase() + field.slice(1)}`, async () => {
                                                 const provider = useAppStore.getState().getActiveStoryEndpoint();
                                                 if (!provider) return;
-                                                const lore = context.loreRaw || context.rulesRaw || '';
+                                                const populateField = `world${field.charAt(0).toUpperCase() + field.slice(1)}` as PopulateField;
+                                                const lore = loreTextFor(populateField);
                                                 const current = context.worldEventConfig?.[field] || defaults[field];
-                                                const result = await populateEngineTags(provider, lore, current, `world${field.charAt(0).toUpperCase() + field.slice(1)}` as 'worldWho' | 'worldWhere' | 'worldWhy' | 'worldWhat');
+                                                const result = await populateEngineTags(provider, lore, current, populateField);
                                                 updateContext({ worldEventConfig: { ...(context.worldEventConfig || worldDefaults), [field]: result } });
                                             })}
                                             <span className={(context.worldEventConfig?.[field]?.length ?? 0) < 3 ? 'text-danger' : 'text-terminal'}>Min 3 tags</span>

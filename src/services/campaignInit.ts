@@ -125,22 +125,22 @@ export async function initializeCampaignState(params: {
             ctx.surpriseConfig = {
                 ...ctx.surpriseConfig, initialDC: ctx.surpriseConfig?.initialDC ?? 95,
                 dcReduction: ctx.surpriseConfig?.dcReduction ?? 3,
-                types: seeds.surpriseTypes.length > 0 ? seeds.surpriseTypes : [...DEFAULT_SURPRISE_TYPES],
-                tones: seeds.surpriseTones.length > 0 ? seeds.surpriseTones : [...DEFAULT_SURPRISE_TONES],
+                types: seeds.surpriseTypes.length >= 3 ? seeds.surpriseTypes : [...DEFAULT_SURPRISE_TYPES],
+                tones: seeds.surpriseTones.length >= 3 ? seeds.surpriseTones : [...DEFAULT_SURPRISE_TONES],
             };
             ctx.encounterConfig = {
                 ...ctx.encounterConfig, initialDC: ctx.encounterConfig?.initialDC ?? 198,
                 dcReduction: ctx.encounterConfig?.dcReduction ?? 2,
-                types: seeds.encounterTypes.length > 0 ? seeds.encounterTypes : [...DEFAULT_ENCOUNTER_TYPES],
-                tones: seeds.encounterTones.length > 0 ? seeds.encounterTones : [...DEFAULT_ENCOUNTER_TONES],
+                types: seeds.encounterTypes.length >= 3 ? seeds.encounterTypes : [...DEFAULT_ENCOUNTER_TYPES],
+                tones: seeds.encounterTones.length >= 3 ? seeds.encounterTones : [...DEFAULT_ENCOUNTER_TONES],
             };
             ctx.worldEventConfig = {
                 ...ctx.worldEventConfig, initialDC: ctx.worldEventConfig?.initialDC ?? 498,
                 dcReduction: ctx.worldEventConfig?.dcReduction ?? 2,
-                who: seeds.worldWho.length > 0 ? seeds.worldWho : [...DEFAULT_WORLD_WHO],
-                where: seeds.worldWhere.length > 0 ? seeds.worldWhere : [...DEFAULT_WORLD_WHERE],
-                why: seeds.worldWhy.length > 0 ? seeds.worldWhy : [...DEFAULT_WORLD_WHY],
-                what: seeds.worldWhat.length > 0 ? seeds.worldWhat : [...DEFAULT_WORLD_WHAT],
+                who: seeds.worldWho.length >= 3 ? seeds.worldWho : [...DEFAULT_WORLD_WHO],
+                where: seeds.worldWhere.length >= 3 ? seeds.worldWhere : [...DEFAULT_WORLD_WHERE],
+                why: seeds.worldWhy.length >= 3 ? seeds.worldWhy : [...DEFAULT_WORLD_WHY],
+                what: seeds.worldWhat.length >= 3 ? seeds.worldWhat : [...DEFAULT_WORLD_WHAT],
             };
         }
         await saveCampaignState(campaignId, {
