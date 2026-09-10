@@ -171,9 +171,11 @@ export function buildPlayerCharacterBlock(
     if (!pc && !carry) return '';
 
     const lines: string[] = [
-        // The label is doing real work: it tells the model this is the human it is
-        // playing with — the protagonist — not another cast member to be narrated at.
-        '[PLAYER CHARACTER — the human you are playing with]',
+        // Plain tag. It used to carry a gloss — "the human you are playing with" — inherited
+        // from the old persona block, which was written when this material lived in a block
+        // called [CHARACTER PROFILE] and needed to say whose profile it was. The tag names
+        // itself now, and the closer below matches it.
+        '[PLAYER CHARACTER]',
     ];
 
     if (pc) {

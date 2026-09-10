@@ -860,7 +860,7 @@ describe('buildPayload — scenario 9: the [PLAYER CHARACTER] block', () => {
 
     it('emits exactly one block, naming the PC once', () => {
         const content = contentOf(pcContext({}));
-        expect(content).toContain('[PLAYER CHARACTER — the human you are playing with]');
+        expect(content).toContain('[PLAYER CHARACTER]');
         expect(content).toContain('[END PLAYER CHARACTER]');
         expect(content.match(/\[PLAYER CHARACTER/g)).toHaveLength(1);
         expect(content.match(/Gareth/g)).toHaveLength(1);
