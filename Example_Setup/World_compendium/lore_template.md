@@ -146,7 +146,6 @@ Here is the exact structure you must use:
 > Engine Tuning. One phrase per line, NOT comma-separated: each entry is a whole sentence
 > or two and carries its own commas. Write the form "Label — what it costs", where the
 > label names the shape of the miss and the cost is specific and concrete.
-> Nothing draws from this list yet; it is being populated ahead of the roll path.
 **Consequences:**
 - Noise — Not discovery, attention. A patrol changes its route, a dog does not settle.
 - Trace — You are through, but you left something: a print, a scratch on a lock.

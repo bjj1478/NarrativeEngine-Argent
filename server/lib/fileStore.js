@@ -12,9 +12,12 @@ export const DATA_DIR = process.env.DATA_DIR || path.join(__projectRoot, 'data')
 export const CAMPAIGNS_DIR = path.join(DATA_DIR, 'campaigns');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 export const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
-export const PUBLIC_ASSETS_DIR = process.env.NODE_ENV === 'production'
-    ? path.join(DATA_DIR, 'portraits')
-    : path.join(__projectRoot, 'public', 'assets', 'portraits');
+// Always under data/, never inside public/. In dev, public/ is Vite publicDir:
+// a portrait written there at runtime makes Vite issue a full page reload, so
+// generating portraits ("Populate all" especially) destroyed the live session.
+// data/ is already covered by watch.ignored in vite.config.ts. Reaches the
+// browser at the same /assets/portraits URL either way (see server.js).
+export const PUBLIC_ASSETS_DIR = path.join(DATA_DIR, 'portraits');
 
 /**
  * Installed mods (Project 2 / WO-P2-04). Deliberately a SIBLING of `data/` rather than a child:

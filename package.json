@@ -7,8 +7,8 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "dev": "concurrently \"node server.js\" \"vite\"",
-    "dev:lan": "concurrently \"node server.js\" \"vite --host 0.0.0.0\"",
+    "dev": "concurrently -k -n server,vite -c blue,magenta \"node server.js\" \"vite\"",
+    "dev:lan": "concurrently -k -n server,vite -c blue,magenta \"node server.js\" \"vite --host 0.0.0.0\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

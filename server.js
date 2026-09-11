@@ -145,7 +145,44 @@ app.use((err, _req, res, _next) => {
 });
 
 // ─── Start ───
-app.listen(PORT, BIND_HOST, () => {
+const server = app.listen(PORT, BIND_HOST);
+
+// Success is reported from the 'listening' event, NOT from a callback passed to
+// app.listen(). On Windows that callback fires even when the bind then fails with
+// EADDRINUSE, which printed "✓ Running on ..." directly above the error telling
+// you it was not running. The event only fires on a bind that actually held.
+server.on('listening', () => {
     console.log(`[GM-Cockpit API] ✓ Running on http://${BIND_HOST}:${PORT}`);
     console.log(`[GM-Cockpit API]   Data dir: ${DATA_DIR}`);
+});
+
+// Without this, EADDRINUSE is an uncaught throw: the API dies instantly behind a
+// wall of scrolling startup output while Vite carries on, so the app still loads
+// but every request fails. Say plainly what happened instead.
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error('');
+        console.error('============================================');
+        console.error(`  [STOP] Port ${PORT} is already in use.`);
+        console.error('============================================');
+        console.error('');
+        console.error('Another copy of the Narrative Engine is still running.');
+        console.error('Close any other black terminal windows titled');
+        console.error('"Narrative Engine", then start the app again.');
+        console.error('');
+    } else {
+        console.error('[GM-Cockpit API] Failed to start:', err);
+    }
+    process.exit(1);
+});
+
+// Last-resort visibility. A crash here used to vanish along with the console
+// window, leaving nothing to diagnose after the fact.
+process.on('uncaughtException', (err) => {
+    console.error('[GM-Cockpit API] Uncaught exception:', err);
+    process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('[GM-Cockpit API] Unhandled promise rejection:', reason);
+    process.exit(1);
 });
