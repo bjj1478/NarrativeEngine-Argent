@@ -6,6 +6,7 @@ import type { LoreChunk, RuleChunkMeta } from './lore';
 import type { ArcRecord } from './arc';
 export type { ArcRecord };
 import type { LootTree } from './loot';
+import type { GalleryEntry } from './gallery';
 import type { TravelMode } from '../services/location/travelModes';
 
 // WO-A rewrite 2 §2: PlayerCharacter is an NPCEntry-shaped record stored at
@@ -356,10 +357,11 @@ export type GameContext = {
     //    LLM only proposes, player can always override). Lazy migration:
     //    absent on existing campaigns → undefined → "no current place".
     currentPlaceId?: string | null;
+    mapWorldSetting?: { id: string; label: string; guidance: string };
     mapEncounter?: {
         key: string; placeId: string | null; worldDay: number; leg: number | null;
         weather: string; biome: string; quiet: boolean; status: 'available' | 'handled' | 'passed';
-        scene?: string; note?: string; onRoad?: boolean;
+        scene?: string; note?: string; onRoad?: boolean; worldProfile?: string;
         events: { id: string; source: string; title: string; text: string; action?: string;
             actor?: { id: string; name: string; role: string; motive: string } }[];
     };
@@ -386,6 +388,10 @@ export type GameContext = {
     // as part of the campaign state JSON. Migration (services/character/migratePC.ts)
     // moves any legacy `isPC: true` row from npcLedger into this field on hydrate.
     playerCharacter?: PlayerCharacter | null;
+    /** Image Gallery — player-uploaded images with their vision captions. Scene
+     *  images are NOT stored here: they are derived live from message attachments
+     *  (see services/gallery/galleryIndex.ts). Optional → lazy migration. */
+    galleryUploads?: GalleryEntry[];
     relationshipMemory?: boolean;
     // ── WO-A2 §2.1 — first-send intercept flag. Once the user picks
     // "Proceed anyway" on the no-PC warning modal, this is set true and the
