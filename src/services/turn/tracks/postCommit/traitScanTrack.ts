@@ -28,7 +28,7 @@ export const traitScanTrack: PostTurnTrack<PostCommitTrackContext> = {
                 ctx.scanMessages,
                 currentTraits,
                 pcName,
-                ctx.storyModelCall,
+                ctx.extractionModelCall,
             );
             if (!assertStillActive(ctx.activeCampaignId, 'Trait-Scan')) return;
             // MUST be a single-key patch through `updatePlayerCharacter`, never a whole-record

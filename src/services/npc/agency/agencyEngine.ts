@@ -305,13 +305,13 @@ function runTimeskipPath(
         return npc;
     });
 
-    // Desktop has no dedicated summarizer slot; utility is preferred, then story.
-    const provider = facade ? undefined : state.getUtilityEndpoint?.() ?? state.getFreshProvider();
-    const modelRole = facade && hasHostModelRole(facade, 'utility')
-        ? 'utility' as const
-        : facade && hasHostModelRole(facade, 'story')
-            ? 'story' as const
-            : undefined;
+    // Timeskip narration is posted to the chat as "[Time passes] ..." — the player
+    // reads it, so it runs on the Summarizer slot. It used to prefer Utility and fall
+    // back to Story, which put player-visible prose on the retrieval model.
+    const provider = facade ? undefined : state.getRawSummariserProvider?.();
+    const modelRole = facade && hasHostModelRole(facade, 'summariser')
+        ? 'summariser' as const
+        : undefined;
     const modelCall = modelRole
         ? (request: { prompt: string; signal?: AbortSignal; maxTokens?: number; priority?: 'low'; trackingLabel?: string; timeoutMs?: number }) =>
             facade!.model.call(modelRole, request).then(result => result.content)

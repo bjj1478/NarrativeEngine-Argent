@@ -105,7 +105,7 @@ function makeGateContext(tier: 'lite' | 'pro' | 'max'): PostCommitTrackContext {
         inventoryItems: [],
         profileData: {} as PostCommitTrackContext['profileData'],
         scanMessages: [],
-        storyModelCall: undefined,
+        extractionModelCall: undefined,
         guardedUpdateContext: vi.fn(),
         guardedSetCharacterProfileData: vi.fn(),
         guardedSetInventoryItems: vi.fn(),

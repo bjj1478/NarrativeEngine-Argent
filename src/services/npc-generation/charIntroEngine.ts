@@ -85,7 +85,8 @@ export async function rollCharacterIntroEngine(
     context: GameContext,
     seenNpcNames: Set<string>,
     messages: ChatMessage[],
-    utilityProvider?: EndpointConfig | ProviderConfig,
+    /** Extraction endpoint — used only to resolve the party's current location. */
+    extractionProvider?: EndpointConfig | ProviderConfig,
     modelCall?: (request: ModelRequest) => Promise<ModelResponse>,
 ): Promise<CharIntroResult> {
     const config = context.npcIntroConfig;
@@ -109,8 +110,8 @@ export async function rollCharacterIntroEngine(
     const wanderingPool = candidates.filter(c => c.type === 'wandering');
     let locationPool = candidates.filter(c => c.type === 'location');
 
-    if (locationPool.length > 0 && (utilityProvider || modelCall)) {
-        const aiLocation = await resolveLocation(messages, utilityProvider, modelCall);
+    if (locationPool.length > 0 && (extractionProvider || modelCall)) {
+        const aiLocation = await resolveLocation(messages, extractionProvider, modelCall);
         if (aiLocation) {
             const aiLocLower = aiLocation.toLowerCase();
             locationPool = locationPool.filter(c =>
@@ -119,7 +120,7 @@ export async function rollCharacterIntroEngine(
         } else {
             locationPool = [];
         }
-    } else if (locationPool.length > 0 && !utilityProvider && !modelCall) {
+    } else if (locationPool.length > 0 && !extractionProvider && !modelCall) {
         locationPool = [];
     }
 

@@ -223,8 +223,25 @@ When modifying core files, consult this matrix to trace downstream effects.
 | src/types/index.ts + sibling type files    | - All src/ files importing types | - Compile errors          |
 | (GameContext, NPCEntry, ChatMessage, etc.)| - packages/engine/src/*         | - Migration logic lost    |
 |                                            |                                  | - Defaults change         |
++--------------------------------------------+----------------------------------+----------------------------+
+| src/services/providerRoles.ts              | - src/store/slices/settingsSlice| - Preset slots vanish     |
+| (the 8 provider-role slots; one source     | - src/store/slices/settingsHelp | - Orphaned provider ids   |
+|  of truth for store getters, orphan        | - src/components/settings-modal/| - Slot missing from UI    |
+|  cleanup, new-preset defaults and the UI)  |   PresetsTab.tsx                | - Turn preflight wrong    |
++--------------------------------------------+----------------------------------+----------------------------+
+| src/services/turn/hostFacade.ts            | - src/services/turn/turnStages  | - Role calls throw        |
+| (ModelRole union + MODEL_ROLES array +     | - src/services/turn/postTurnPipe| - Mod manifests rejected  |
+|  resolveEndpoint; NO role substitutes for  | - src/services/mods/sandbox/*   | - baseAppGate diverges    |
+|  another — unassigned throws)              | - server/lib/modLoader.js       | - Mod API drift (no test) |
 +-------------------------------------------------------------------------------------------------------+
 ```
+
+> **Adding or renaming a `ModelRole` touches 7 places**, and only one of them is a compile error.
+> `MODEL_ROLES` (`hostFacade.ts`) is hand-maintained, not derived from the union.
+> `server/lib/modLoader.js` (`COMPUTE_MODEL_ROLES`) duplicates the list in the **server** process —
+> a role missing there is rejected at mod-manifest load with no type error. `docs/narrative-mod-api.d.ts`
+> and `docs/MODDING.md` mirror it with no test enforcing the match. `hasConfiguredRole` has no
+> `default` arm, so it *is* a compile error; `resolveEndpoint` carries a `never` arm to make itself one too.
 
 ### Critical Risk Zones (High Blast Radius)
 

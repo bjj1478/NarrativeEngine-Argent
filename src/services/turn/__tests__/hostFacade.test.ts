@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AppSettings, EndpointConfig, TurnCallbacks, TurnState } from '../../../types';
-import { buildHostFacade, type HostFacade } from '../hostFacade';
+import { buildHostFacade, MODEL_ROLES, type HostFacade } from '../hostFacade';
 
 const endpoint = (modelName: string): EndpointConfig => ({
     endpoint: `http://${modelName}`,
@@ -38,6 +38,8 @@ const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
     getMessages: () => [],
     getFreshProvider: () => endpoint('story'),
     getUtilityEndpoint: () => endpoint('utility'),
+    getDirectorEndpoint: () => endpoint('director'),
+    getExtractionEndpoint: () => endpoint('extraction'),
     getFreshAuxiliaryProvider: () => endpoint('auxiliary'),
     getRawAuxiliaryProvider: () => endpoint('raw-auxiliary'),
     getRawSummariserProvider: () => endpoint('raw-summariser'),
@@ -101,7 +103,7 @@ describe('HostFacade', () => {
         expect(credentialPaths).toEqual([]);
     });
 
-    it('brokers all six model roles without returning an endpoint', async () => {
+    it('brokers every model role without returning an endpoint', async () => {
         const calls: Array<{ role: string; endpoint: string | undefined }> = [];
         const facade = buildHostFacade(makeState(), makeCallbacks(), {
             modelCall: async (role, _request, resolved) => {
@@ -110,19 +112,25 @@ describe('HostFacade', () => {
             },
         });
 
-        const roles = ['story', 'utility', 'auxiliary', 'summariser', 'raw-auxiliary', 'raw-summariser'] as const;
+        // Every declared role, in MODEL_ROLES order. `raw-auxiliary` / `raw-summariser`
+        // are legacy aliases and resolve to the same endpoint as their base role —
+        // nothing substitutes for anything else any more.
+        const roles = MODEL_ROLES;
         const responses = await Promise.all(roles.map((role) => facade.model.call(role, { prompt: role })));
 
         expect(calls).toEqual([
             { role: 'story', endpoint: 'story' },
+            { role: 'director', endpoint: 'director' },
+            { role: 'extraction', endpoint: 'extraction' },
             { role: 'utility', endpoint: 'utility' },
-            { role: 'auxiliary', endpoint: 'auxiliary' },
+            { role: 'auxiliary', endpoint: 'raw-auxiliary' },
             { role: 'summariser', endpoint: 'raw-summariser' },
             { role: 'raw-auxiliary', endpoint: 'raw-auxiliary' },
             { role: 'raw-summariser', endpoint: 'raw-summariser' },
         ]);
         expect(responses.map((response) => response.content)).toEqual([
-            'story', 'utility', 'auxiliary', 'raw-summariser', 'raw-auxiliary', 'raw-summariser',
+            'story', 'director', 'extraction', 'utility',
+            'raw-auxiliary', 'raw-summariser', 'raw-auxiliary', 'raw-summariser',
         ]);
         expect(Object.keys(facade)).not.toContain('settings');
     });

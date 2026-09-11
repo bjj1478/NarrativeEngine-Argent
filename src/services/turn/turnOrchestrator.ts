@@ -134,13 +134,16 @@ export type TurnState = {
     getMessages: () => ChatMessage[]; // to get fresh messages midway
     getFreshProvider: () => EndpointConfig | ProviderConfig | undefined;
     getUtilityEndpoint?: () => EndpointConfig | undefined;
+    /** Director AI — the Director Brief only. */
+    getDirectorEndpoint?: () => EndpointConfig | undefined;
+    /** Extraction AI — structured read-and-report work. */
+    getExtractionEndpoint?: () => EndpointConfig | undefined;
     getFreshAuxiliaryProvider?: () => EndpointConfig | undefined;
-    /** Raw auxiliary-endpoint resolver — unlike `getFreshAuxiliaryProvider`,
-     *  this intentionally skips the Story-provider fallback. Callers (e.g.
-     *  enemy discovery) that must never silently receive the Story AI read
-     *  this instead. */
+    /** Raw auxiliary-endpoint resolver. Historically this skipped a Story-provider
+     *  fallback that `getFreshAuxiliaryProvider` applied; no resolver substitutes
+     *  any more, so the two are equivalent. Kept for the frozen mod surface. */
     getRawAuxiliaryProvider?: () => EndpointConfig | undefined;
-    /** Raw summariser-endpoint resolver, same no-fallback rationale as
+    /** Raw summariser-endpoint resolver, same legacy rationale as
      *  `getRawAuxiliaryProvider`. */
     getRawSummariserProvider?: () => EndpointConfig | undefined;
     onStageNpcIds?: string[];

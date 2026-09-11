@@ -577,10 +577,10 @@ export function rebuildStateFromLiveStore(
         getMessages: () => useAppStore.getState().messages,
         getFreshProvider: () => store.getActiveStoryEndpoint(),
         getUtilityEndpoint: () => store.getActiveUtilityEndpoint(),
-        getFreshAuxiliaryProvider: () => {
-            const aux = store.getActiveAuxiliaryEndpoint?.();
-            return aux?.modelName ? aux : store.getActiveStoryEndpoint();
-        },
+        getDirectorEndpoint: () => store.getActiveDirectorEndpoint?.(),
+        getExtractionEndpoint: () => store.getActiveExtractionEndpoint?.(),
+        // No Story fallback: an unassigned auxiliary slot throws in `resolveEndpoint`.
+        getFreshAuxiliaryProvider: () => store.getActiveAuxiliaryEndpoint?.(),
         getRawAuxiliaryProvider: () => store.getActiveAuxiliaryEndpoint(),
         getRawSummariserProvider: () => store.getActiveSummarizerEndpoint(),
         chapters: store.chapters ?? [],

@@ -63,6 +63,8 @@ const makeCtx = (over: {
         npcLedger,
         activeCampaignId: 'campaign-1',
         getFreshProvider: vi.fn().mockReturnValue({ endpoint: 'http://llm', apiKey: '', modelName: 'm' }),
+        // Bookkeeping/NPC extraction runs on the Extraction slot, not Story.
+        getExtractionEndpoint: vi.fn().mockReturnValue({ endpoint: 'http://llm', apiKey: '', modelName: 'm' }),
         ...over.state,
     } as unknown as TurnState;
     const callbacks = {

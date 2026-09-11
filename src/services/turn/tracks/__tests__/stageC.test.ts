@@ -100,7 +100,7 @@ function makeContext(sceneCount: number): PostCommitTrackContext {
         inventoryItems: [],
         profileData: {},
         scanMessages: [],
-        storyModelCall: undefined,
+        extractionModelCall: undefined,
         guardedUpdateContext: vi.fn(),
         guardedSetCharacterProfileData: vi.fn(),
         guardedSetInventoryItems: vi.fn(),

@@ -100,7 +100,9 @@ export async function runLoreCheck(input: LoreCheckInput): Promise<LoreCheckResu
 }
 
 export type DirectRewriteInput = {
-    utilityEndpoint: EndpointConfig;
+    /** Summarizer endpoint. This call REWRITES player-visible narration in place, so it
+     *  runs on a prose model, not the Utility slot it used to share with retrieval work. */
+    summarizerEndpoint: EndpointConfig;
     selectedText: string;
     surroundingContext: string;
     fact: string;
@@ -112,11 +114,11 @@ export type DirectRewriteInput = {
  * retrieval/verification and just rewrite the highlighted sentence to state that fact.
  */
 export async function runDirectRewrite(input: DirectRewriteInput): Promise<LoreCheckResult> {
-    const { utilityEndpoint, selectedText, surroundingContext, fact, signal } = input;
+    const { summarizerEndpoint, selectedText, surroundingContext, fact, signal } = input;
 
     const prompt = buildRewritePrompt({ selectedText, surroundingContext, fact });
 
-    const raw = await llmCall(utilityEndpoint, prompt, {
+    const raw = await llmCall(summarizerEndpoint, prompt, {
         temperature: 0.3,
         maxTokens: 4096,
         priority: 'high',

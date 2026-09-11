@@ -258,18 +258,23 @@ export async function runIntroEngineStage(
     const context = data?.context ?? state.context;
     const messages = data?.messages ?? state.messages;
     const npcLedger = data?.npcLedger ?? state.npcLedger;
-    const provider = facade ? undefined : state.provider;
     if (!context.npcIntroEngineActive || !tierAllows(config?.aiTier ?? settings.aiTier, 'introEngine')) return;
     const seenNpcNames = new Set((npcLedger ?? []).map((n: NPCEntry) => n.name.toLowerCase()));
     try {
-        const auxProvider = facade ? undefined : state.getFreshAuxiliaryProvider?.() ?? provider;
+        // The intro engine's only model call resolves the party's current location so
+        // location-gated characters can be filtered (`charIntroEngine.resolveLocation`,
+        // temp 0.1 / 60 tokens). The tag itself is a template string. That is extraction
+        // work, not authoring, so it belongs on the Extraction slot.
+        const introProvider = facade ? undefined : state.getExtractionEndpoint?.();
         const { rollCharacterIntroEngine } = await import('../npc-generation/charIntroEngine');
         const introResult = await rollCharacterIntroEngine(
             context,
             seenNpcNames,
             messages,
-            auxProvider,
-            facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('auxiliary', request) : undefined
+            introProvider,
+            facade && hasHostModelRole(facade, 'extraction')
+                ? (request: import('./hostFacade').ModelRequest) => facade.model.call('extraction', request)
+                : undefined
         );
         if (introResult.tag) {
             ctx.finalInput = ctx.finalInput + '\n' + introResult.tag;
@@ -366,15 +371,15 @@ export async function runDirectorStage(
                 timeline: facade?.data.timeline ?? state.timeline,
                 ...(worldFacts.length > 0 ? { worldFacts } : {}),
                 campaignId: facade?.data.activeCampaignId ?? state.activeCampaignId,
-                getAuxiliaryProvider: facade ? undefined : state.getFreshAuxiliaryProvider,
+                getDirectorProvider: facade ? undefined : state.getDirectorEndpoint,
                 signal: directorSignal,
                 maxTokens: blockTokenCap(
                     BUILTIN_IDS.directorBrief,
                     getBuiltinTokenCap(BUILTIN_IDS.directorBrief)?.default ?? 1500,
                     state.settings.moduleTokens,
                 ),
-                modelCall: facade && hasHostModelRole(facade, 'auxiliary')
-                    ? (prompt, request) => facade.model.call('auxiliary', { prompt, ...request }).then(result => result.content)
+                modelCall: facade && hasHostModelRole(facade, 'director')
+                    ? (prompt, request) => facade.model.call('director', { prompt, ...request }).then(result => result.content)
                     : undefined,
             });
         } catch (err) {

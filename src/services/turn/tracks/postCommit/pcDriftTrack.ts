@@ -15,7 +15,7 @@ export const pcDriftTrack: PostTurnTrack<PostCommitTrackContext> = {
     shouldRun: (ctx) => Boolean(
         ctx.bookkeepingDue
         && ctx.facade
-        && hasHostModelRole(ctx.facade, 'story')
+        && hasHostModelRole(ctx.facade, 'extraction')
         && ctx.pc
         && tierAllows(ctx.facade.config.aiTier ?? ctx.state.settings.aiTier, 'npcUpdate'),
     ),
@@ -29,7 +29,7 @@ export const pcDriftTrack: PostTurnTrack<PostCommitTrackContext> = {
             if (!assertStillActive(ctx.activeCampaignId, 'PC-Drift')) return;
             const { checkCharacterDrift } = await import('../../../character/pcUpdater');
             await checkCharacterDrift(
-                (request) => facade.model.callJson('story', request, { retries: 1 }),
+                (request) => facade.model.callJson('extraction', request, { retries: 1 }),
                 ctx.scanMessages,
                 pc,
                 guardedUpdatePlayerCharacter,

@@ -65,9 +65,15 @@ export const chapterSealTrack: PostTurnTrack<PostCommitTrackContext> = {
             });
             toast.info(`Chapter "${sealResult.sealedChapter.title}" auto-sealed (${CHAPTER_SCENE_SOFT_CAP} scenes)`);
 
-            const sealProvider: EndpointConfig | ProviderConfig | undefined = ctx.facade ? undefined : ctx.state.getFreshProvider();
-            const sealModelCall: SealModelCall | undefined = ctx.facade && hasHostModelRole(ctx.facade, 'story')
-                ? (request) => ctx.facade!.model.call('story', request).then(result => result.content)
+            // Auto-seal uses the Summarizer, matching the manual seal path in
+            // `useChapterSealing`. The two used to disagree — auto ran the combined seal
+            // on Story, manual on Summarizer — for the same job. `sealChapterCombined`
+            // emits the chapter summary and the divergence facts in ONE call, so it
+            // cannot be split across Summarizer and Extraction without splitting the
+            // prompt; the summary is player-visible, so Summarizer owns it.
+            const sealProvider: EndpointConfig | ProviderConfig | undefined = ctx.facade ? undefined : ctx.state.getRawSummariserProvider?.();
+            const sealModelCall: SealModelCall | undefined = ctx.facade && hasHostModelRole(ctx.facade, 'summariser')
+                ? (request) => ctx.facade!.model.call('summariser', request).then(result => result.content)
                 : undefined;
             if ((sealProvider || sealModelCall) && tierAllows(ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, 'sealChapter')) {
                 await runCombinedSeal(

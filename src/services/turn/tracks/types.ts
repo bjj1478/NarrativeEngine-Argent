@@ -147,7 +147,8 @@ export interface PostCommitTrackContext {
     freshContext: GameContext;
     inventoryItems: InventoryItem[];
     scanMessages: ChatMessage[];
-    storyModelCall: ((request: ModelRequest) => Promise<ModelResponse>) | undefined;
+    /** Extraction-role model call, shared by the bookkeeping scan tracks. */
+    extractionModelCall: ((request: ModelRequest) => Promise<ModelResponse>) | undefined;
     guardedUpdateContext: (patch: Partial<GameContext>) => void;
     guardedSetInventoryItems: (items: InventoryItem[]) => void;
     guardedSetLocationLedger: (locations: LocationEntry[]) => void;

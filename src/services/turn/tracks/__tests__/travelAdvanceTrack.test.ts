@@ -63,7 +63,7 @@ function makeTrackCtx(overrides: Partial<PostCommitTrackContext> = {}): PostComm
         inventoryItems: [],
         profileData: {} as never,
         scanMessages: [],
-        storyModelCall: undefined,
+        extractionModelCall: undefined,
         guardedUpdateContext,
         guardedSetCharacterProfileData: vi.fn(),
         guardedSetInventoryItems: vi.fn(),

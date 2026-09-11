@@ -28,7 +28,7 @@ export const locationScanTrack: PostTurnTrack<PostCommitTrackContext> = {
                 baselineLedger,
                 baselinePlaceId,
                 baselineFeature,
-                ctx.storyModelCall,
+                ctx.extractionModelCall,
             );
             if (!assertStillActive(ctx.activeCampaignId, 'Location-Scan')) return;
             const after = ctx.callbacks.getFreshLocationState();

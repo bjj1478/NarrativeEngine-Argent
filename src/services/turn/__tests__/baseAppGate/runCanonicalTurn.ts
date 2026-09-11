@@ -232,7 +232,13 @@ export async function runCanonicalTurn(): Promise<CanonicalTurnResult> {
         provider,
         getMessages: () => messages,
         getFreshProvider: () => provider,
+        // Utility stays unassigned so the canonical turn skips retrieval work and the
+        // baseline remains minimal. Director and Extraction resolve to the same fixture
+        // provider the Director Brief and post-turn scans used before they had slots of
+        // their own, so the recorded bytes are unchanged.
         getUtilityEndpoint: () => undefined,
+        getDirectorEndpoint: () => provider,
+        getExtractionEndpoint: () => provider,
         getFreshAuxiliaryProvider: () => provider,
         getRawAuxiliaryProvider: () => provider,
         getRawSummariserProvider: () => provider,

@@ -208,8 +208,9 @@ export function NPCLedgerModal() {
     const handleAIUpdate = async () => {
         if (!selectedId || !form.name) return;
         const state = useAppStore.getState();
-        const provider = state.getActiveStoryEndpoint();
-        if (!provider) { alert('Story AI endpoint is not configured.'); return; }
+        // Refreshing an NPC profile reads the scene and reports changes — extraction work.
+        const provider = state.getActiveExtractionEndpoint();
+        if (!provider) { alert('Extraction AI is not configured. Set one in Settings → Presets.'); return; }
         const npc = npcLedger.find(n => n.id === selectedId);
         if (!npc) return;
         setIsAIUpdating(true);

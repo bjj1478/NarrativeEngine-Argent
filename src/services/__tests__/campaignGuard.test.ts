@@ -93,6 +93,8 @@ const makeState = (overrides: Partial<TurnState> = {}): TurnState => ({
     provider: { endpoint: 'http://llm', apiKey: '', modelName: 'm' },
     getMessages: vi.fn().mockReturnValue(ALL_MSGS),
     getFreshProvider: vi.fn().mockReturnValue({ endpoint: 'http://llm', apiKey: '', modelName: 'm' }),
+    // Bookkeeping/NPC extraction runs on the Extraction slot, not Story.
+    getExtractionEndpoint: vi.fn().mockReturnValue({ endpoint: 'http://llm', apiKey: '', modelName: 'm' }),
     getUtilityEndpoint: vi.fn().mockReturnValue(undefined),
     chapters: [], pinnedChapterIds: [], clearPinnedChapters: vi.fn(),
     setChapters: vi.fn(),

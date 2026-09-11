@@ -5,6 +5,11 @@ import { get as idbGet } from 'idb-keyval';
 import { decryptSettingsProviders, decryptSettingsPresets } from '../../services/infrastructure/settingsCrypto';
 import { toast } from '../../components/Toast';
 import { api } from '../../services/llm/apiClient';
+import {
+    PROVIDER_ROLES,
+    findUnassignedRequiredRoles,
+    type ProviderRoleSpec,
+} from '../../services/providerRoles';
 
 import { API_BASE as API } from '../../lib/apiBase';
 
@@ -56,7 +61,11 @@ export type SettingsSlice = {
     getActiveSummarizerEndpoint: () => LLMProvider | undefined;
     getActiveUtilityEndpoint: () => LLMProvider | undefined;
     getActiveAuxiliaryEndpoint: () => LLMProvider | undefined;
+    getActiveDirectorEndpoint: () => LLMProvider | undefined;
+    getActiveExtractionEndpoint: () => LLMProvider | undefined;
     getActiveVisionEndpoint: () => LLMProvider | undefined;
+    /** Required slots on the active preset with no resolvable provider. Empty = runnable. */
+    getUnassignedRequiredRoles: () => readonly ProviderRoleSpec[];
 
     addProvider: (provider: LLMProvider) => void;
     updateProvider: (id: string, patch: Partial<LLMProvider>) => void;
@@ -248,11 +257,30 @@ export const createSettingsSlice: StateCreator<SettingsSlice & { activeCampaignI
         return s.settings.providers.find(p => p.id === preset.auxiliaryAIProviderId);
     },
 
+    getActiveDirectorEndpoint: () => {
+        const s = get();
+        const preset = s.getActivePreset();
+        if (!preset || !preset.directorAIProviderId) return undefined;
+        return s.settings.providers.find(p => p.id === preset.directorAIProviderId);
+    },
+
+    getActiveExtractionEndpoint: () => {
+        const s = get();
+        const preset = s.getActivePreset();
+        if (!preset || !preset.extractionAIProviderId) return undefined;
+        return s.settings.providers.find(p => p.id === preset.extractionAIProviderId);
+    },
+
     getActiveVisionEndpoint: () => {
         const s = get();
         const preset = s.getActivePreset();
         if (!preset || !preset.visionAIProviderId) return undefined;
         return s.settings.providers.find(p => p.id === preset.visionAIProviderId);
+    },
+
+    getUnassignedRequiredRoles: () => {
+        const s = get();
+        return findUnassignedRequiredRoles(s.getActivePreset(), s.settings.providers);
     },
 
     addProvider: (provider) => {
@@ -282,25 +310,14 @@ export const createSettingsSlice: StateCreator<SettingsSlice & { activeCampaignI
             if (s.settings.providers.length <= 1) return {};
             const newProviders = s.settings.providers.filter(p => p.id !== id);
             const firstProviderId = newProviders[0].id;
+            // Required slots must always resolve, so an orphaned one is re-pointed at
+            // the first surviving provider rather than cleared — clearing it would
+            // leave the preset unrunnable. Optional slots clear, disabling their feature.
             const newPresets = s.settings.presets.map(preset => {
                 const updated = { ...preset };
-                if (updated.storyAIProviderId === id) {
-                    updated.storyAIProviderId = firstProviderId;
-                }
-                if (updated.summarizerAIProviderId === id) {
-                    updated.summarizerAIProviderId = '';
-                }
-                if (updated.utilityAIProviderId === id) {
-                    updated.utilityAIProviderId = '';
-                }
-                if (updated.auxiliaryAIProviderId === id) {
-                    updated.auxiliaryAIProviderId = '';
-                }
-                if (updated.imageAIProviderId === id) {
-                    updated.imageAIProviderId = '';
-                }
-                if (updated.visionAIProviderId === id) {
-                    updated.visionAIProviderId = '';
+                for (const role of PROVIDER_ROLES) {
+                    if (updated[role.presetField] !== id) continue;
+                    updated[role.presetField] = role.required ? firstProviderId : '';
                 }
                 return updated;
             });

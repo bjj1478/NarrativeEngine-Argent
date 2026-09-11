@@ -5,6 +5,7 @@ import { runTurn } from '../services/turn/turnOrchestrator';
 import { formatAttachmentBlock } from '../services/vision/describeImage';
 import { commitPendingTurn, findRetryableMessage, persistPendingTurn } from '../services/turn/pendingCommit';
 import { debouncedSaveCampaignState } from '../store/slices/campaignSlice';
+import { toast } from '../components/Toast';
 import type { InventoryProposal, ConditionProposal, PlayerOutcomeRequest, PlayerOutcomeResolution } from '../types';
 import type { useSceneContinue } from '../components/hooks/useSceneContinue';
 
@@ -263,6 +264,19 @@ ${textToUse}` : attachmentBlock)
         // slot (the onDone guard drops it silently once commit fired).
         await commitPendingTurn().catch(e => console.warn('[ChatArea] commit failed:', e));
 
+        // Preflight: every required slot must resolve before the turn does any work.
+        // Roles never substitute for one another, so a missing assignment would
+        // otherwise surface mid-turn — often in a post-turn track, after the player
+        // already saw narration. One message naming every gap is the kinder failure.
+        const unassignedRoles = storeSnapshot.getUnassignedRequiredRoles?.() ?? [];
+        if (unassignedRoles.length > 0) {
+            toast.error(
+                `Unassigned model ${unassignedRoles.length === 1 ? 'slot' : 'slots'}: ${unassignedRoles.map(r => r.label).join(', ')}. ` +
+                'Open Settings → Presets and assign a provider to each.',
+            );
+            return;
+        }
+
         const storyProvider = storeSnapshot.getActiveStoryEndpoint();
         if (!storyProvider) return;
         const useAskGmBrief = armedAskGmBrief?.campaignId === activeCampaignId ? armedAskGmBrief.text : undefined;
@@ -288,6 +302,8 @@ ${textToUse}` : attachmentBlock)
             getMessages: () => useAppStore.getState().messages,
             getFreshProvider: () => useAppStore.getState().getActiveStoryEndpoint(),
             getUtilityEndpoint: () => useAppStore.getState().getActiveUtilityEndpoint(),
+            getDirectorEndpoint: () => useAppStore.getState().getActiveDirectorEndpoint(),
+            getExtractionEndpoint: () => useAppStore.getState().getActiveExtractionEndpoint(),
             getRawAuxiliaryProvider: () => useAppStore.getState().getActiveAuxiliaryEndpoint(),
             getRawSummariserProvider: () => useAppStore.getState().getActiveSummarizerEndpoint(),
             timeline: storeSnapshot.timeline,
@@ -311,10 +327,8 @@ ${textToUse}` : attachmentBlock)
             armedLoot: useArmedLoot,
             armedOneShot: useArmedOneShot,
             absoluteCommand: useAbsoluteCommand,
-            getFreshAuxiliaryProvider: () => {
-                const aux = useAppStore.getState().getActiveAuxiliaryEndpoint();
-                return aux?.modelName ? aux : useAppStore.getState().getActiveStoryEndpoint();
-            },
+            // No Story fallback: an unassigned auxiliary slot throws in `resolveEndpoint`.
+            getFreshAuxiliaryProvider: () => useAppStore.getState().getActiveAuxiliaryEndpoint(),
             nextTurnOocBrief: useAskGmBrief,
             directorSkipController: directorAbortRef.current,
         }, {

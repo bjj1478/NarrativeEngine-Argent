@@ -130,16 +130,13 @@ describe('WO-A2 §4.10 — lore excerpt budget (~1,200 tokens)', () => {
         expect(excerpt).not.toContain('FULL_D_SHOULD_NOT_APPEAR');
     });
 
-    it('resolveGuidedCreationEndpoint prefers utility over auxiliary over summarizer over story', () => {
-        const util = { endpoint: 'u', modelName: 'u' } as EndpointConfig;
+    // Guided creation belongs to the Worldbuilding & Lore slot. The old four-deep
+    // chain (utility ?? auxiliary ?? summarizer ?? story) is gone: roles no longer
+    // substitute, so an unassigned slot yields undefined rather than borrowing Story.
+    it('resolveGuidedCreationEndpoint uses the auxiliary slot and never substitutes', () => {
         const aux = { endpoint: 'x', modelName: 'x' } as EndpointConfig;
-        const summ = { endpoint: 's', modelName: 's' } as EndpointConfig;
-        const story = { endpoint: 'st', modelName: 'st' } as EndpointConfig;
-        expect(resolveGuidedCreationEndpoint(() => util, () => aux, () => summ, () => story)).toBe(util);
-        expect(resolveGuidedCreationEndpoint(() => undefined, () => aux, () => summ, () => story)).toBe(aux);
-        expect(resolveGuidedCreationEndpoint(() => undefined, () => undefined, () => summ, () => story)).toBe(summ);
-        expect(resolveGuidedCreationEndpoint(() => undefined, () => undefined, () => undefined, () => story)).toBe(story);
-        expect(resolveGuidedCreationEndpoint(() => undefined, () => undefined, () => undefined, () => undefined)).toBeUndefined();
+        expect(resolveGuidedCreationEndpoint(() => aux)).toBe(aux);
+        expect(resolveGuidedCreationEndpoint(() => undefined)).toBeUndefined();
     });
 });
 

@@ -72,7 +72,19 @@ const COMPUTE_WRITES = new Set([
 ]);
 const COMPUTE_TABLE_READS = new Set([]);
 const COMPUTE_TABLE_WRITES = new Set([]);
-const COMPUTE_MODEL_ROLES = new Set(['story', 'utility', 'auxiliary', 'summariser', 'raw-auxiliary', 'raw-summariser']);
+// Mirrors MODEL_ROLES in src/services/turn/hostFacade.ts. Duplicated because this
+// runs in the server process, so nothing type-checks the two against each other —
+// a role missing here is rejected at manifest load with no compile-time warning.
+const COMPUTE_MODEL_ROLES = new Set([
+    'story',
+    'director',
+    'extraction',
+    'utility',
+    'auxiliary',
+    'summariser',
+    'raw-auxiliary',
+    'raw-summariser',
+]);
 
 /**
  * WO-P5-05 §2: the only two record shapes a mod table may declare. The app

@@ -22,7 +22,7 @@ export const inventoryScanTrack: PostTurnTrack<PostCommitTrackContext> = {
                 ctx.facade ? undefined : ctx.bkProvider,
                 ctx.scanMessages,
                 ctx.inventoryItems,
-                ctx.storyModelCall,
+                ctx.extractionModelCall,
             );
             if (!assertStillActive(ctx.activeCampaignId, 'Inventory-Scan')) return;
             ctx.guardedUpdateContext({

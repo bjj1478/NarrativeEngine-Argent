@@ -50,10 +50,7 @@ export function AIGuidedCreationWizard({ onCancel, onCommit }: { onCancel: () =>
     // Endpoint + lore availability (§2.2).
     const provider = useMemo<EndpointConfig | ProviderConfig | undefined>(() => {
         return resolveGuidedCreationEndpoint(
-            () => useAppStore.getState().getActiveUtilityEndpoint(),
             () => useAppStore.getState().getActiveAuxiliaryEndpoint(),
-            () => useAppStore.getState().getActiveSummarizerEndpoint(),
-            () => useAppStore.getState().getActiveStoryEndpoint(),
         );
     }, []);
 

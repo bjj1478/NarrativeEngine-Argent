@@ -151,8 +151,9 @@ export function useChapterSealing(deps: UseChapterSealingDeps) {
             });
 
             const capturedHeaderIndex = deps.context.headerIndex;
-            const capturedProvider = deps.getActiveSummarizerEndpoint?.()
-                ?? deps.getActiveStoryEndpoint();
+            // Summarizer only — the chapter summary is player-visible prose and must
+            // not silently land on whichever model happens to be assigned elsewhere.
+            const capturedProvider = deps.getActiveSummarizerEndpoint?.();
             await generateChapterSummaryAsync(campaignId, result.sealedChapter, capturedHeaderIndex, capturedProvider, deps.setChapters);
             const updatedChapters = await api.chapters.list(campaignId);
             const sealedWithSummary = updatedChapters.find(c => c.chapterId === result.sealedChapter.chapterId);

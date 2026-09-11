@@ -20,7 +20,7 @@ function messagesToPrompt(messages: Array<{ role: string; content: string | null
 
 function brokerJsonCall(facade: HostFacade): JsonModelCall {
     return async (messages, _contextLabel, trackingLabel) => {
-        const response = await facade.model.call('story', {
+        const response = await facade.model.call('extraction', {
             prompt: messagesToPrompt(messages),
             trackingLabel,
             timeoutMs: AI_CALL_TIMEOUT_MS,
@@ -40,7 +40,7 @@ async function runNPCTrack(ctx: PostTurnTrackContext): Promise<void> {
     const npcLedger = ctx.facade ? data.npcLedger : ctx.npcLedger;
     const state = ctx.state;
     const modelCall = useBroker ? brokerJsonCall(facade) : undefined;
-    const provider = useBroker ? undefined : state?.getFreshProvider();
+    const provider = useBroker ? undefined : state?.getExtractionEndpoint?.();
 
     const pc = data.context.playerCharacter ?? npcLedger.find(n => n.isPC) ?? null;
     const excludeNames = npcLedger.flatMap(npc => {
@@ -58,7 +58,7 @@ async function runNPCTrack(ctx: PostTurnTrackContext): Promise<void> {
 
     const validatedNames = tierAllows(config.aiTier, 'npcValidate')
         ? useBroker
-            ? await validateNPCCandidates(undefined, extractedNames, lastAssistantContent, async (request) => facade.model.call('story', request))
+            ? await validateNPCCandidates(undefined, extractedNames, lastAssistantContent, async (request) => facade.model.call('extraction', request))
             : provider
                 ? await validateNPCCandidates(provider, extractedNames, lastAssistantContent)
                 : extractedNames
@@ -93,7 +93,7 @@ async function runNPCTrack(ctx: PostTurnTrackContext): Promise<void> {
         );
 
         if (npcsDueForUpdate.length > 0) {
-            const updateProvider = useBroker ? undefined : state?.getFreshProvider();
+            const updateProvider = useBroker ? undefined : state?.getExtractionEndpoint?.();
             if (useBroker || updateProvider) {
                 backgroundQueue.push(
                     `NPC-Update:${npcsDueForUpdate.map(n => n.name).join(',')}`,
@@ -117,7 +117,7 @@ async function runNPCTrack(ctx: PostTurnTrackContext): Promise<void> {
         if (tierAllows(config.aiTier, 'drivesBackfill')) {
             const npcsNeedingDrives = existingNpcsToUpdate.filter(n => !n.drives);
             if (npcsNeedingDrives.length > 0) {
-                const backfillProvider = useBroker ? undefined : state?.getFreshProvider();
+                const backfillProvider = useBroker ? undefined : state?.getExtractionEndpoint?.();
                 if (useBroker || backfillProvider) {
                     backgroundQueue.push(
                         `NPC-Drives-Backfill:${npcsNeedingDrives.map(n => n.name).join(',')}`,

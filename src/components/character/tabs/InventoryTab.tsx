@@ -131,7 +131,7 @@ export function InventoryTab() {
 
     const inventoryItems = useAppStore((s) => s.inventoryItems ?? s.context.inventoryItems ?? []);
     const setInventoryItems = useAppStore((s) => s.setInventoryItems);
-    const getActiveStoryEndpoint = useAppStore((s) => s.getActiveStoryEndpoint);
+    const getActiveExtractionEndpoint = useAppStore((s) => s.getActiveExtractionEndpoint);
 
     const [activeTab, setActiveTab] = useState<InventoryItemCategory | 'all' | 'equipped'>('all');
     const [search, setSearch] = useState('');
@@ -143,7 +143,7 @@ export function InventoryTab() {
         if (isScanningInventory) return;
         setIsScanningInventory(true);
         try {
-            const provider = getActiveStoryEndpoint();
+            const provider = getActiveExtractionEndpoint();
             if (!provider) return;
             const newItems = await scanInventory(provider as ProviderConfig | EndpointConfig, messages, inventoryItems);
             setInventoryItems(newItems);

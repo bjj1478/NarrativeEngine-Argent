@@ -4,22 +4,17 @@ import { countTokens } from '../infrastructure/tokenizer';
 /**
  * WO-A2 §2.2 — endpoint + lore selection for AI-Guided creation (zero LLM).
  *
- * Endpoint chain (deliberately differs from useSelectionActions.ts:180's
- * `summarizer ?? utility ?? story` — NOT an accident, do not "harmonize"):
- *   getActiveUtilityEndpoint() ?? getActiveAuxiliaryEndpoint() ??
- *   getActiveSummarizerEndpoint() ?? getActiveStoryEndpoint()
- * Cheap models first; story AI is the last resort.
+ * Endpoint: the Worldbuilding & Lore (auxiliary) slot, which owns guided character
+ * creation. This used to be a four-deep chain ending at Story; roles no longer
+ * substitute for one another, so the slot that owns the job is the slot that runs it.
  */
 
 export type EndpointGetter = () => EndpointConfig | ProviderConfig | undefined;
 
 export function resolveGuidedCreationEndpoint(
-    getUtility: EndpointGetter,
     getAuxiliary: EndpointGetter,
-    getSummarizer: EndpointGetter,
-    getStory: EndpointGetter,
 ): EndpointConfig | ProviderConfig | undefined {
-    return getUtility() ?? getAuxiliary() ?? getSummarizer() ?? getStory();
+    return getAuxiliary();
 }
 
 /**

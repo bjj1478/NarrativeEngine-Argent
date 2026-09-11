@@ -36,7 +36,7 @@ export function useNpcReview(): UseNpcReview {
 
     const startReview = () => {
         const state = useAppStore.getState();
-        const provider = state.getActiveUtilityEndpoint() ?? state.getActiveStoryEndpoint();
+        const provider = state.getActiveExtractionEndpoint();
         if (!provider) {
             setReviewError('No AI endpoint configured.');
             setReviewOpen(true);

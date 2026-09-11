@@ -73,8 +73,12 @@ export const defaultPreset: AIPreset = {
     name: 'Default Setting',
     storyAIProviderId: defaultProvider.id,
     summarizerAIProviderId: defaultProvider.id,
-    utilityAIProviderId: '',
-    auxiliaryAIProviderId: '',
+    utilityAIProviderId: defaultProvider.id,
+    auxiliaryAIProviderId: defaultProvider.id,
+    directorAIProviderId: defaultProvider.id,
+    extractionAIProviderId: defaultProvider.id,
+    // Optional slots: unset disables the feature rather than pointing image/vision
+    // work at a text model.
     imageAIProviderId: '',
     visionAIProviderId: '',
 };
@@ -280,15 +284,34 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
     }
 
     let presets: AIPreset[];
+    /** Set when an existing preset had no Utility assignment — see the notice below. */
+    let utilityRoleBackfilled = false;
 
     if (Array.isArray(raw.presets) && (raw.presets as any[]).length > 0) {
         presets = (raw.presets as any[]).map((p: any) => {
             let storyAIProviderId = p.storyAIProviderId || getOrAddProvider(p.storyAI);
             if (!storyAIProviderId && providers.length > 0) storyAIProviderId = providers[0].id;
 
-            const summarizerAIProviderId = p.summarizerAIProviderId || getOrAddProvider(p.summarizerAI) || '';
-            const utilityAIProviderId = p.utilityAIProviderId || getOrAddProvider(p.utilityAI) || '';
-            const auxiliaryAIProviderId = p.auxiliaryAIProviderId || getOrAddProvider(p.auxiliaryAI) || '';
+            // Required slots backfill from Story when unassigned. Every one of these
+            // previously fell back to the Story provider at call time, so this makes
+            // today's implicit routing explicit and visible without changing behaviour.
+            // The one exception is `utility`, which used to fail closed — see
+            // `newlyActivatedUtilityFeatures` below.
+            const summarizerAIProviderId = p.summarizerAIProviderId || getOrAddProvider(p.summarizerAI) || storyAIProviderId;
+            // Utility is the one required slot that used to FAIL CLOSED: unassigned meant
+            // the archive planner, context recommender, deep search, query expansion and
+            // reranker simply never ran. Backfilling turns them on, which costs tokens the
+            // user was not spending. Flag it so the UI can say so once; the correct off
+            // switch is the tier/block toggles, not an empty slot.
+            const resolvedUtility = p.utilityAIProviderId || getOrAddProvider(p.utilityAI) || '';
+            if (!resolvedUtility) utilityRoleBackfilled = true;
+            const utilityAIProviderId = resolvedUtility || storyAIProviderId;
+            const auxiliaryAIProviderId = p.auxiliaryAIProviderId || getOrAddProvider(p.auxiliaryAI) || storyAIProviderId;
+            // Director was resolved as `auxiliary ?? story`; Extraction ran on story.
+            const directorAIProviderId = p.directorAIProviderId || auxiliaryAIProviderId || storyAIProviderId;
+            const extractionAIProviderId = p.extractionAIProviderId || storyAIProviderId;
+            // Optional slots stay unassigned — unset disables the feature rather than
+            // silently pointing image/vision work at a text model.
             const imageAIProviderId = p.imageAIProviderId || getOrAddProvider(p.imageAI) || '';
             const visionAIProviderId = p.visionAIProviderId || getOrAddProvider(p.visionAI) || '';
 
@@ -301,6 +324,8 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
                 summarizerAIProviderId,
                 utilityAIProviderId,
                 auxiliaryAIProviderId,
+                directorAIProviderId,
+                extractionAIProviderId,
                 imageAIProviderId,
                 visionAIProviderId,
             } as AIPreset;
@@ -336,10 +361,12 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
             name: 'Default Preset',
             storyAIProviderId: providerId,
             summarizerAIProviderId: providerId,
-            utilityAIProviderId: '',
-            auxiliaryAIProviderId: '',
+            utilityAIProviderId: providerId,
+            auxiliaryAIProviderId: providerId,
+            directorAIProviderId: providerId,
+            extractionAIProviderId: providerId,
             imageAIProviderId: '',
-    visionAIProviderId: '',
+            visionAIProviderId: '',
         }];
 
         // Carry over legacy image endpoint config into its own provider if present
@@ -425,6 +452,12 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
         modLoadOrder: Array.isArray(raw.modLoadOrder)
             ? (raw.modLoadOrder as unknown[]).filter((id): id is string => typeof id === 'string')
             : undefined,
+
+        // One-time notice: a preset had no Utility model, so retrieval features that
+        // were silently inactive are now live. Sticky until the user dismisses it —
+        // `migrateSettings` runs on every load, so it must not re-arm once cleared.
+        utilityRoleBackfillNoticePending:
+            (raw.utilityRoleBackfillNoticePending as boolean | undefined) ?? utilityRoleBackfilled,
     };
 }
 

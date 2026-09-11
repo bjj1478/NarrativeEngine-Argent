@@ -34,7 +34,7 @@ export function DivergenceReviewModal() {
         if (!factText.trim()) return;
         setIsStructuring(true);
         try {
-            const provider = useAppStore.getState().getActiveUtilityEndpoint() ?? useAppStore.getState().getActiveStoryEndpoint();
+            const provider = useAppStore.getState().getActiveExtractionEndpoint();
             if (!provider) {
                 toast.error('No AI provider configured');
                 setIsStructuring(false);

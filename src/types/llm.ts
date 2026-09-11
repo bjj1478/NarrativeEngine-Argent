@@ -82,6 +82,13 @@ export type AIPreset = {
     summarizerAIProviderId?: string;
     utilityAIProviderId?: string;
     auxiliaryAIProviderId?: string;
+    /** Director AI — runs the Director Brief (blocking, in-turn). Split out of the
+     *  auxiliary slot so scene direction is not tied to lore/worldbuilding work. */
+    directorAIProviderId?: string;
+    /** Extraction AI — structured read-and-report work (importance rating, bookkeeping
+     *  scans, NPC detection, scene events). Split off the story slot so JSON extraction
+     *  is not billed to the narration model. Never produces player-visible prose. */
+    extractionAIProviderId?: string;
     imageAIProviderId?: string;
     /** Vision AI — reads an attached image and writes it back as text (visual profile
      *  + appearance prose). Optional: unset means the "Read Image" action is unavailable.
@@ -142,6 +149,10 @@ export type AppSettings = {
      *  something it depends on. Absent or empty = manifest default. Mods
      *  not listed fall back to `loadOrder` then `id` among themselves. */
     modLoadOrder?: string[];
+    /** One-time notice: migration backfilled an unassigned Utility slot, so retrieval
+     *  features that used to fail closed (archive planner, context recommender, deep
+     *  search, query expansion, reranker) are now active. Cleared on dismiss. */
+    utilityRoleBackfillNoticePending?: boolean;
     aiTier?: AiTier;                 // 'lite' | 'pro' | 'max' — gates which turn stages run (Phase 4)
     uiScale?: number;                // 0.7–1.3, default 1.0 — global UI zoom (ported from mobile settings)
     embeddingModel?: 'standard' | 'high';  // kept for type parity with mobile; mainApp runs a single server-side embedder, so this is informational only

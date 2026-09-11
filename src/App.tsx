@@ -20,7 +20,7 @@ import { RenameNpcModal } from './components/RenameNpcModal';
 import { GalleryModal } from './components/GalleryModal';
 import { PinnedMemoriesPanel } from './components/PinnedMemoriesPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ToastContainer } from './components/Toast';
+import { ToastContainer, toast } from './components/Toast';
 import { IndexingSpeedPrompt } from './components/IndexingSpeedPrompt';
 import { VaultUnlockModal } from './components/VaultUnlockModal';
 import { WorldMapTravelBridge } from './components/WorldMapTravelBridge';
@@ -46,6 +46,26 @@ export default function App() {
   // True once campaign state has been hydrated into Zustand (or there's no campaign to hydrate)
   const [campaignLoaded, setCampaignLoaded] = useState(false);
   const [isCheckingVault, setIsCheckingVault] = useState(false);
+
+  // One-time notice after the provider-role migration. Utility used to FAIL CLOSED:
+  // an unassigned slot meant the archive planner, context recommender, deep search,
+  // query expansion and reranker silently never ran. Backfilling it from Story turns
+  // them on, which costs tokens the user was not spending — so say so once rather than
+  // letting the bill be the first they hear of it. Features are disabled via the tier
+  // and block toggles, not by blanking a slot.
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    if (!useAppStore.getState().settings.utilityRoleBackfillNoticePending) return;
+    toast.info(
+      'Retrieval features (archive planner, context recommender, deep search, query expansion, reranker) '
+      + 'are now active: they needed a Utility model, which has been set to your Story model. '
+      + 'Reassign it in Settings → Presets, or turn individual features off in the Blocks panel.',
+      {
+        label: 'Got it',
+        onClick: () => useAppStore.getState().updateSettings({ utilityRoleBackfillNoticePending: false }),
+      },
+    );
+  }, [settingsLoaded]);
 
   // Initial load: check vault status after settings load
   useEffect(() => {

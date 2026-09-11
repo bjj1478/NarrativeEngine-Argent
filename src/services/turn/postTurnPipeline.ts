@@ -199,11 +199,11 @@ async function runArchiveTrack(
 
     if (!appendedSceneId) {
         let sceneImportance: number | undefined;
-        const importanceProvider = facade ? undefined : state.getFreshProvider();
-        const importanceAvailable = facade ? hasHostModelRole(facade, 'story') : Boolean(importanceProvider);
+        const importanceProvider = facade ? undefined : state.getExtractionEndpoint?.();
+        const importanceAvailable = facade ? hasHostModelRole(facade, 'extraction') : Boolean(importanceProvider);
         if (importanceAvailable && tierAllows(facade?.config.aiTier ?? state.settings.aiTier, 'importanceRating')) {
             try {
-                sceneImportance = await rateImportance(importanceProvider, displayInput, lastAssistantContent, allMsgs, facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('story', request) : undefined);
+                sceneImportance = await rateImportance(importanceProvider, displayInput, lastAssistantContent, allMsgs, facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('extraction', request) : undefined);
                 console.log(`[ImportanceRater] Scene rated: ${sceneImportance}/5`);
             } catch (err) {
                 console.warn('[ImportanceRater] Failed (non-fatal):', err);
@@ -290,8 +290,10 @@ async function runArchiveTrack(
     }
 
     // Trap 2: Compute shared scan inputs once
-    const bkProvider = state.getFreshProvider();
-    const bkAvailable = facade ? hasHostModelRole(facade, 'story') : Boolean(bkProvider);
+    // Bookkeeping scans read the committed scene and report structured deltas —
+    // extraction work, not authoring.
+    const bkProvider = state.getExtractionEndpoint?.();
+    const bkAvailable = facade ? hasHostModelRole(facade, 'extraction') : Boolean(bkProvider);
     const snapshotContext = facade?.data.context;
     // Prefer the turn's frozen snapshot when it actually carries the PC, else re-read live
     // state. This used to key off `characterProfileActive`, a flag that no longer exists —
@@ -299,7 +301,7 @@ async function runArchiveTrack(
     const freshContext = snapshotContext?.playerCharacter ? snapshotContext : state.getFreshContext();
     const inventoryItems = freshContext.inventoryItems || [];
     const scanMessages = facade?.data.messages ?? state.getMessages();
-    const storyModelCall = facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('story', request) : undefined;
+    const extractionModelCall = facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('extraction', request) : undefined;
 
     const guardedUpdateContext = makeGuarded(facade?.write.updateContext ?? callbacks.updateContext, activeCampaignId, 'updateContext (bookkeeping scan)');
     const guardedSetInventoryItems = makeGuarded(
@@ -337,7 +339,7 @@ async function runArchiveTrack(
         freshIndex,
         freshChapters,
         entry,
-        eventExtractionProvider: facade ? undefined : state.getFreshProvider(),
+        eventExtractionProvider: facade ? undefined : state.getExtractionEndpoint?.(),
         bookkeepingDue,
         bkProvider,
         bkAvailable,
@@ -345,7 +347,7 @@ async function runArchiveTrack(
         freshContext,
         inventoryItems,
         scanMessages,
-        storyModelCall,
+        extractionModelCall,
         guardedUpdateContext,
         guardedSetInventoryItems,
         guardedSetLocationLedger,

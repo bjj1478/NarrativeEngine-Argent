@@ -512,17 +512,27 @@ Three mods ship bundled — **World Map**, **Enemy Compendium**, and a tone exam
 
 ## Supported LLM Providers
 
-Any OpenAI-compatible API works. Configure up to 5 endpoints per preset:
+Any OpenAI-compatible API works. A preset assigns a model to each of eight roles — six required, two optional:
 
-| Role | Purpose |
-|---|---|
-| **Story AI** | Main GM narration — required |
-| **Summarizer AI** | Condensing old history (can use a cheaper/faster model) |
-| **Utility AI** | Lore checks, divergence structuring, archive reranking, rule indexing |
-| **Image AI** | Portrait and scene illustration generation |
-| **Auxiliary AI** | Witness capture, NPC intro engine, scene analysis fallback |
+| Role | Purpose | Required |
+|---|---|---|
+| **Story AI** | GM narration, Scene Continue, swipes, Ask GM; plus invented content (encounter tags, complications, arcs, the overworld) | yes |
+| **Director AI** | The Director Brief — audits the last turn and steers the next GM reply. Blocking and in-turn, so latency here is felt directly | yes |
+| **Extraction AI** | Reads scenes and reports structured data: importance rating, inventory/location/trait scans, NPC detection and updates, scene events. Never writes prose — a small fast model suits this | yes |
+| **Worldbuilding & Lore AI** | Lore formatting, expansion and import, the World Primer, AI-guided character creation | yes |
+| **Utility AI** | Chooses what the GM sees: archive recall, context recommendation, query expansion, reranking, rules and lore indexing, fact clustering. Never writes prose | yes |
+| **Summarizer AI** | Chapter summaries, synopsis backfill, divergence pruning, location enrichment, lore-check rewrites, timeskip narration | yes |
+| **Image AI** | Portrait and scene illustration generation | no |
+| **Vision AI** | Reads an attached image and writes it back as character-sheet text (needs a multimodal model) | no |
 
-Each endpoint has its own model, API key, base URL, and sampling config (temperature, top-p, max tokens). Thinking/reasoning effort is supported where the provider offers it.
+**Roles never substitute for one another.** If a required slot has no model, the app says so and
+stops rather than quietly spending your narration model on bookkeeping. Pointing several slots at
+the same provider is fine — that is the default after an upgrade — so start there and split off
+the cheap work when you want to.
+
+Each endpoint has its own model, API key, base URL, and reasoning effort. Sampling (temperature,
+top-p, max tokens) is configured once per preset and applies to narration; utility calls set their
+own temperatures internally.
 
 Works with Ollama for fully local play — no internet required after setup.
 

@@ -112,7 +112,9 @@ function baseInput(over: Partial<DirectorBriefInput> = {}): DirectorBriefInput {
         onStageNpcIds: ['npc_ingrid'],
         timeline: [tlEvent()],
         campaignId: 'camp_a',
-        getAuxiliaryProvider: undefined,
+        // The Director runs on its own slot and never borrows `provider`, so the
+        // default fixture has to assign one for the Brief to run at all.
+        getDirectorProvider: () => endpoint(),
         signal: undefined,
         ...over,
     };
@@ -193,36 +195,34 @@ describe('runDirectorBrief', () => {
             expect(prompt).toContain('SUMMARY');
         });
 
-        it('uses auxiliary provider when one resolves; falls back to story provider', async () => {
+        it('uses the director provider, never the story provider', async () => {
             mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
-            const aux = endpoint('aux-model');
+            const director = endpoint('director-model');
             await runDirectorBrief(baseInput({
                 provider: endpoint('story-model'),
-                getAuxiliaryProvider: () => aux,
+                getDirectorProvider: () => director,
             }));
             const usedProvider = mockLlmCall.mock.calls[0][0];
-            expect((usedProvider as EndpointConfig).modelName).toBe('aux-model');
+            expect((usedProvider as EndpointConfig).modelName).toBe('director-model');
         });
 
-        it('falls back to story provider when auxiliary has no modelName', async () => {
-            mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
-            const auxNoModel = { endpoint: 'http://localhost' } as any;
-            await runDirectorBrief(baseInput({
+        it('skips the Brief when the director slot has no modelName (never borrows story)', async () => {
+            const directorNoModel = { endpoint: 'http://localhost' } as any;
+            const brief = await runDirectorBrief(baseInput({
                 provider: endpoint('story-model'),
-                getAuxiliaryProvider: () => auxNoModel,
+                getDirectorProvider: () => directorNoModel,
             }));
-            const usedProvider = mockLlmCall.mock.calls[0][0];
-            expect((usedProvider as EndpointConfig).modelName).toBe('story-model');
+            expect(brief).toBeNull();
+            expect(mockLlmCall).not.toHaveBeenCalled();
         });
 
-        it('falls back to story provider when getAuxiliaryProvider returns undefined', async () => {
-            mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
-            await runDirectorBrief(baseInput({
+        it('skips the Brief when getDirectorProvider returns undefined (never borrows story)', async () => {
+            const brief = await runDirectorBrief(baseInput({
                 provider: endpoint('story-model'),
-                getAuxiliaryProvider: () => undefined,
+                getDirectorProvider: () => undefined,
             }));
-            const usedProvider = mockLlmCall.mock.calls[0][0];
-            expect((usedProvider as EndpointConfig).modelName).toBe('story-model');
+            expect(brief).toBeNull();
+            expect(mockLlmCall).not.toHaveBeenCalled();
         });
 
         it('uses 180_000ms timeout (DIRECTOR_BRIEF_TIMEOUT_MS)', () => {
@@ -366,20 +366,20 @@ describe('runDirectorBrief', () => {
         });
 
         it('returns null when no provider resolves (story undefined, no auxiliary resolver)', async () => {
-            const brief = await runDirectorBrief(baseInput({ provider: undefined, getAuxiliaryProvider: undefined }));
+            const brief = await runDirectorBrief(baseInput({ provider: undefined, getDirectorProvider: undefined }));
             expect(brief).toBeNull();
             expect(mockLlmCall).not.toHaveBeenCalled();
         });
 
         it('returns null when no provider resolves (story undefined, auxiliary returns undefined)', async () => {
-            const brief = await runDirectorBrief(baseInput({ provider: undefined, getAuxiliaryProvider: () => undefined }));
+            const brief = await runDirectorBrief(baseInput({ provider: undefined, getDirectorProvider: () => undefined }));
             expect(brief).toBeNull();
             expect(mockLlmCall).not.toHaveBeenCalled();
         });
 
         it('returns null when no provider resolves (story undefined, auxiliary has no modelName)', async () => {
             const auxNoModel = { endpoint: 'http://localhost' } as any;
-            const brief = await runDirectorBrief(baseInput({ provider: undefined, getAuxiliaryProvider: () => auxNoModel }));
+            const brief = await runDirectorBrief(baseInput({ provider: undefined, getDirectorProvider: () => auxNoModel }));
             expect(brief).toBeNull();
             expect(mockLlmCall).not.toHaveBeenCalled();
         });
@@ -409,10 +409,10 @@ describe('runDirectorBrief', () => {
 
     // ── WO-04b §1: failure-total boundary ─────────────────────────────────────
     describe('failure-total boundary (WO-04b §1)', () => {
-        it('returns null when getAuxiliaryProvider throws; the promise must not reject', async () => {
+        it('returns null when getDirectorProvider throws; the promise must not reject', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const throwing = () => { throw new Error('aux resolver exploded'); };
-            const brief = await runDirectorBrief(baseInput({ getAuxiliaryProvider: throwing as any }));
+            const brief = await runDirectorBrief(baseInput({ getDirectorProvider: throwing as any }));
             expect(brief).toBeNull();
             // The catch path logs a warning (not an abort, not a timeout).
             expect(warnSpy).toHaveBeenCalledWith('[DirectorBrief] failed:', expect.any(Error));
@@ -421,26 +421,26 @@ describe('runDirectorBrief', () => {
             warnSpy.mockRestore();
         });
 
-        it('returns null when getAuxiliaryProvider throws AND storyProvider is undefined', async () => {
+        it('returns null when getDirectorProvider throws AND storyProvider is undefined', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const throwing = () => { throw new Error('aux resolver exploded'); };
-            const brief = await runDirectorBrief(baseInput({ provider: undefined, getAuxiliaryProvider: throwing as any }));
+            const brief = await runDirectorBrief(baseInput({ provider: undefined, getDirectorProvider: throwing as any }));
             expect(brief).toBeNull();
             expect(mockLlmCall).not.toHaveBeenCalled();
             warnSpy.mockRestore();
         });
 
-        it('does NOT cache when getAuxiliaryProvider throws (retry may succeed)', async () => {
+        it('does NOT cache when getDirectorProvider throws (retry may succeed)', async () => {
             const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
             const throwing = () => { throw new Error('aux resolver exploded'); };
-            const input = baseInput({ getAuxiliaryProvider: throwing as any });
+            const input = baseInput({ getDirectorProvider: throwing as any });
             const first = await runDirectorBrief(input);
             expect(first).toBeNull();
             // The cache must NOT hold the null — a retry with a non-throwing
             // resolver should reach the LLM. Swap the resolver to a working
             // one and confirm a fresh call.
             mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
-            const second = await runDirectorBrief({ ...input, getAuxiliaryProvider: () => endpoint('aux') });
+            const second = await runDirectorBrief({ ...input, getDirectorProvider: () => endpoint('aux') });
             expect(second).toBe(VALID_BRIEF);
             expect(mockLlmCall).toHaveBeenCalledTimes(1);
             // And the cache now holds the successful brief.
@@ -483,7 +483,7 @@ describe('runDirectorBrief', () => {
             const aux = endpoint('aux-model');
             const input = baseInput({
                 provider: undefined,                 // no story provider
-                getAuxiliaryProvider: () => aux,    // auxiliary resolves
+                getDirectorProvider: () => aux,    // auxiliary resolves
             });
             const first = await runDirectorBrief(input);
             const second = await runDirectorBrief(input);
@@ -731,42 +731,38 @@ describe('parseDirectorBrief', () => {
 });
 
 describe('resolveDirectorProvider', () => {
-    // WO-04b §2: the auxiliary resolver is called even when storyProvider is
-    // undefined — a preset with only an auxiliary endpoint still resolves a
-    // Director provider. Returns undefined only when both are absent/invalid.
-    it('returns the auxiliary provider when storyProvider is undefined and auxiliary has a modelName', () => {
-        const aux = endpoint('aux');
-        expect(resolveDirectorProvider(undefined, () => aux)).toBe(aux);
+    // The Director has its own slot and nothing substitutes for it. The story
+    // provider argument is retained only for call-shape compatibility and must
+    // never be returned — borrowing it is exactly the bug the slot split fixed.
+    it('returns the director provider when it has a modelName', () => {
+        const director = endpoint('director');
+        expect(resolveDirectorProvider(undefined, () => director)).toBe(director);
     });
 
-    it('returns undefined when storyProvider is undefined and auxiliary returns undefined', () => {
+    it('returns the director provider even when a story provider is present', () => {
+        const story = endpoint('story');
+        const director = endpoint('director');
+        expect(resolveDirectorProvider(story, () => director)).toBe(director);
+    });
+
+    it('returns undefined when the director resolver yields undefined', () => {
         expect(resolveDirectorProvider(undefined, () => undefined)).toBeUndefined();
     });
 
-    it('returns undefined when both storyProvider and auxiliary are undefined', () => {
+    it('returns undefined when no director resolver is passed', () => {
         expect(resolveDirectorProvider(undefined, undefined)).toBeUndefined();
     });
 
-    it('returns the auxiliary provider when it has a modelName', () => {
+    it('never falls back to the story provider when the director slot is unassigned', () => {
         const story = endpoint('story');
-        const aux = endpoint('aux');
-        expect(resolveDirectorProvider(story, () => aux)).toBe(aux);
+        expect(resolveDirectorProvider(story, () => undefined)).toBeUndefined();
+        expect(resolveDirectorProvider(story, undefined)).toBeUndefined();
     });
 
-    it('falls back to story provider when auxiliary returns undefined', () => {
+    it('never falls back to the story provider when the director slot has no modelName', () => {
         const story = endpoint('story');
-        expect(resolveDirectorProvider(story, () => undefined)).toBe(story);
-    });
-
-    it('falls back to story provider when auxiliary has no modelName', () => {
-        const story = endpoint('story');
-        const auxNoModel = { endpoint: 'http://x' } as any;
-        expect(resolveDirectorProvider(story, () => auxNoModel)).toBe(story);
-    });
-
-    it('falls back to story provider when no getAuxiliaryProvider is passed', () => {
-        const story = endpoint('story');
-        expect(resolveDirectorProvider(story, undefined)).toBe(story);
+        const directorNoModel = { endpoint: 'http://x' } as any;
+        expect(resolveDirectorProvider(story, () => directorNoModel)).toBeUndefined();
     });
 });
 

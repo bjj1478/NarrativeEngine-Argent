@@ -905,9 +905,16 @@ interface ModModel {
 }
 ```
 
-Brokers by role (`'story' | 'utility' | 'auxiliary' | 'summariser' |
-'raw-auxiliary' | 'raw-summariser'`). No endpoint, no provider config, no
-credential ever crosses the surface. Caps: **3 calls per lease, 2048 output
+Brokers by role (`'story' | 'director' | 'extraction' | 'utility' |
+'auxiliary' | 'summariser' | 'raw-auxiliary' | 'raw-summariser'`). No endpoint,
+no provider config, no credential ever crosses the surface.
+
+Each role is a separate model the user assigns, and **no role substitutes for
+another** — asking for a role the user has not assigned throws rather than
+quietly using a different model. Check `ctx.model.available(role)` first if the
+call is optional. `raw-auxiliary` and `raw-summariser` are legacy aliases of
+`auxiliary` and `summariser`: they existed to opt out of a Story fallback that
+no longer exists, and now resolve identically to their base role. Caps: **3 calls per lease, 2048 output
 tokens per call**. `refresh()` returns a new lease with a fresh budget. For
 a sandboxed mod this cap is enforced at the host boundary and is real; for a
 native mod it is a guardrail against a runaway loop, not a security control

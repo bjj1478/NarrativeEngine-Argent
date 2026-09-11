@@ -197,8 +197,9 @@ export function useSelectionActions() {
                 ledger: state.npcLedger ?? [],
                 messages: state.messages,
                 campaignId,
-                storyProvider: state.getActiveStoryEndpoint(),
-                updateProvider: state.getActiveSummarizerEndpoint() ?? state.getActiveUtilityEndpoint() ?? state.getActiveStoryEndpoint(),
+                // Building an NPC record from selected text is extraction, not authoring.
+                storyProvider: state.getActiveExtractionEndpoint(),
+                updateProvider: state.getActiveExtractionEndpoint(),
                 addNPC: state.addNPC,
                 updateNPC: state.updateNPC,
                 matureMode: state.settings.matureMode ?? false,

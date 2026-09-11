@@ -121,15 +121,17 @@ export function LoreCheckModal() {
         (async () => {
             try {
                 const state = useAppStore.getState();
-                const utility = state.getActiveUtilityEndpoint();
-                if (!utility) {
-                    setError('No Utility AI configured. Set one in Settings \u2192 AI Providers.');
+                // The rewrite replaces narration the player reads, so it runs on the
+                // Summarizer slot rather than Utility (which handles retrieval only).
+                const summarizer = state.getActiveSummarizerEndpoint();
+                if (!summarizer) {
+                    setError('No Summarizer AI configured. Set one in Settings → Presets.');
                     setStage('done');
                     return;
                 }
                 setStatus('Rewriting with your fact...');
                 const res = await runDirectRewrite({
-                    utilityEndpoint: utility,
+                    summarizerEndpoint: summarizer,
                     selectedText: selection.selectedText,
                     surroundingContext: selection.surroundingContext,
                     fact,

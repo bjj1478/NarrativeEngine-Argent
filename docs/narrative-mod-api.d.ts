@@ -60,9 +60,14 @@ export type AiTier = 'lite' | 'pro' | 'max';
 
 export type ModelRole =
     | 'story'
+    | 'director'
+    | 'extraction'
     | 'utility'
     | 'auxiliary'
     | 'summariser'
+    /** Legacy aliases of `auxiliary` / `summariser`. They existed to opt out of a
+     *  Story fallback that no longer exists — every role is explicitly assigned and
+     *  none substitutes — so they now resolve identically to their base role. */
     | 'raw-auxiliary'
     | 'raw-summariser';
 

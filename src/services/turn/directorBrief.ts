@@ -11,12 +11,11 @@
 // swipes reuse `cachedPayload` and never re-enter this path, we keep the cache anyway
 // (cheap insurance — see `pendingCommit.ts:capturePendingTurnSnapshot`).
 //
-// Provider resolution (WO-04 §2): auxiliary endpoint if the preset resolves one,
-// else story endpoint. Mirrors the getter-fallback pattern in
-// `turnOrchestrator.ts:197` (`getActiveAuxiliaryEndpoint() ?? provider`) and
-// `pendingCommit.ts:249-252` (`getFreshAuxiliaryProvider`). The available getters
-// on the store are: `getActiveStoryEndpoint`, `getActiveUtilityEndpoint`,
-// `getActiveAuxiliaryEndpoint` (see `store/slices/settingsSlice.ts:180-213`).
+// Provider resolution: the Director slot, and nothing else. The Brief used to ride
+// on the auxiliary slot and fall back to Story, which meant a cheap model assigned
+// for "NPC classification" silently took over scene direction. It now has its own
+// assignment (`getActiveDirectorEndpoint`) and no substitute — unassigned means the
+// Brief is skipped, not that Story pays for it.
 
 import type { ChatMessage, NPCEntry, TimelineEvent, EndpointConfig, ProviderConfig } from '../../types';
 import { llmCall, UtilityTimeoutError } from '../../utils/llmCall';
@@ -261,25 +260,23 @@ export function parseDirectorBrief(raw: string): string | null {
 // ── Provider resolution ─────────────────────────────────────────────────────
 
 /**
- * Resolve the provider for the Director call (WO-04 §2): auxiliary endpoint if
- * the preset resolves one, else the story endpoint. Mirrors
- * `turnOrchestrator.ts:197` and `pendingCommit.ts:249-252`.
+ * Resolve the provider for the Director call: the Director slot, and nothing else.
  *
- * WO-04b §2: the auxiliary resolver is called even when `storyProvider` is
- * undefined — a preset with only an auxiliary endpoint (no story endpoint)
- * still runs the Director. If the resolver itself throws, `runDirectorBrief`
- * catches it (this function does not catch — it is a pure resolver; the caller
- * owns the failure-total boundary).
+ * The Director used to ride on the auxiliary slot and silently fall back to Story.
+ * It now has its own assignment, so there is nothing to substitute — an unassigned
+ * Director slot returns undefined and `runDirectorBrief` skips the Brief rather than
+ * quietly spending the narration model on it. `storyProvider` is retained in the
+ * signature only so callers need not change shape; it is deliberately unused.
+ *
+ * If the resolver itself throws, `runDirectorBrief` catches it (this function does
+ * not catch — it is a pure resolver; the caller owns the failure-total boundary).
  */
 export function resolveDirectorProvider(
-    storyProvider: EndpointConfig | ProviderConfig | undefined,
-    getAuxiliary?: () => EndpointConfig | undefined,
+    _storyProvider: EndpointConfig | ProviderConfig | undefined,
+    getDirector?: () => EndpointConfig | undefined,
 ): EndpointConfig | ProviderConfig | undefined {
-    // Call the auxiliary resolver unconditionally. A preset with only an
-    // auxiliary endpoint (no story endpoint) still resolves a Director provider.
-    const aux = getAuxiliary?.();
-    if (aux?.modelName) return aux;
-    return storyProvider;
+    const director = getDirector?.();
+    return director?.modelName ? director : undefined;
 }
 
 // ── Public entry point ──────────────────────────────────────────────────────
@@ -305,8 +302,8 @@ export interface DirectorBriefInput {
     worldFacts?: string[];
     /** Campaign id for the once-per-input cache key. */
     campaignId: string | null;
-    /** Auxiliary-endpoint resolver (mirrors `getFreshAuxiliaryProvider`). */
-    getAuxiliaryProvider?: () => EndpointConfig | undefined;
+    /** Director-endpoint resolver (mirrors `getDirectorEndpoint`). */
+    getDirectorProvider?: () => EndpointConfig | undefined;
     /** Optional abort signal from the turn's AbortController. */
     signal?: AbortSignal;
     /** User-selected output-token cap for the owned director-brief call. */
@@ -355,13 +352,13 @@ export async function runDirectorBrief(input: DirectorBriefInput): Promise<strin
     }
 
     // Failure-total boundary (WO-04b §1, WO-04c): every stage that can throw —
-    // provider resolution (including a throwing getAuxiliaryProvider), NPC
+    // provider resolution (including a throwing getDirectorProvider), NPC
     // summary construction, recent-event construction, prompt rendering, the
     // LLM call, AND parsing — lives inside this try/catch. Any exception
     // returns null and never escapes the service. The Director must never
     // fail the turn, including programmer-error paths in parsing.
     try {
-        const provider = resolveDirectorProvider(input.provider, input.getAuxiliaryProvider);
+        const provider = resolveDirectorProvider(input.provider, input.getDirectorProvider);
         if (!provider && !input.modelCall) {
             // No provider resolved — fall back gracefully (no Brief, turn continues).
             // Not cached: a later call in the same turn (e.g. after the user picks a
@@ -415,7 +412,7 @@ export async function runDirectorBrief(input: DirectorBriefInput): Promise<strin
         };
         return brief;
     } catch (err) {
-        // Timeout (UtilityTimeoutError), abort, throwing getAuxiliaryProvider,
+        // Timeout (UtilityTimeoutError), abort, throwing getDirectorProvider,
         // throwing preflight (npcSummary / recentEvents / render), any error
         // from llmCall itself, OR a thrown parser exception (WO-04c §2): log
         // and return null. Never throw into the turn.

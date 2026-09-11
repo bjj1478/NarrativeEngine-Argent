@@ -21,12 +21,35 @@ import type {
 } from '../../types';
 import { llmCall, type LLMCallPriority } from '../../utils/llmCall';
 import { extractJson } from '../infrastructure/jsonExtract';
+import { MissingProviderRoleError } from '../providerRoles';
 import type { TurnCallbacks, TurnState } from './turnOrchestrator';
 import { createReactiveReadHub, disposeCampaignSubscriptions, type ReactiveReadHub, type ReactiveStoreLike } from '../mods/reactiveReads';
 
-export type ModelRole = 'story' | 'utility' | 'auxiliary' | 'summariser' | 'raw-auxiliary' | 'raw-summariser';
+/**
+ * Service roles a turn can broker a model call for.
+ *
+ * `raw-auxiliary` / `raw-summariser` are LEGACY ALIASES. They existed only to opt
+ * out of the silent Story fallback that `auxiliary` / `summariser` used to apply.
+ * Every required role is now explicitly assigned and resolution never substitutes,
+ * so they resolve identically to their base role. They are kept because the mod
+ * surface is additive-only within API generation 1 (`docs/MODDING.md` §"Compatibility
+ * and the frozen surface") — they cannot be removed until the generation bumps.
+ */
+export type ModelRole =
+    | 'story'
+    | 'director'
+    | 'extraction'
+    | 'utility'
+    | 'auxiliary'
+    | 'summariser'
+    | 'raw-auxiliary'
+    | 'raw-summariser';
+/** Hand-maintained: NOT derived from the union. Keep in sync with `ModelRole`,
+ *  `server/lib/modLoader.js` (COMPUTE_MODEL_ROLES) and `docs/narrative-mod-api.d.ts`. */
 export const MODEL_ROLES: readonly ModelRole[] = [
     'story',
+    'director',
+    'extraction',
     'utility',
     'auxiliary',
     'summariser',
@@ -277,39 +300,65 @@ function readFacadeData(state: TurnState): FacadeData {
     });
 }
 
-function hasConfiguredRole(state: TurnState, role: ModelRole): boolean {
+/**
+ * Resolve a role to its assigned endpoint, or `undefined` when the slot is unassigned.
+ *
+ * No role substitutes for another. The `never` arm makes a new `ModelRole` member a
+ * compile error here rather than a silent `undefined` at runtime.
+ */
+function tryResolveEndpoint(state: TurnState, role: ModelRole): EndpointConfig | ProviderConfig | undefined {
     switch (role) {
         case 'story':
-            return Boolean(state.provider || typeof state.getFreshProvider === 'function');
+            return state.getFreshProvider?.() ?? state.provider;
+        case 'director':
+            return state.getDirectorEndpoint?.();
+        case 'extraction':
+            return state.getExtractionEndpoint?.();
         case 'utility':
-            return typeof state.getUtilityEndpoint === 'function';
+            return state.getUtilityEndpoint?.();
+        // `raw-*` are legacy aliases — nothing substitutes any more, so they and
+        // their base role resolve identically.
         case 'auxiliary':
-            return Boolean(typeof state.getFreshAuxiliaryProvider === 'function' || typeof state.getFreshProvider === 'function' || state.provider);
-        case 'summariser':
-            return Boolean(typeof state.getRawSummariserProvider === 'function' || typeof state.getFreshProvider === 'function' || state.provider);
         case 'raw-auxiliary':
-            return typeof state.getRawAuxiliaryProvider === 'function';
+            return state.getRawAuxiliaryProvider?.() ?? state.getFreshAuxiliaryProvider?.();
+        case 'summariser':
         case 'raw-summariser':
-            return typeof state.getRawSummariserProvider === 'function';
+            return state.getRawSummariserProvider?.();
+        default: {
+            const never: never = role;
+            return never;
+        }
     }
 }
 
-function resolveEndpoint(state: TurnState, role: ModelRole): EndpointConfig | ProviderConfig | undefined {
-    const story = () => state.getFreshProvider?.() ?? state.provider;
-    switch (role) {
-        case 'story':
-            return story();
-        case 'utility':
-            return state.getUtilityEndpoint?.();
-        case 'auxiliary':
-            return state.getFreshAuxiliaryProvider?.() ?? story();
-        case 'summariser':
-            return state.getRawSummariserProvider?.() ?? story();
-        case 'raw-auxiliary':
-            return state.getRawAuxiliaryProvider?.();
-        case 'raw-summariser':
-            return state.getRawSummariserProvider?.();
+/**
+ * Whether the role resolves to an assigned endpoint.
+ *
+ * Deliberately asks the resolver rather than checking that a getter *exists*: those
+ * two answers used to disagree (a state could supply `getUtilityEndpoint: () => undefined`
+ * and report the role available, then throw when called). Callers gate optional work on
+ * this, so it has to mean "calling this role will work".
+ */
+function hasConfiguredRole(state: TurnState, role: ModelRole): boolean {
+    try {
+        return Boolean(tryResolveEndpoint(state, role));
+    } catch {
+        return false;
     }
+}
+
+/**
+ * Resolve a role to its assigned endpoint, or throw.
+ *
+ * Returns a non-optional endpoint: every required slot is explicitly assigned
+ * (migration backfills unassigned ones from Story — see `settingsHelpers.migrateSettings`),
+ * so an unresolved role is a configuration fault worth failing loudly on, never
+ * something to paper over with a substitute.
+ */
+function resolveEndpoint(state: TurnState, role: ModelRole): EndpointConfig | ProviderConfig {
+    const resolved = tryResolveEndpoint(state, role);
+    if (!resolved) throw new MissingProviderRoleError(role);
+    return resolved;
 }
 
 function buildDefaultTableAdapter(activeCampaignId: string | null, reactiveStore?: ReactiveStoreLike): HostFacadeTableAdapter {
@@ -479,8 +528,9 @@ export function buildHostFacade(
         requestBackup: callbacks.requestBackup ?? (() => undefined),
     });
     const call: ModelCall = async (role: ModelRole, request: ModelRequest): Promise<ModelResponse> => {
+        // `resolveEndpoint` throws MissingProviderRoleError when the role is unassigned —
+        // roles never substitute for one another, so there is nothing to fall back to.
         const endpoint = resolveEndpoint(state, role);
-        if (!endpoint) throw new Error('[sandbox] model role not configured: ' + role);
         if (options.modelCall) return options.modelCall(role, request, endpoint);
         const content = await llmCall(endpoint, request.prompt, {
             signal: request.signal,

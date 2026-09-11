@@ -171,7 +171,7 @@ export function queueLocationEnrichment(entryId: string): void {
     const campaignId = s.activeCampaignId;
     if (!campaignId) return;
     if (!tierAllows(s.settings.aiTier, 'locationEnrich')) return;
-    const provider = s.getActiveSummarizerEndpoint() ?? s.getActiveUtilityEndpoint() ?? s.getActiveStoryEndpoint();
+    const provider = s.getActiveSummarizerEndpoint();
     if (!provider) return;
     const entry = s.locationLedger.find(l => l.id === entryId);
     if (!entry) return;
