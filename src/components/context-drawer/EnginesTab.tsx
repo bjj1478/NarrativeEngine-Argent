@@ -4,7 +4,7 @@ import { useAppStore, DEFAULT_SURPRISE_TYPES, DEFAULT_SURPRISE_TONES, DEFAULT_EN
 import { populateEngineTags } from '../../services/chatEngine';
 import { Toggle } from './Toggle';
 import { NPCPressureInspector } from '../NPCPressureInspector';
-import type { RollFrequency, LoreCategory } from '../../types';
+import type { RollFrequency, ResponseLength, LoreCategory } from '../../types';
 
 type PopulateField =
     | 'surpriseTypes' | 'surpriseTones' | 'encounterTypes' | 'encounterTones'
@@ -47,6 +47,34 @@ const ROLL_FREQUENCY_OPTIONS: { value: RollFrequency; label: string; detail: str
         value: 'critical',
         label: 'Only decisive moments',
         detail: 'Only a conflict that could genuinely go either way, or an attempt that by rights should not be possible.',
+    },
+];
+
+/**
+ * The reply-length dial. Described by what the player gets, not by the word counts the
+ * prompt actually carries: a number here reads as a promise the model cannot keep exactly,
+ * and the same "don't state a quota" caution as ROLL_FREQUENCY_OPTIONS applies.
+ */
+const RESPONSE_LENGTH_OPTIONS: { value: ResponseLength; label: string; detail: string }[] = [
+    {
+        value: 'flexible',
+        label: 'Follow the scene',
+        detail: 'Quiet scenes get room to breathe; pressured ones stay tight and hand back fast. Only a time skip runs long.',
+    },
+    {
+        value: 'short',
+        label: 'Short',
+        detail: 'One development, then the turn is yours again. Best for fast back-and-forth.',
+    },
+    {
+        value: 'medium',
+        label: 'Medium',
+        detail: 'A couple of beats — an exchange and its consequence — before it hands back.',
+    },
+    {
+        value: 'long',
+        label: 'Long',
+        detail: 'Room to cover real ground: elapsed time, travel, errands, several people acting.',
     },
 ];
 
@@ -368,8 +396,19 @@ export function EnginesTab() {
                     </div>
                 </div>
 
-                {/* Dice Fairness Engine (generalized) */}
-                <DiceFairnessSection context={context} updateContext={updateContext} />
+                {/* Ask To Resolve + Response Length are the two turn-shape dials — one decides
+                    when the GM stops to ask you something, the other how long it writes before
+                    handing back — so they read as a pair. Their own full-width row with a nested
+                    2-column grid, because the three engine blocks above are an odd number: left
+                    to the outer grid's auto-flow these two would land in different rows. Mirrors
+                    the outer container's classes so it collapses to a stacked column below xl. */}
+                <div className="space-y-4 xl:col-span-2 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0">
+                    {/* Dice Fairness Engine (generalized) */}
+                    <DiceFairnessSection context={context} updateContext={updateContext} />
+
+                    {/* Response Length — caps the [BEAT BUDGET] line sent every turn. */}
+                    <ResponseLengthSection context={context} updateContext={updateContext} />
+                </div>
 
                 {/* Consequences — seeded from lore, edited here, not yet drawn from. */}
                 <div className="space-y-2 xl:col-span-2">
@@ -460,6 +499,55 @@ type DiceFairnessSectionProps = {
     context: ReturnType<typeof useAppStore.getState>['context'];
     updateContext: ReturnType<typeof useAppStore.getState>['updateContext'];
 };
+
+/**
+ * Response Length. Unlike its neighbours there is no on/off toggle: "no length guidance at
+ * all" is not a useful state, and it is what every thinking-off campaign used to get by
+ * accident. Switch the block off in the Block View if you really want it gone.
+ */
+function ResponseLengthSection({ context, updateContext }: DiceFairnessSectionProps) {
+    const active = context.responseLength ?? 'flexible';
+
+    return (
+        <div className="border border-border bg-surface p-3 space-y-3">
+            <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-terminal" />
+                <span className="text-[13px] text-text-primary font-bold uppercase tracking-wider">
+                    Response Length
+                </span>
+            </div>
+
+            <div className="text-[11px] text-text-dim/70 leading-relaxed">
+                How much the GM writes before handing the turn back. This is a cap, not a target —
+                a scene that is genuinely finished ends early rather than padding to fill it.
+            </div>
+
+            <div className="space-y-1 pt-1">
+                {RESPONSE_LENGTH_OPTIONS.map(opt => {
+                    const selected = active === opt.value;
+                    return (
+                        <button
+                            key={opt.value}
+                            onClick={() => updateContext({ responseLength: opt.value })}
+                            className={`w-full text-left px-2 py-1.5 rounded border transition-colors ${
+                                selected
+                                    ? 'border-terminal/50 bg-terminal/10'
+                                    : 'border-border/50 hover:border-border'
+                            }`}
+                        >
+                            <div className={`text-[11px] font-bold ${selected ? 'text-terminal' : 'text-text-primary'}`}>
+                                {opt.label}
+                            </div>
+                            <div className="text-[10px] text-text-dim/70 leading-snug">
+                                {opt.detail}
+                            </div>
+                        </button>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
 
 function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProps) {
     const askToRoll = context.diceFairnessActive !== false;

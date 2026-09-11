@@ -112,6 +112,18 @@ export type RollFrequency =
     | 'consequential'   // only when failure imposes a real, lasting cost
     | 'critical';       // only decisive conflicts and near-impossible attempts
 
+// How long a reply should run. Consumed only by beatBudgetLine (payload/contributions/
+// builtins.ts), which turns it into the [BEAT BUDGET] line. Optional + read-site default
+// (`?? 'flexible'`) so no campaign migration is needed — migrateLegacyContext is
+// deliberately untouched, same as rollFrequency above.
+//
+// 'flexible' is the only value that still consults the scene stakes the writer tagged last
+// turn; the other three are fixed and ignore stakes entirely, which is the whole point of
+// choosing one. A const tuple rather than a bare union because both the Engine Tuning
+// option table and the resolver need the values at runtime.
+export const RESPONSE_LENGTHS = ['short', 'medium', 'long', 'flexible'] as const;
+export type ResponseLength = typeof RESPONSE_LENGTHS[number];
+
 // How hard the GM judges the attempt, estimated BEFORE it can see the player's answer. This
 // replaced the die plus the numeric bar: a label carries the same pre-commitment without
 // assuming a dice size, a threshold, or any particular ruleset.
@@ -318,6 +330,8 @@ export type GameContext = {
     diceFairnessActive: boolean;
     /** Threshold for what deserves asking. Absent reads as 'contested' at the use site. */
     rollFrequency?: RollFrequency;
+    /** How long a reply should run. Absent reads as 'flexible' at the use site. */
+    responseLength?: ResponseLength;
     sceneNote: string;
     sceneNoteActive: boolean;
     sceneNoteDepth: number;

@@ -21,6 +21,7 @@ import { isBlockEnabled } from '../turn/blockEnablement';
 import { BUILTIN_IDS } from './contributions/builtins';
 import { interceptorFaultStore, formatInterceptorFaultReason } from '../mods/interceptors/interceptorFaults';
 import { RELATIONSHIP_STANCE_TOKEN_BUDGET } from '../npc/relationshipStance';
+import { detectTimeskip } from '../npc/agency/agencyTimeskipRun';
 
 export type BuildPayloadOptions = {
     settings: AppSettings;
@@ -334,10 +335,19 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
             relationsBlock,
             relationshipStances,
             relationshipStanceBudget,
-            // Drives the per-turn beat budget on the writer.cot contribution. Read from the
-            // writer's own last [[SCENE_STAKES]] tag; absent (a fresh campaign) reads as calm,
-            // matching extractAndStripSceneStakes' own fallback.
+            // Drives the per-turn beat budget on the writer.length contribution, but only when
+            // responseLength is 'flexible'. Read from the writer's own last [[SCENE_STAKES]]
+            // tag; absent (a fresh campaign) reads as calm, matching
+            // extractAndStripSceneStakes' own fallback.
             sceneStakes: context.lastSceneStakes,
+            // The player's Response Length dial; absent reads as 'flexible' at the use site.
+            responseLength: context.responseLength,
+            // Only 'flexible' consults this, to reach its longest budget. detectTimeskip is a
+            // pure synchronous regex over the player's own words ("three weeks later"), already
+            // used by the agency engine — no LLM call, so it is safe on the payload path. An
+            // ambiguous match ("a season later") still counts: the turn is covering a gap
+            // either way, which is what the budget cares about.
+            timeskipDetected: detectTimeskip(userMessage) !== null,
             directorBrief,
             watchdogNudge,
             absoluteCommand,

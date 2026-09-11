@@ -6,7 +6,7 @@ import { createContributionRegistry } from './registry';
 import type { ContributionModule, ContributionRegistry } from './registry';
 import type { ContributionSpec } from './types';
 import { renderRelationshipStanceBlock } from '../../npc/relationshipStance';
-import type { SceneStakes } from '../../../types';
+import type { SceneStakes, ResponseLength } from '../../../types';
 
 /**
  * Project 2 / WO-P2-02 — the built-in prompt contributions, as modules.
@@ -73,8 +73,14 @@ export interface FinalUserModuleInput {
     /** WO-5: scene-specific NPC readings; numbers and flat relationship arrows never enter v3. */
     relationshipStances?: readonly RelationshipStance[];
     relationshipStanceBudget?: number;
-    /** Scene stakes from the writer's own last [[SCENE_STAKES]] tag; drives the beat budget. */
+    /** Scene stakes from the writer's own last [[SCENE_STAKES]] tag; drives the beat budget
+     *  when `responseLength` is 'flexible'. */
     sceneStakes?: SceneStakes;
+    /** The player's Response Length dial. Absent reads as 'flexible'. */
+    responseLength?: ResponseLength;
+    /** Whether this turn's player message skips time ("three weeks later"). Only 'flexible'
+     *  reads it, to reach its longest budget. Computed in payloadBuilder via detectTimeskip. */
+    timeskipDetected?: boolean;
     directorBrief?: string;
     watchdogNudge?: string;
     absoluteCommand?: string;
@@ -88,35 +94,75 @@ export interface FinalUserModuleInput {
 }
 
 /**
- * Per-turn beat budget, keyed on the scene stakes the writer itself tagged last turn
- * (`[[SCENE_STAKES: …]]` → `context.lastSceneStakes`, parsed in sceneStakesTag.ts). The
- * signal already existed and was tracked but unused.
+ * Per-turn beat budget. The player picks the dial in Engine Tuning
+ * (`context.responseLength`); only 'flexible' still reads the scene stakes the writer itself
+ * tagged last turn (`[[SCENE_STAKES: …]]` → `context.lastSceneStakes`, parsed in
+ * sceneStakesTag.ts).
  *
- * This is what replaced the flat "draft 5-8 beats" quota in WRITER_COT: intense scenes
- * hand the turn back fast, calm ones may run long. It lives here, in a contribution below
- * the cache boundary, rather than in the stable CoT — see the PACING note in stable.ts.
+ * This is what replaced the flat "draft 5-8 beats" quota in WRITER_COT. It lives here, in a
+ * contribution below the cache boundary, rather than in the stable CoT — see the PACING note
+ * in stable.ts for why a per-turn VARYING string must never move up there.
+ *
+ * Lengths are stated in WORDS, not tokens. A model cannot count its own tokens, so a token
+ * budget reads as a vague hint and is routinely overshot. The ranges below are tuned directly
+ * in words against how the writer actually behaves — they are not a conversion of a token
+ * figure, so do not "correct" them back into one.
  */
-const BEAT_BUDGET: Record<SceneStakes, string> = {
-    calm:
-        '[BEAT BUDGET: 4-6 beats. The scene is calm, so it may breathe — elapsed time, travel, ' +
-        'errands and downtime can run long and cover real ground.]',
-    tense:
-        '[BEAT BUDGET: 2-3 beats, then stop. The scene is tense: end the turn the moment a ' +
-        'decision faces the player and hand the beat back rather than resolving it for them. ' +
-        'Never pad a pressured scene to fill a budget — under-running it is correct.]',
-    dangerous:
-        '[BEAT BUDGET: 2-3 beats, then stop. The scene is dangerous: keep it close and physical, ' +
-        'end on the moment that demands a response, and never resolve the danger on the player\'s ' +
-        'behalf. Never pad — under-running it is correct.]',
+const LENGTH_SPEC = {
+    short: '1 beat, 100-200 words',
+    medium: '2-3 beats, 250-400 words',
+    long: '3-5 beats, 800-1500 words',
+} as const;
+
+type FixedLength = keyof typeof LENGTH_SPEC;
+
+/**
+ * The tag name is load-bearing: the shipped and user-authored rulesets in Example_Setup/ and
+ * Custom_Setup/ say "when a [BEAT BUDGET] line is present it is the cap". Renaming it would
+ * silently break those prompt files.
+ *
+ * The closing clause is on every variant on purpose. A stated range invites padding up to it,
+ * and padding is the failure mode the stakes-aware rework existed to kill.
+ */
+const budget = (spec: FixedLength, flavour = ''): string =>
+    `[BEAT BUDGET: ${LENGTH_SPEC[spec]}.${flavour ? ` ${flavour}` : ''} Never pad to reach the ` +
+    'range — under-running it is correct.]';
+
+/** Stakes flavour, used only by 'flexible'. A fixed setting is a deliberate instruction and
+ *  must not be talked out of its length by the scene. */
+const FLEXIBLE: Record<SceneStakes, string> = {
+    calm: budget('medium', 'The scene is calm, so it may breathe.'),
+    tense: budget('short', 'The scene is tense: end the turn the moment a decision faces the player and hand the beat back rather than resolving it for them.'),
+    dangerous: budget('short', 'The scene is dangerous: keep it close and physical, end on the moment that demands a response, and never resolve the danger on the player\'s behalf.'),
 };
 
-// `?? BEAT_BUDGET.calm` is not redundant with `stakes ?? 'calm'`: the first `??` only
-// catches null/undefined, so a value that is outside the union at RUNTIME — an older save,
-// a hand-edited context — indexes the record to `undefined` and gets template-interpolated
-// into the prompt as the literal string "undefined". Same words-only fallback shape as
-// agencyDigest's `BAND_PROSE[...] ?? 'moved on'`.
-export const beatBudgetLine = (stakes: SceneStakes | undefined): string =>
-    BEAT_BUDGET[stakes ?? 'calm'] ?? BEAT_BUDGET.calm;
+/** Flexible only reaches its longest budget on a time skip — the one case where a reply has
+ *  real ground to cover rather than a live scene to hand back. */
+const FLEXIBLE_TIMESKIP = budget('long', 'Time has skipped: cover the gap and what the player returns to.');
+
+const FIXED: Record<FixedLength, string> = {
+    short: budget('short', 'Land one development only.'),
+    medium: budget('medium'),
+    long: budget('long', 'There is room to cover real ground — elapsed time, travel, errands and downtime.'),
+};
+
+/**
+ * Every lookup below is written `RECORD[key] ?? fallback`, and that is not redundant with the
+ * `?? 'flexible'` / `?? 'calm'` defaults: those only catch null/undefined. A value outside the
+ * union at RUNTIME — an older save, a hand-edited context — indexes the record to `undefined`
+ * and would get template-interpolated into the prompt as the literal string "undefined".
+ * Same words-only fallback shape as agencyDigest's `BAND_PROSE[...] ?? 'moved on'`.
+ */
+export const beatBudgetLine = (
+    length: ResponseLength | undefined,
+    stakes: SceneStakes | undefined,
+    timeskip = false,
+): string => {
+    const choice = length ?? 'flexible';
+    if (choice !== 'flexible') return FIXED[choice as FixedLength] ?? FLEXIBLE[stakes ?? 'calm'] ?? FLEXIBLE.calm;
+    if (timeskip) return FLEXIBLE_TIMESKIP;
+    return FLEXIBLE[stakes ?? 'calm'] ?? FLEXIBLE.calm;
+};
 
 export const GM_REMINDER =
     '[GM REMINDER: NPCs push back when their wants/boundaries are crossed. Do not default to facilitation.]';
@@ -127,6 +173,7 @@ export const BUILTIN_IDS = {
     relations: 'npc.relations',
     stance: 'npcStance',
     writerCot: 'writer.cot',
+    responseLength: 'writer.length',
     directorBrief: 'director.brief',
     gmReminder: 'gm.reminder',
     watchdogNudge: 'watchdog.nudge',
@@ -284,7 +331,7 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
 
 Final-turn invocation:
 Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.`,
-                "tokenImpact": "The six-step framework is 467 input tokens in the stable prompt. The normal final-turn invocation is 18 more input tokens. There is no separate COT output-token cap; the provider/model controls hidden reasoning and answer limits.",
+                "tokenImpact": "The six-step framework is 467 input tokens in the stable prompt. The normal final-turn invocation is 18 more input tokens. The [BEAT BUDGET] line is no longer part of this block — it is its own contribution (Response Length) and ships whether or not thinking is on. There is no separate COT output-token cap; the provider/model controls hidden reasoning and answer limits.",
                 "quietWhen": "Thinking Effort is Off. An Absolute Command swaps the normal invocation for a 38-token instruction that tells the model to follow the command where they conflict."
             },
             explain: 'Asks the writer to think through the scene before writing it, instead of answering straight away. Only does anything when thinking is switched on for your model — with thinking off it adds nothing at all.',
@@ -293,16 +340,48 @@ Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.`
         (input) => ({
             id: BUILTIN_IDS.writerCot,
             order: 200,
-            // The beat budget rides along with the invocation, so a turn either gets both or
-            // neither — a budget with no framework to apply it in would be noise. Both branches
-            // carry it: an Absolute Command overrides the framework's content, not the pacing.
+            // The beat budget used to ride along with this invocation, which meant a
+            // thinking-off campaign was sent no length guidance at all. Length is a player
+            // setting now, so it is its own contribution (order 210) and does not depend on
+            // whether the reasoning framework was sent.
             text: !isThinkingEnabled(input.settings)
                 ? ''
                 : hasAbsolute(input)
-                    ? `Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.
-${beatBudgetLine(input.sceneStakes)}`
-                    : `Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.
-${beatBudgetLine(input.sceneStakes)}`,
+                    ? 'Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.'
+                    : 'Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.',
+        }),
+    ),
+
+    /**
+     * Response Length — the [BEAT BUDGET] line. Ordered immediately after the reasoning
+     * framework so it lands exactly where it used to sit in the assembled message.
+     *
+     * Deliberately NOT gated on thinking. It is a setting the player chose, and WRITER_COT's
+     * Step 5 ("draft exactly as many beats as the [BEAT BUDGET] line allows") is not the only
+     * thing that honours it — the shipped rulesets treat the line as the cap on their own.
+     */
+    single(
+        {
+            id: BUILTIN_IDS.responseLength,
+            name: 'Response Length',
+            description: 'Caps how long a reply runs, in beats and words.',
+            toggleable: true,
+            details: {
+                "trigger": "Every turn. Set the dial in Engine Tuning → Response Length.",
+                "prompt": `Short:    ${beatBudgetLine('short', undefined)}
+Medium:   ${beatBudgetLine('medium', undefined)}
+Long:     ${beatBudgetLine('long', undefined)}
+Flexible: ${beatBudgetLine('flexible', 'calm')}`,
+                "tokenImpact": "One line, 35-55 input tokens depending on the setting. It caps OUTPUT tokens, which is where it pays for itself.",
+                "quietWhen": "The block is switched off here, or a mod suppresses it. Nothing else silences it — unlike the reasoning framework above, it ships with thinking off."
+            },
+            explain: 'How long a reply should be. Short hands the turn straight back; Long lets a scene cover real ground. Flexible reads the scene instead — quiet scenes get room, pressured ones stay tight, and only a time skip runs long.',
+            example: 'Same moment: a guard blocks the gate.\n\n**Short** — one exchange, and the turn is yours again.\n\n**Long** — the guard, the queue behind you, the captain being fetched, the weather turning.\n\n**Flexible** — tight here, because a guard blocking your way is a decision waiting on you.',
+        },
+        (input) => ({
+            id: BUILTIN_IDS.responseLength,
+            order: 210,
+            text: beatBudgetLine(input.responseLength, input.sceneStakes, input.timeskipDetected),
         }),
     ),
 

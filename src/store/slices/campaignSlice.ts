@@ -238,6 +238,7 @@ export const defaultContext: GameContext = {
     // Ask To Roll on by default — see DEFAULT_CONTEXT in campaignInit.ts, which this mirrors.
     diceFairnessActive: true,
     rollFrequency: 'contested' as const,
+    responseLength: 'flexible' as const,
     sceneNote: '',
     sceneNoteActive: false,
     sceneNoteDepth: 3,

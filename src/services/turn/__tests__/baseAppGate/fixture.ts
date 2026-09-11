@@ -89,6 +89,7 @@ export function fixtureContext(): GameContext {
         // carries no tool call, so the turn still resolves in a single pass.
         diceFairnessActive: true,
         rollFrequency: 'contested',
+        responseLength: 'flexible',
         sceneNote: '',
         sceneNoteActive: false,
         sceneNoteDepth: 3,

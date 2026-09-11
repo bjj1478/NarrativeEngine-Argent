@@ -656,6 +656,67 @@ describe('buildPayload — scene-stakes tag request', () => {
     });
 });
 
+// The [BEAT BUDGET] line is assembled from three things that only meet here: the player's
+// Response Length dial, the stakes the writer tagged last turn, and whether this turn's
+// message skips time. The contribution itself is pinned in finalUserAssemblyGolden; these
+// pin the wiring, which is the half that would fail silently.
+describe('buildPayload — response length reaches the payload', () => {
+    const userText = (context: Partial<GameContext>, userMessage = 'I wait.'): string => {
+        const result = buildPayload({
+            settings: baseSettings(),
+            context: { ...baseContext(), ...context } as GameContext,
+            history: [],
+            userMessage,
+        });
+        return result.messages[result.messages.length - 1].content as string;
+    };
+
+    it.each([
+        ['short', /1 beat, \d+-\d+ words/],
+        ['medium', /2-3 beats, \d+-\d+ words/],
+        ['long', /3-5 beats, \d+-\d+ words/],
+    ] as const)('the %s setting reaches the user message', (responseLength, expected) => {
+        expect(userText({ responseLength })).toMatch(expected);
+    });
+
+    it('flexible follows the stakes the writer tagged last turn', () => {
+        expect(userText({ responseLength: 'flexible', lastSceneStakes: 'calm' })).toContain('2-3 beats');
+        expect(userText({ responseLength: 'flexible', lastSceneStakes: 'dangerous' })).toContain('1 beat');
+    });
+
+    // detectTimeskip is a pure regex over the player's own words; this pins that it is
+    // actually consulted, not merely imported. A skip outranks even a dangerous scene,
+    // which is the one case where flexible is allowed its longest budget.
+    it.each([
+        '3 weeks later, I return to the city.',
+        'A month later, I return.',
+        '2 months pass before I return.',
+        'A fortnight later, I return.',
+    ])('flexible runs long when the player skips time: %s', (message) => {
+        const skipped = userText({ responseLength: 'flexible', lastSceneStakes: 'dangerous' }, message);
+        expect(skipped).toMatch(/3-5 beats, \d+-\d+ words/);
+    });
+
+    // Known limit of the shared detector (agencyTimeskipRun.ts), which the NPC agency engine
+    // has always had too: its patterns want digits or a bare "a/an", so a spelled-out number
+    // is not a skip. Pinned rather than hidden — if the detector learns words later, this is
+    // the test that should be updated deliberately.
+    it('a spelled-out number is NOT detected as a skip', () => {
+        const spelled = userText({ responseLength: 'flexible', lastSceneStakes: 'dangerous' }, 'Three weeks later, I return.');
+        expect(spelled).toMatch(/1 beat, \d+-\d+ words/);
+    });
+
+    it('a fixed length is not overridden by a time skip', () => {
+        expect(userText({ responseLength: 'short' }, 'Three weeks later, I return.')).toContain('1 beat');
+    });
+
+    it('an existing campaign with no setting saved reads as flexible', () => {
+        const absent = userText({ responseLength: undefined, lastSceneStakes: 'tense' });
+        expect(absent).toBe(userText({ responseLength: 'flexible', lastSceneStakes: 'tense' }));
+        expect(absent).toContain('[BEAT BUDGET:');
+    });
+});
+
 describe('buildPayload — scenario 8: thinking mode and tool mode', () => {
     it('reasoning reminder text appears in stable content when thinkingEffort is enabled', () => {
         const reasoningSettings = {
