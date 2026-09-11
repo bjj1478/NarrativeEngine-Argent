@@ -226,6 +226,13 @@ ${textToUse}` : attachmentBlock)
         const useAbsoluteCommand = useAppStore.getState().armedAbsoluteCommand;
         useAppStore.getState().setArmedAbsoluteCommand(null);
 
+        // Skip Time: capture then clear before runTurn, same contract as the arming
+        // above, so a picked skip fires exactly once even if the turn errors. The
+        // calendar was already advanced at confirm time, so this carries only the
+        // simulation budget the agency engine and the arc mod spend.
+        const useArmedTimeskip = useAppStore.getState().armedTimeskip ?? undefined;
+        useAppStore.getState().setArmedTimeskip?.(null);
+
         if (!overrideText) {
             setInput('');
             resetTextareaHeight();
@@ -301,6 +308,7 @@ ${textToUse}` : attachmentBlock)
             provider: storyProvider,
             getMessages: () => useAppStore.getState().messages,
             getFreshProvider: () => useAppStore.getState().getActiveStoryEndpoint(),
+            armedTimeskip: useArmedTimeskip,
             getUtilityEndpoint: () => useAppStore.getState().getActiveUtilityEndpoint(),
             getDirectorEndpoint: () => useAppStore.getState().getActiveDirectorEndpoint(),
             getExtractionEndpoint: () => useAppStore.getState().getActiveExtractionEndpoint(),

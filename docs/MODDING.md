@@ -830,7 +830,7 @@ unfreezing this.
 | `divergenceRegister` | `DivergenceRegister` | The divergence register. Whole-replacement writable. |
 | `playerCharacter` | `PlayerCharacter \| null` | The PC. |
 | `inventory` | `readonly InventoryItem[]` | The inventory. Whole-replacement writable. |
-| `location` | `ModLocation` | `{ currentPlaceId, currentFeature, ledger, travel, worldDay }`. The ledger is whole-replacement writable. `travel`/`worldDay` are read-only journey state (WO 6.2). |
+| `location` | `ModLocation` | `{ currentPlaceId, currentFeature, ledger, travel, worldDay, elapsedTicks }`. The ledger is whole-replacement writable. `travel`/`worldDay` are read-only journey state (WO 6.2). `elapsedTicks` is read-only simulated elapsed time for THIS turn — `0` normally, non-zero when the player skipped time. It is the only way a **sandboxed** compute mod can learn a skip happened (events and `ctx.subscribe` are native-tier only), so scale long-running state by it rather than ticking once when a year passed. |
 
 ### NPC entries — Phase 9.1 §5.1
 

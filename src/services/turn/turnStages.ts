@@ -521,6 +521,7 @@ export function buildTurnPayload(
         watchdogNudge: ctx.watchdogNudge,
         directorBrief: ctx.directorBrief,
         absoluteCommand: state.absoluteCommand ?? undefined,
+        armedTimeskip: state.armedTimeskip,
         elevatedScenes: ctx.gathered.elevatedScenes,
         slottedRagSnippets: ctx.gathered.slottedRagSnippets,
         relationshipStances: ctx.gathered.relationshipStances,

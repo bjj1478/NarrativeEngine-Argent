@@ -27,7 +27,8 @@ import { registerBuiltin, __registerBuiltinGuardReset } from './mountRegistry';
  *
  * `travel` (WO 3.1) sits between `absoluteCommand` and `askGm` — it is the
  * app's central verb and belongs in the same row as the other "start a
- * structured action" buttons.
+ * structured action" buttons. `skipTime` follows it for the same reason and
+ * because the two are the app's only controls that move in-world time.
  *
  * The parked "Inject Arc" button is NOT in this list — it returns in 4.2 as
  * a mod-claimed `composer.actions` entry the arc mod registers from its
@@ -43,6 +44,7 @@ export const COMPOSER_BUILTIN_IDS = Object.freeze([
     'oneShot',
     'absoluteCommand',
     'travel',
+    'skipTime',
     'askGm',
     'archive',
 ] as const);

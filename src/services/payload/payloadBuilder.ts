@@ -74,6 +74,9 @@ export type BuildPayloadOptions = {
      *  is swapped for a subordination line, and the command block is placed LAST — after
      *  userMessage — for maximum recency. Never enters chat history. */
     absoluteCommand?: string;
+    /** Skip Time: set when the turn was started by an explicit picked duration. The
+     *  beat budget must not depend on the phrase detector matching the composed text. */
+    armedTimeskip?: import('../../types').ArmedTimeskip;
     /** Project 2: registry of final-user contributions. Defaults to built-ins only.
      *  Callers supply their own once mods can be loaded, so `buildPayload` never learns
      *  what a mod is. */
@@ -146,6 +149,7 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
         slottedRagSnippets,
         relationshipStances,
         absoluteCommand,
+        armedTimeskip,
         finalUserRegistry,
         interception,
         publishedFacts,
@@ -347,7 +351,8 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
             // used by the agency engine — no LLM call, so it is safe on the payload path. An
             // ambiguous match ("a season later") still counts: the turn is covering a gap
             // either way, which is what the budget cares about.
-            timeskipDetected: detectTimeskip(userMessage) !== null,
+            // An explicit skip always counts; the regex is the fallback for a typed one.
+            timeskipDetected: Boolean(armedTimeskip) || detectTimeskip(userMessage) !== null,
             directorBrief,
             watchdogNudge,
             absoluteCommand,

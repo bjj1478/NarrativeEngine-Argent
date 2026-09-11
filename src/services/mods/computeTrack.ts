@@ -65,6 +65,12 @@ export function modToComputeTrack(
                     // sandbox mods see the same `data.location` shape.
                     travel: freshLocation.context.travel ?? null,
                     worldDay: freshLocation.context.worldDay,
+                    // Read from the turn, not from the agency track's result: compute
+                    // tracks run BEFORE the sequential tracks that run the timeskip
+                    // (`postTurnPipeline.ts` awaits the former first), so a count taken
+                    // from `runTimeskip` would not exist yet and mods would react a
+                    // turn late. The budget is computed once when the skip is armed.
+                    elapsedTicks: ctx.state?.armedTimeskip?.ticks ?? 0,
                 }
                 : undefined;
             try {

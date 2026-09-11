@@ -524,6 +524,10 @@ export interface ModLocation {
     readonly travel?: TravelState | null;
     /** WO 6.2 — the in-game day counter. Read-only to the mod. */
     readonly worldDay?: number;
+    /** Simulated elapsed time for THIS turn, in agency ticks — `0` on an ordinary turn,
+     *  non-zero when the player skipped time. Scale long-running state by this instead
+     *  of ticking once when a year passed. Read-only. */
+    readonly elapsedTicks?: number;
 }
 
 /** `API.md` §4.3 — only `aiTier` is exposed. */

@@ -21,6 +21,20 @@ export type ComfyUiSettings = {
 
 export type AiTier = 'lite' | 'pro' | 'max';
 
+/**
+ * An explicit, user-picked time skip awaiting the next send (Skip Time button).
+ *
+ * All three fields are derived once by `timeskipDuration` so they can never disagree:
+ * `days` advances `context.worldDay`, `weeks` feeds the agency simulation curve, and
+ * `ticks` is the shared budget both the NPC agency engine and the arc mod spend.
+ */
+export type ArmedTimeskip = {
+    readonly days: number;
+    readonly weeks: number;
+    readonly ticks: number;
+};
+
+
 export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
 
 export type EndpointConfig = {

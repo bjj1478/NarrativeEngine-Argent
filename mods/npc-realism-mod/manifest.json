@@ -1,0 +1,14 @@
+{
+  "id": "erotica-tone",
+  "name": "Erotica Tone",
+  "version": "1.0.0",
+  "description": "Instructions for making NPCs act with more agency and more realistic dialogue.",
+  "contributions": [
+    {
+      "id": "tone",
+      "order": 250,
+      "budget": 100,
+      "text": "<insert text>"
+    }
+  ]
+}

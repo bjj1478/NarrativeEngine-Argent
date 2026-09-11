@@ -6,6 +6,7 @@ import { toast } from '../Toast';
 import { OneShotInjectorButton } from '../OneShotInjectorButton';
 import { AbsoluteCommandButton } from '../AbsoluteCommandButton';
 import { TravelButton } from '../TravelButton';
+import { SkipTimeButton } from '../SkipTimeButton';
 import { AbandonJourneyChip } from './AbandonJourneyChip';
 import { useTranslation } from '../../i18n/useTranslation';
 import { readRegion, subscribeToRegion, type RegisteredChromeEntry } from '../../services/mods/mounts/mountRegistry';
@@ -69,6 +70,7 @@ export function ChatActionStrip({
     onTrim,
     onOpenOoc,
     onOpenArchive,
+    onSendText,
 }: {
     isStreaming: boolean;
     isSaving: boolean;
@@ -77,6 +79,9 @@ export function ChatActionStrip({
     onTrim: () => void;
     onOpenOoc: () => void;
     onOpenArchive: () => void;
+    /** Send a composed message as this turn's player input. Used by Skip Time,
+     *  which submits the turn itself rather than arming for the next send. */
+    onSendText: (text: string) => void;
 }) {
     const settings = useAppStore(s => s.settings);
     const context = useAppStore(s => s.context);
@@ -105,6 +110,7 @@ export function ChatActionStrip({
                         onTrim,
                         onOpenOoc,
                         onOpenArchive,
+                        onSendText,
                         settings,
                         context,
                         activeCampaignId,
@@ -170,6 +176,7 @@ function renderComposerBuiltin(id: string, deps: {
     onTrim: () => void;
     onOpenOoc: () => void;
     onOpenArchive: () => void;
+    onSendText: (text: string) => void;
     settings: { deepContextSearch?: boolean } | null;
     context: { lootTree?: unknown } | null;
     activeCampaignId: string | null;
@@ -281,6 +288,11 @@ function renderComposerBuiltin(id: string, deps: {
             // WO 3.1 §2 — TRAVEL is a first-class composer entry point. Only
             // render when a campaign is active, matching oneShot/absoluteCommand.
             return deps.activeCampaignId ? <TravelButton key="travel" /> : null;
+        case 'skipTime':
+            // Sits with `travel`: the app's only two controls that move in-world time.
+            return deps.activeCampaignId
+                ? <SkipTimeButton key="skipTime" onConfirm={deps.onSendText} />
+                : null;
         case 'askGm':
             return (
                 <button
