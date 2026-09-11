@@ -191,6 +191,7 @@ export interface HostFacadeBuildOptions {
         readonly travel?: TravelState | null;
         /** WO 6.2 — the in-game day counter, read from the live `GameContext`. */
         readonly worldDay?: number;
+    readonly travelMode?: GameContext['travelMode'];
     };
 }
 
@@ -423,6 +424,7 @@ export function buildHostFacade(
                     ledger: live?.locationLedger ?? fresh?.ledger ?? [],
                     travel: fresh?.travel ?? context.travel ?? null,
                     worldDay: fresh?.worldDay ?? context.worldDay,
+                    travelMode: fresh?.travelMode ?? context.travelMode,
                 };
             }
             default: return undefined;
