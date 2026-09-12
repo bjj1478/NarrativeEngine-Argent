@@ -39,7 +39,11 @@ export interface SheetTabHandle {
  * prompt sourced the persona block from one of those and the kit line from this record.
  * There is one record and one block now: services/payload/playerCharacter.ts.
  */
-export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () => void }>(function SheetTab({ onStartGuidedCreation }, ref) {
+// Local copy of the ledger's tab union -- deliberately not imported from
+// CharacterLedgerModal, which imports this file.
+type LedgerTab = 'sheet' | 'record' | 'inventory';
+
+export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () => void; onNavigateTab?: (tab: LedgerTab) => void }>(function SheetTab({ onStartGuidedCreation, onNavigateTab }, ref) {
     const {
         playerCharacter,
         setPlayerCharacter,
@@ -184,6 +188,7 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
                 onGeneratePortrait={handleGeneratePortrait}
                 onUploadPortrait={handleUploadPortrait}
                 onRemovePortrait={handleRemovePortrait}
+                onNavigateTab={onNavigateTab}
             />
         );
     }
@@ -202,6 +207,7 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
                 onGeneratePortrait={handleGeneratePortrait}
                 onUploadPortrait={handleUploadPortrait}
                 onRemovePortrait={handleRemovePortrait}
+                onNavigateTab={onNavigateTab}
             />
         );
     }

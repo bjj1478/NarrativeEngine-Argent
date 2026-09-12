@@ -22,6 +22,7 @@ import { useChapterSealing } from './hooks/useChapterSealing';
 import { useMessageEditor } from './hooks/useMessageEditor';
 import { useChatOperations } from '../hooks/useChatOperations';
 import { useChatAttachment } from './hooks/useChatAttachment';
+import { useGalleryMention } from './hooks/useGalleryMention';
 import { titleForUpload } from '../services/gallery/galleryIndex';
 import { uid } from '../utils/uid';
 import { useChatPersistence } from '../hooks/useChatPersistence';
@@ -90,7 +91,11 @@ export function ChatArea() {
         clear: clearAttachment,
     } = useChatAttachment();
     const attachmentRef = useRef(attachment);
-    attachmentRef.current = attachment;
+    // Synced in an effect, not during render: writing a ref while rendering is
+    // a concurrent-mode hazard (a render that React throws away would still
+    // have mutated it). The send closure reads this after commit, so an effect
+    // with no dependency array is both correct and lint-clean.
+    useEffect(() => { attachmentRef.current = attachment; });
     // Session-local OOC state stays outside the campaign store and turn lifecycle.
     const [oocOpen, setOocOpen] = useState(false);
     const [oocBusy, setOocBusy] = useState(false);
@@ -130,6 +135,10 @@ export function ChatArea() {
     const bottomRef = useRef<HTMLDivElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    // Gallery `@` picker + suggestion offer. Local string matching only — it
+    // never adds a retrieval pass, and nothing reaches the payload unless the
+    // player picks it (see services/gallery/galleryMention.ts).
+    const galleryMention = useGalleryMention({ input, setInput, inputRef });
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -209,7 +218,20 @@ export function ChatArea() {
     }, [setPendingProposal, setPendingConditionProposal]);
 
     const { isSaving, handleForceSave, handleOpenArchive } = useChatPersistence();
-    const { handleKeyDown } = useChatKeyboard(() => handleSend());
+    /**
+     * Send, honouring anything the gallery is still offering.
+     *
+     * A visible suggestion is a standing offer — pressing Enter accepts it
+     * rather than discarding it. Arming is synchronous (Zustand), so the store
+     * already carries the entry by the time handleSend reads it.
+     */
+    const sendWithGallery = () => {
+        galleryMention.armPendingSuggestions();
+        galleryMention.resetSuggestions();
+        handleSend();
+    };
+
+    const { handleKeyDown } = useChatKeyboard(() => sendWithGallery());
 
     const archiveDeps = {
         setArchiveIndex,
@@ -330,7 +352,7 @@ export function ChatArea() {
                     oocBusy={oocBusy}
                     onInputChange={handleInputChange}
                     onKeyDown={handleKeyDown}
-                    onSend={() => handleSend()}
+                    onSend={() => sendWithGallery()}
                     onStop={handleStop}
                     attachment={attachment}
                     attachmentBusy={attachmentBusy}
@@ -338,6 +360,7 @@ export function ChatArea() {
                     onAttachFromDataTransfer={(data) => attachFromDataTransfer(data, input)}
                     onCaptionChange={setAttachmentCaption}
                     onRemoveAttachment={clearAttachment}
+                    gallery={galleryMention}
                 />
             </div>
 

@@ -198,4 +198,57 @@ describe('WO-A §6.4: buildPcKitLine + volatile payload', () => {
         expect(content).not.toContain('Kit:');
         expect(content).not.toContain('Powers:');
     });
+
+    // ── Smart-bookkeeping path: the kit must ride the always-injected PC block ──
+    // Regression for the branch gap: buildPcKitLine was only called in the
+    // `characterProfileActive` arm of the if/else chain in volatile.ts, so a campaign
+    // with smartBookkeepingActive on never received the PC signature kit at all.
+    // The if/else chain is gone (payload/playerCharacter.ts emits one unconditional
+    // [PLAYER CHARACTER] block), so the gap cannot reopen — but smart bookkeeping is
+    // still the config that used to lose the kit, so it stays covered here.
+    const smartCtx = (pc: NPCEntry | null) => ({
+        ...baseCtx(),
+        smartBookkeepingActive: true,
+        characterProfileActive: false,
+        characterProfileData: {
+            name: 'Hero', race: 'Human', class: 'Fighter', level: 3,
+            hp: { current: 20, max: 20 }, stats: {}, skills: [], abilities: [], traits: [],
+            notes: '',
+        },
+        inventoryItems: [{
+            id: 'i1', name: 'torch', qty: 1, category: 'misc' as const, keywords: [],
+            equipped: false, lastUsedScene: '', importance: 5, notes: '',
+        }],
+        playerCharacter: pc,
+    } as unknown as GameContext);
+
+    const runPayload = (ctx: GameContext) => buildPayload({
+        settings: baseSettings(),
+        context: ctx,
+        history: [],
+        userMessage: 'What do I have?',
+        npcLedger: [],
+    }).messages.map(m => m.content as string).join('\n');
+
+    it('the PC block carries the kit when smart bookkeeping is active', () => {
+        // `element` is deliberately absent: it was a bare affinity tag that said nothing
+        // `abilities` did not already say, and it is gone from the type.
+        const pc = makePc('Hero', { signatureKit: { equipment: ['Excalibur'], abilities: ['fire magic'] } });
+        const allContent = runPayload(smartCtx(pc));
+        expect(allContent).toContain('[PLAYER CHARACTER');
+        expect(allContent).toContain('Kit: Excalibur');
+        expect(allContent).toContain('Powers: fire magic');
+    });
+
+    it('a kitless PC emits no kit line on the smart path', () => {
+        // This used to assert the payload was byte-identical with and without a PC,
+        // back when a kitless PC contributed nothing. The PC record is now always sent
+        // (that was the point of the rewrite), so the surviving guarantee is narrower:
+        // no kit, no kit line — and the PC is still named.
+        const withPc = runPayload(smartCtx(makePc('Hero')));
+        expect(withPc).toContain('[PLAYER CHARACTER');
+        expect(withPc).toContain('Hero');
+        expect(withPc).not.toContain('Kit:');
+        expect(withPc).not.toContain('Powers:');
+    });
 });
