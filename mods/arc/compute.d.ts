@@ -64,3 +64,31 @@ export function runArcTick(
     displayInput: string,
     lastAssistantContent: string,
 ): ArcTickResult;
+
+/** Extra arc ticks per unit of simulated elapsed time (`ctx.data.location.elapsedTicks`). */
+export const ARC_TIMESKIP_TICK_RATIO: number;
+
+/**
+ * The postTurn compute hook — the mod's entry point.
+ *
+ * Runs the tick once per turn, plus `ARC_TIMESKIP_TICK_RATIO` extra times per unit of
+ * `ctx.data.location.elapsedTicks`, so a skipped year pressures arcs instead of
+ * advancing them as if a single turn had passed.
+ */
+export default function arcCompute(ctx: {
+    table: {
+        read(name: string): Promise<unknown>;
+        write(name: string, rows: unknown): Promise<void> | void;
+    };
+    data: {
+        archiveIndex: { sceneId: string }[];
+        playerInput: string;
+        messages: { role: string; content?: string }[];
+        location?: { elapsedTicks?: number };
+    };
+    config: { aiTier: unknown };
+    write: {
+        updateContext(patch: Record<string, unknown>): void;
+        addMessage(message: Record<string, unknown>): void;
+    };
+}): Promise<void>;

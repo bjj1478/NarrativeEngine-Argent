@@ -81,6 +81,9 @@ export type BuildPayloadOptions = {
      *  its `context` is captured before `commitPendingTurn()` writes the previous turn's
      *  stakes, so reading it off `context` would lag a turn behind. */
     sceneStakes?: SceneStakes;
+    /** Skip Time: set when the turn was started by an explicit picked duration. The
+     *  beat budget must not depend on the phrase detector matching the composed text. */
+    armedTimeskip?: import('../../types').ArmedTimeskip;
     /** Project 2: registry of final-user contributions. Defaults to built-ins only.
      *  Callers supply their own once mods can be loaded, so `buildPayload` never learns
      *  what a mod is. */
@@ -156,6 +159,7 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
         relationshipStances,
         absoluteCommand,
         sceneStakes,
+        armedTimeskip,
         finalUserRegistry,
         interception,
         publishedFacts,
@@ -351,7 +355,8 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
             // no LLM call, so it is safe on the payload path. An ambiguous match ("a season
             // later") still counts: the turn is covering a gap either way.
             sceneStakes: sceneStakes ?? context.lastSceneStakes,
-            timeskipDetected: detectTimeskip(userMessage) !== null,
+            // An explicit skip always counts; the regex is the fallback for a typed one.
+            timeskipDetected: Boolean(armedTimeskip) || detectTimeskip(userMessage) !== null,
             directorBrief,
             watchdogNudge,
             absoluteCommand,

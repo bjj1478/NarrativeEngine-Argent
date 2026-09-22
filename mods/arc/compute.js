@@ -26,6 +26,16 @@
 // ── Constants (duplicated from src/services/arc/arcConstants.ts — locked by
 //   the WO-01 contract; the spawn path stays host-side and needs its own copy) ──
 export const ARC_TICK_DC = { initial: 35, reduction: 5, floor: 5 };
+// How many extra arc ticks to run per unit of simulated elapsed time
+// (`ctx.data.location.elapsedTicks`, the same budget the NPC agency engine spends).
+//
+// 1:1 is deliberate but hot: the arc roll fires at ~66% base (DC 35, decaying 5 per
+// miss) against the NPC goal path's 19% tempo-miss gate, so a skip advances arcs
+// roughly: 1 week ~1.3 rungs, 1 month ~2.7, 3 months ~4.1, 1 year ~6.1 — against
+// ladders of 5-12 rungs. That means arcs start boiling over from about three months,
+// which is a defensible reading of "a year should change the world". Lower this if
+// long skips should pressure arcs without resolving them.
+export const ARC_TIMESKIP_TICK_RATIO = 1;
 export const LADDER_MIN = 5;
 export const LADDER_MAX = 12;
 export const MAX_ACTIVE_ARCS = 3;
@@ -431,13 +441,37 @@ export default async function arcCompute(ctx) {
     const displayInput = ctx.data.playerInput;
     const lastAssistantContent = lastAssistantMessage(ctx.data.messages);
 
-    const result = runArcTick(
-        arcs,
-        archiveIndex,
-        ctx.config.aiTier,
-        displayInput,
-        lastAssistantContent,
-    );
+    // One tick per turn, plus one per unit of simulated elapsed time. Arcs used to
+    // roll once regardless, so a year-long skip left world pressures exactly where
+    // they were. Each arc carries its own decaying `tickDC` pity timer in the table,
+    // so extra rolls reuse that mechanism rather than adding a parallel one.
+    const elapsedTicks = Math.max(0, Math.floor(ctx.data.location?.elapsedTicks ?? 0));
+    const runs = 1 + elapsedTicks * ARC_TIMESKIP_TICK_RATIO;
+
+    let workingArcs = arcs;
+    let arcsChanged = false;
+    let arcDigest = null;
+    const divergenceFacts = [];
+    for (let run = 0; run < runs; run++) {
+        const pass = runArcTick(
+            workingArcs,
+            archiveIndex,
+            ctx.config.aiTier,
+            displayInput,
+            lastAssistantContent,
+        );
+        if (pass.arcs) {
+            workingArcs = pass.arcs;
+            arcsChanged = true;
+        }
+        // Keep the latest digest: it is the surface line for the next prompt, so it
+        // must describe where the arcs ended up, not where they were mid-skip.
+        if (pass.arcDigest !== null) arcDigest = pass.arcDigest;
+        for (let i = 0; i < pass.divergenceFacts.length; i++) {
+            divergenceFacts.push(pass.divergenceFacts[i]);
+        }
+    }
+    const result = { arcs: arcsChanged ? workingArcs : null, arcDigest, divergenceFacts };
 
     if (result.arcs) {
         await ctx.table.write('arcs', result.arcs);

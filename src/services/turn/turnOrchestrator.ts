@@ -110,6 +110,10 @@ export type TurnState = {
     provider: EndpointConfig | ProviderConfig | undefined;
     getMessages: () => ChatMessage[]; // to get fresh messages midway
     getFreshProvider: () => EndpointConfig | ProviderConfig | undefined;
+    /** Skip Time: an explicit, user-picked duration for THIS turn. Present only on a
+     *  turn started by the Skip Time button; absent on every ordinary turn. When
+     *  present it wins over the phrase detector — there is nothing to disambiguate. */
+    armedTimeskip?: import('../../types').ArmedTimeskip;
     getUtilityEndpoint?: () => EndpointConfig | undefined;
     getFreshAuxiliaryProvider?: () => EndpointConfig | undefined;
     /** Raw auxiliary-endpoint resolver — unlike `getFreshAuxiliaryProvider`,

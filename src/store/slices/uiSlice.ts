@@ -1,5 +1,5 @@
 ﻿import type { StateCreator } from 'zustand';
-import type { PayloadTrace, PipelinePhase, StreamingStats, LoreCheckResult, LoreCheckSelection, ArmedLoot, ArmedGalleryRecall, GallerySource } from '../../types';
+import type { PayloadTrace, PipelinePhase, StreamingStats, LoreCheckResult, LoreCheckSelection, ArmedLoot, ArmedGalleryRecall, ArmedTimeskip, GallerySource } from '../../types';
 import type { OneShotEventId } from '../../services/oneshot/oneShotEvents';
 
 // WO-screen-modernization §A-2 — `rules-mgr` is gone. Rules Manager merged
@@ -97,6 +97,13 @@ export type UISlice = {
      *  then the sender clears it — same contract as `armedOneShot`. */
     armedGalleryRecall: ArmedGalleryRecall[] | null;
     setArmedGalleryRecall: (entries: ArmedGalleryRecall[] | null) => void;
+    /** Skip Time: an explicit, picked duration for the NEXT send. Fires once, then
+     *  the sender clears it — same contract as `armedOneShot`. Carries all three
+     *  representations so nothing downstream recomputes them: `days` advances
+     *  `context.worldDay`, `weeks` drives the agency simulation curve, and `ticks`
+     *  is the shared budget the NPC and arc engines both spend. */
+    armedTimeskip: ArmedTimeskip | null;
+    setArmedTimeskip: (skip: ArmedTimeskip | null) => void;
     // Inline Scene Image V1
     sceneImageModalOpen: boolean;
     sceneImageDraft: import('../../types').SceneImageDraft | null;
@@ -161,6 +168,8 @@ export const createUISlice: StateCreator<UISlice, [], [], UISlice> = (set) => ({
     closeLootRollModal: () => set({ lootRollModalOpen: false }),
     armedOneShot: null,
     setArmedOneShot: (id) => set({ armedOneShot: id }),
+    armedTimeskip: null,
+    setArmedTimeskip: (skip) => set({ armedTimeskip: skip }),
     armedAbsoluteCommand: null,
     setArmedAbsoluteCommand: (text) => set({ armedAbsoluteCommand: text }),
     troubleModalOpen: false,

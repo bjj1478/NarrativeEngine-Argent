@@ -498,6 +498,7 @@ export function buildTurnPayload(
         absoluteCommand: state.absoluteCommand ?? undefined,
         // Read fresh: `context` predates the commit that stored last turn's stakes.
         sceneStakes: state.getFreshContext().lastSceneStakes,
+        armedTimeskip: state.armedTimeskip,
         elevatedScenes: ctx.gathered.elevatedScenes,
         slottedRagSnippets: ctx.gathered.slottedRagSnippets,
         relationshipStances: ctx.gathered.relationshipStances,

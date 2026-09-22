@@ -307,6 +307,7 @@ export function ChatArea() {
                 onTrim={triggerCondense}
                 onOpenOoc={() => setOocOpen(true)}
                 onOpenArchive={handleOpenArchive}
+                onSendText={(text) => handleSend(text)}
             />
 
             <div className="chat-composer-bar flex-shrink-0 bg-void border-t border-border">

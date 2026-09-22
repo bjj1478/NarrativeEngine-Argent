@@ -1,12 +1,13 @@
 // NPC Agency Engine — Phase 2 port wrapper. Mobile source: turnPostProcess.ts:531-927
 // (runAgencyTick + runTimeskipPath + bumpOnStageActivity). Faithful port with the minimal
 // desktop adaptations:
-//   - The real AiTier gate is wired at the caller: `postTurnPipeline.ts:257` wraps the
-//     `runAgencyTick` call in `if (tierAllows(state.settings.aiTier, 'heartbeatTick'))`, so
-//     `timeskipRun` inside it is unreachable on lite too. On lite this function is never
-//     entered, so the local stub below is a redundant inner guard, not a hole. The stub
-//     stays because removing it would be a behaviour change this work order promises
-//     none (WORKORDER-P5-01 §3).
+//   - The caller (`tracks/sequential/agencyTrack.ts`) gates this whole function on
+//     `tierAllows(aiTier, 'heartbeatTick')`, so nothing here runs on lite. The
+//     `timeskipRun` check below uses the REAL `tierAllows`: it used to be a local stub
+//     that always returned true, which made the Block View's "Timeskip Narration"
+//     switch inert while "NPC Agency Heartbeat" — whose description never mentions time
+//     skips — was the actual kill switch. Mobile already used the real gate
+//     (`mobile/src/services/turn/postTurn/npcStage.ts`).
 //   - `state.getFreshSummarizerProvider` (mobile) → `state.getUtilityEndpoint` (desktop has no
 //     separate summarizer slot; the utility endpoint is the closest low-priority background LLM).
 //   - Prompt-section helpers (TTRPG_PERSONA_GM_ASSISTANT, joinPromptSections, ANCHOR_BEFORE_INPUT,
@@ -31,16 +32,7 @@ import { detectCollision, resolveTangle, buildTangleDeltas } from './agencyColli
 import { buildDigest, visibilityFromBand, type TickDelta } from './agencyDigest';
 import { detectTimeskip, runTimeskip } from './agencyTimeskipRun';
 import { isAgencyEligible } from './agencyLifecycle';
-
-// Redundant inner guard — the caller in postTurnPipeline.ts already gates this on the
-// real `tierAllows` before the call. On lite this function is never entered (a no-op when
-// no NPCs have goalRecords, which is all legacy NPCs until populateAgencyFields fills wants).
-// Kept as a stub (returns true) because removing it is a behaviour change (WORKORDER-P5-01 §3).
-function tierAllows(tier: unknown, feature: string): boolean {
-    void tier;
-    void feature;
-    return true;
-}
+import { tierAllows } from '../../turn/aiTier';
 
 // Inlined from mobile's services/infrastructure/utilityPrompts (desktop has no equivalent).
 const TTRPG_PERSONA_GM_ASSISTANT = 'You are a background GM assistant running silently.';
@@ -68,11 +60,17 @@ export function runAgencyTick(
     const currentTick = context.agencyTick ?? 0;
     const currentDc = context.agencyHeartbeatDC ?? HEARTBEAT_DC.initial;
 
-    // ── Timeskip detection (§9.7 Piece D, +1 LLM) ──
-    const timeskipResult = detectTimeskip(displayInput);
-    if (timeskipResult && !('ambiguous' in timeskipResult) && timeskipResult.weeks > 0) {
+    // ── Timeskip (§9.7 Piece D, +1 LLM) ──
+    // An explicit skip (the Skip Time button) wins over the phrase detector and skips
+    // the ambiguity guard entirely — the user picked a duration, there is nothing to
+    // disambiguate. The detector remains for skips the player types by hand.
+    const explicitWeeks = state.armedTimeskip?.weeks;
+    const detected = explicitWeeks === undefined ? detectTimeskip(displayInput) : null;
+    const detectedWeeks = detected && !('ambiguous' in detected) ? detected.weeks : undefined;
+    const timeskipWeeks = explicitWeeks ?? detectedWeeks;
+    if (timeskipWeeks !== undefined && timeskipWeeks > 0) {
         if (tierAllows(aiTier, 'timeskipRun')) {
-            runTimeskipPath(state, callbacks, npcLedger, timeskipResult.weeks, currentTick, sceneStakes, facade);
+            runTimeskipPath(state, callbacks, npcLedger, timeskipWeeks, currentTick, sceneStakes, facade);
             return;
         }
     }

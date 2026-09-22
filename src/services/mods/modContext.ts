@@ -196,6 +196,17 @@ export interface ModLocation {
     readonly travel?: TravelState | null;
     /** WO 6.2 — the in-game day counter. Read-only to the mod. */
     readonly worldDay?: number;
+    /**
+     * Simulated elapsed time for THIS turn, in agency ticks — `0` on an ordinary turn,
+     * non-zero when the player skipped time. The same budget the NPC agency engine
+     * spends (`ticksForDuration`), shared so a mod that advances its own long-running
+     * state scales with the skip instead of ticking once and pretending a year was a
+     * turn. Read-only.
+     *
+     * This is the ONLY route into a sandboxed compute mod: events and `ctx.subscribe`
+     * are native-tier only, so a skip cannot be announced to a compute hook any other way.
+     */
+    readonly elapsedTicks?: number;
     readonly travelMode?: GameContext['travelMode'];
 }
 
@@ -474,6 +485,8 @@ export interface ModLocationStateInput {
     readonly travel?: TravelState | null;
     /** WO 6.2 — the in-game day counter. */
     readonly worldDay?: number;
+    /** Simulated elapsed ticks for this turn; `0`/absent on an ordinary turn. */
+    readonly elapsedTicks?: number;
     readonly travelMode?: GameContext['travelMode'];
 }
 
@@ -866,6 +879,9 @@ function buildModData(
         // the mod, so pass them through unchanged rather than normalising.
         travel: locationState?.travel ?? context.travel ?? null,
         worldDay: locationState?.worldDay ?? context.worldDay,
+        // Turn-scoped, not campaign state: there is no `context` fallback because a
+        // skip belongs to the turn that requested it, never to a later one.
+        elapsedTicks: locationState?.elapsedTicks ?? 0,
         travelMode: locationState?.travelMode ?? context.travelMode,
     });
     const chapters: readonly ModChapter[] = Object.freeze(
