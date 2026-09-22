@@ -223,6 +223,8 @@ export const en = {
     'hub.tagline': 'AI Game Master System',
     'hub.brand.lead': 'Narrative',
     'hub.brand.accent': 'Nexus',
+    // Proper noun — see 'header.title.suffix'. Other locales inherit it.
+    'hub.brand.suffix': 'ARGENT',
     'hub.subtitle': 'Choose your world. Shape its fate.',
     'hub.delete.confirm': 'Delete this campaign? All data — chat history, lore, saves — will be lost forever.',
     'hub.delete.cancel': 'Cancel',

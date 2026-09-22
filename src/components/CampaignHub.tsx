@@ -272,7 +272,8 @@ export function CampaignHub() {
                     margin: '0 0 10px', lineHeight: 1,
                 }}>
                     {t('hub.brand.lead')}{' '}
-                    <span style={{ color: 'var(--color-terminal)' }}>{t('hub.brand.accent')}</span>
+                    <span style={{ color: 'var(--color-terminal)' }}>{t('hub.brand.accent')}</span>{' '}
+                    <span style={{ color: 'var(--color-argent)' }}>{t('hub.brand.suffix')}</span>
                 </h1>
                 <p style={{
                     fontStyle: 'italic', fontSize: 15,
