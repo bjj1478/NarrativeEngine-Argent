@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { mapTier } from '../engine';
 import { handleDiceTool, getToolDefinitions } from '../turn';
-import { buildDefaultDiceSystem } from '../../types';
+import { buildLegacyDiceSystem } from '../../types';
 import type { DieType, DiceSystemConfig } from '../../types';
 
-const SYS: DiceSystemConfig = buildDefaultDiceSystem();
+// These cases are about d20/d6 band mapping, which is what the LEGACY die set
+// provides. The shipped default is now a percentile ladder of skill ratings, so
+// the subject matter of this file lives in `buildLegacyDiceSystem()`.
+const SYS: DiceSystemConfig = buildLegacyDiceSystem();
 const d20: DieType = SYS.dieTypes.find(d => d.name === 'd20')!;
 const d6: DieType = SYS.dieTypes.find(d => d.name === 'd6')!;
 

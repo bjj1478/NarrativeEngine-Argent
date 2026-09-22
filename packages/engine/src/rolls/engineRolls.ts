@@ -34,6 +34,19 @@ export type GateRollResult = {
     detail: string;     // player-facing label
 };
 
+/**
+ * How a roll reads to the GM and to the player.
+ *
+ * A die's `name` used to BE the notation ("d20"), so `${count}${name}` produced
+ * "2d20". A name can now be a skill rating ("DECENT"), which turned the same
+ * expression into "1DECENT". Build the notation from the face count instead,
+ * and append the name only when it carries something the notation does not.
+ */
+function describeDie(count: number, dieType: DieType): string {
+    const notation = `${count}d${dieType.faces}`;
+    return dieType.name === `d${dieType.faces}` ? notation : `${notation} (${dieType.name})`;
+}
+
 export function executeGateRoll(dieType: DieType, rollDef: RollDefinition): GateRollResult {
     const rollDie = () => Math.floor(Math.random() * dieType.faces) + 1;
     const count = Math.max(1, rollDef.count);
@@ -42,7 +55,7 @@ export function executeGateRoll(dieType: DieType, rollDef: RollDefinition): Gate
     if (rollDef.aggregation === 'total_all') {
         const rolls = Array.from({ length: count }, rollDie);
         const value = rolls.reduce((a, b) => a + b, 0);
-        return { value, rolls, detail: `${count}${dieType.name} total` };
+        return { value, rolls, detail: `${describeDie(count, dieType)} total` };
     }
 
     // pick_one: modifier determines which die to keep
@@ -51,14 +64,14 @@ export function executeGateRoll(dieType: DieType, rollDef: RollDefinition): Gate
     let detail: string;
     if (rollDef.modifier === 'adv') {
         value = Math.max(...rolls);
-        detail = count > 1 ? `${count}${dieType.name} advantage (highest)` : `1${dieType.name}`;
+        detail = count > 1 ? `${describeDie(count, dieType)} advantage (highest)` : describeDie(1, dieType);
     } else if (rollDef.modifier === 'disadv') {
         value = Math.min(...rolls);
-        detail = count > 1 ? `${count}${dieType.name} disadvantage (lowest)` : `1${dieType.name}`;
+        detail = count > 1 ? `${describeDie(count, dieType)} disadvantage (lowest)` : describeDie(1, dieType);
     } else {
         // none: take the first die (or just the single die)
         value = rolls[0];
-        detail = count > 1 ? `${count}${dieType.name}` : `1${dieType.name}`;
+        detail = describeDie(count > 1 ? count : 1, dieType);
     }
     return { value, rolls, detail };
 }
@@ -251,8 +264,14 @@ function resolveManualRollLegacy(
     mode: string,
     sys?: DiceSystemConfig | null
 ): ManualRollResult {
-    // Map old '1d20'|'adv'|'disadv' to a d20 gate roll
-    const d20 = sys?.dieTypes.find(dt => dt.name === 'd20') ?? {
+    // Map old '1d20'|'adv'|'disadv' to a d20 gate roll. Match on id first: a
+    // campaign's d20 is only NAMED "d20" by convention, and a system built from
+    // skill ratings has no die by that name at all — which used to drop the
+    // campaign's own bands on the floor without a word.
+    const d20 = sys?.dieTypes.find(dt => dt.id === 'dt_d20')
+        ?? sys?.dieTypes.find(dt => dt.name === 'd20')
+        ?? sys?.dieTypes.find(dt => dt.faces === 20)
+        ?? {
         id: 'legacy_d20',
         name: 'd20',
         faces: 20,

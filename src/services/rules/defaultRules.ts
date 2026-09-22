@@ -212,11 +212,13 @@ Trigger: [DICE OUTCOMES: ...] tag in player message.
 - Disadvantage — only if explicitly impaired (blinded, wounded, overwhelmed)
 
 **Outcomes:**
-- Catastrophe: severe unexpected failure, consequences beyond simple loss.
-- Failure: fails. Damage, setback, or resource loss.
+- Triumph: succeeds, and the manner of it opens something further.
 - Success: succeeds exactly as intended.
-- Triumph: succeeds with an unexpected additional benefit.
-- Narrative Boon: flawless. Massive strategic or narrative advantage.
+- Failure: does not succeed. Cost, setback, or ground lost.
+- Fumble: fails, and makes the situation actively worse.
+
+A campaign may define its own labels. Read any you do not recognise on their
+scale from worst to best and narrate proportionally.
 
 **The mechanism stays off the page.** Never state the tag, and in prose name no category, outcome label, die, total, threshold, tier or bonus — never "Stealth failure", never "the Triumph", never "your Perception", never "the check". Narrate the cause instead: a guard who turned at the wrong moment, a lock that gave on the second try, a hand steadier than it had any right to be. The labels tell you what happened; they are not words the reader ever sees.
 

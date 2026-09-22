@@ -4,7 +4,7 @@ import { useAppStore, DEFAULT_SURPRISE_TYPES, DEFAULT_SURPRISE_TONES, DEFAULT_EN
 import { populateEngineTags } from '../../services/chatEngine';
 import { Toggle } from './Toggle';
 import { NPCPressureInspector } from '../NPCPressureInspector';
-import { buildDefaultDiceSystem } from '../../types';
+import { DEFAULT_RATING_ID, buildDefaultDiceSystem } from '../../types';
 import { validateBands } from '../../services/engine/diceTier';
 import { countTokens } from '../../services/infrastructure/tokenizer';
 import {
@@ -364,8 +364,13 @@ function DiceFairnessSection({ context, updateContext }: DiceFairnessSectionProp
     };
 
     const removeDieType = (id: string) => {
-        // Remove the die type and any categories referencing it (reassign to d20)
-        const fallbackId = diceSystem.dieTypes.find(d => d.name === 'd20')?.id ?? diceSystem.dieTypes[0]?.id;
+        // Remove the die type and reassign any categories that referenced it.
+        // Match the default rating first: keying on the name "d20" silently
+        // fell through to dieTypes[0] — the weakest die — once the defaults
+        // stopped shipping a die by that name.
+        const fallbackId = diceSystem.dieTypes.find(d => d.id === DEFAULT_RATING_ID)?.id
+            ?? diceSystem.dieTypes.find(d => d.name === 'd20')?.id
+            ?? diceSystem.dieTypes[0]?.id;
         const categories = diceSystem.categories.map(c =>
             c.dieTypeId === id && fallbackId ? { ...c, dieTypeId: fallbackId } : c
         );

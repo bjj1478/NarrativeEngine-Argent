@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { rollEngines, rollDiceFairness, mapTier } from '../engine';
-import { buildDefaultDiceSystem } from '../../types';
+import { buildLegacyDiceSystem } from '../../types';
 import type { GameContext, DieType } from '../../types';
 import {
     DEFAULT_SURPRISE_TYPES, DEFAULT_SURPRISE_TONES,
@@ -31,7 +31,7 @@ const baseContext: GameContext = {
     sceneNote: '',
     sceneNoteActive: false,
     sceneNoteDepth: 3,
-    diceSystem: buildDefaultDiceSystem(),
+    diceSystem: buildLegacyDiceSystem(),
     surpriseConfig: { initialDC: 95, dcReduction: 3, types: DEFAULT_SURPRISE_TYPES, tones: DEFAULT_SURPRISE_TONES },
     encounterConfig: { initialDC: 198, dcReduction: 2, types: DEFAULT_ENCOUNTER_TYPES, tones: DEFAULT_ENCOUNTER_TONES },
     worldEventConfig: { initialDC: 498, dcReduction: 2, who: DEFAULT_WORLD_WHO, where: DEFAULT_WORLD_WHERE, why: DEFAULT_WORLD_WHY, what: DEFAULT_WORLD_WHAT },
@@ -128,7 +128,10 @@ describe('rollDiceFairness — generalized', () => {
 });
 
 describe('mapTier — generalized', () => {
-    const d20: DieType = buildDefaultDiceSystem().dieTypes.find(d => d.name === 'd20')!;
+// These cases are about d20/d6 band mapping, which is what the LEGACY die set
+// provides. The shipped default is now a percentile ladder of skill ratings, so
+// the subject matter of this file lives in `buildLegacyDiceSystem()`.
+    const d20: DieType = buildLegacyDiceSystem().dieTypes.find(d => d.name === 'd20')!;
 
     it('maps d20 values to bands consistently', () => {
         expect(mapTier(1, d20)).toBe('Catastrophe');

@@ -131,6 +131,23 @@ type CampaignDeps = CampaignSlice & ArchiveSlice & LoreSlice & NPCSlice & ChatSl
 
 // ── Slice creator ──────────────────────────────────────────────────────
 
+/**
+ * Merge a saved context over the defaults, without letting the defaults answer
+ * a question only the save can answer.
+ *
+ * `defaultContext` pre-fills `diceSystem`, so after the spread `migrateDiceSystem`
+ * can never tell whether this campaign had one of its own — its `!merged.diceSystem`
+ * guard was unreachable. Drop the default back off for a save that predates the
+ * field, so the migration decides and a campaign in progress is not silently moved
+ * onto whatever the current default ladder happens to be.
+ */
+function hydrateContext(saved: Partial<GameContext> | undefined): Partial<GameContext> {
+    const stored = (saved ?? {}) as Partial<GameContext>;
+    const merged = { ...defaultContext, ...stored } as Partial<GameContext>;
+    if (!stored.diceSystem) delete merged.diceSystem;
+    return merged;
+}
+
 export const createCampaignSlice: StateCreator<CampaignDeps, [], [], CampaignSlice> = (set, get) => ({
     activeCampaignId: null,
     setActiveCampaign: async (id) => {
@@ -195,7 +212,7 @@ export const createCampaignSlice: StateCreator<CampaignDeps, [], [], CampaignSli
 
         set({
             activeCampaignId: id,
-            context: migrateDiceSystem({ ...defaultContext, ...(campaignState?.context ?? {}) }),
+            context: migrateDiceSystem(hydrateContext(campaignState?.context)),
             messages: campaignState?.messages ?? [],
             condenser: campaignState?.condenser ?? { condensedUpToIndex: -1 },
             pinnedExcerpts: campaignState?.pinnedExcerpts ?? [],

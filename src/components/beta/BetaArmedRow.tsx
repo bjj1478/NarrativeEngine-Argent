@@ -28,6 +28,7 @@ export function BetaArmedRow() {
     const setDeepArmed = useAppStore(s => s.setDeepArmed);
     const armedRoll = useAppStore(s => s.armedRoll);
     const setArmedRoll = useAppStore(s => s.setArmedRoll);
+    const diceSystem = useAppStore(s => s.context.diceSystem);
     const armedLoot = useAppStore(s => s.armedLoot);
     const clearArmedLoot = useAppStore(s => s.clearArmedLoot);
     const armedOneShot = useAppStore(s => s.armedOneShot);
@@ -42,7 +43,10 @@ export function BetaArmedRow() {
     }
     if (armedRoll) {
         // `armedRoll` is either the current object shape or a legacy string.
-        const detail = typeof armedRoll === 'string' ? armedRoll : armedRoll.dieTypeId;
+        // Resolve the id to the die's name — the chip used to read "dt_decent".
+        const detail = typeof armedRoll === 'string'
+            ? armedRoll
+            : (diceSystem?.dieTypes.find(d => d.id === armedRoll.dieTypeId)?.name ?? armedRoll.dieTypeId);
         chips.push({ key: 'dice', label: 'Dice', detail, onClear: () => setArmedRoll(null) });
     }
     if (armedLoot) {

@@ -85,25 +85,24 @@ const ROLL_DICE_TOOL = {
             "Trigger: Player attempts an action with an uncertain outcome — combat hits, skill checks, saves, contested actions.\n" +
             "1. Identify core intent of the player's action.\n" +
             "2. If the outcome depends on chance, CALL `roll_dice` BEFORE narrating. Do NOT narrate the outcome first.\n" +
-            "   - `dice`: use the die type appropriate to the category (e.g. Combat→d20, Social→d6, Perception→d6). Use `NdM` form (e.g. 2d6, 1d100). Optionally add `+N` or `-N` modifier.\n" +
+            "   - `dice`: match the die the campaign configures for that category. The default system is percentile, so `1d100`. Use `NdM` form. Optionally add `+N` or `-N` modifier.\n" +
             "   - `reason`: short label (e.g. \"Stealth check vs guard\", \"Longsword attack\")\n" +
-            "   - `category`: one of Combat / Stealth / Social / Perception / Movement / Knowledge / Mundane (used for d20 tier mapping only)\n" +
-            "3. Use the returned `tier` (outcome band label, e.g. Catastrophe / Failure / Success / Triumph / Narrative Boon) to shape the narrative. If no tier is returned (non-d20 rolls without configured bands), interpret the raw `result` per the campaign's Action Resolution rules.\n" +
+            "   - `category`: one of Combat / Stealth / Social / Perception / Movement / Knowledge / Mundane — which skill the check draws on\n" +
+            "3. Use the returned `tier` (outcome band label, e.g. Triumph / Success / Failure / Fumble) to shape the narrative. If no tier is returned — the value fell outside the configured bands — interpret the raw `result` per the campaign's Action Resolution rules.\n" +
             "4. Do NOT call `roll_dice` for descriptive moments, dialogue, or trivial actions.\n\n" +
             "Advantage: if the player explicitly leverages a known weakness or superior tool, call `roll_dice` twice and use the higher result. If explicitly impaired (blinded, wounded, overwhelmed), call twice and use the lower. Otherwise, single roll.\n\n" +
             "Outcome band semantics (when tier is returned):\n" +
-            "- Catastrophe: severe unexpected failure, consequences beyond simple loss.\n" +
-            "- Failure: fails. Damage, setback, or resource loss.\n" +
+            "- Triumph: succeeds, and the manner of it opens something further.\n" +
             "- Success: succeeds exactly as intended.\n" +
-            "- Triumph: succeeds with an unexpected additional benefit.\n" +
-            "- Narrative Boon: flawless. Massive strategic or narrative advantage.\n" +
+            "- Failure: does not succeed. Cost, setback, or ground lost.\n" +
+            "- Fumble: fails, and makes the situation actively worse.\n" +
             "Other custom bands: interpret per the campaign's Action Resolution rules.",
         parameters: {
             type: 'object' as const,
             properties: {
-                dice:     { type: 'string' as const, description: "Dice expression: '1d20', '2d6', '1d100', '1d4', optionally with '+N' or '-N' modifier. Use the die type matching the action's category." },
+                dice:     { type: 'string' as const, description: "Dice expression, e.g. '1d100' (the default system is percentile), '2d6', '1d20', optionally with '+N' or '-N'. Match the die the campaign configures for the action's category." },
                 reason:   { type: 'string' as const, description: "Short label, e.g. 'Stealth check vs guard' or 'Longsword attack'" },
-                category: { type: 'string' as const, enum: ['Combat','Perception','Stealth','Social','Movement','Knowledge','Mundane'], description: 'Skill category for tier mapping (used for d20 only)' }
+                category: { type: 'string' as const, enum: ['Combat','Perception','Stealth','Social','Movement','Knowledge','Mundane'], description: 'Which skill category the check draws on' }
             },
             required: ['dice', 'reason']
         }

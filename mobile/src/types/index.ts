@@ -1016,8 +1016,62 @@ export type StatBlock = {
 
 function bandId() { return `b_${Math.random().toString(36).slice(2, 9)}`; }
 
-/** Standard 8 polyhedral/percentile die types with sensible default outcome bands. */
+/**
+ * The five skill ratings that make up the default system, keyed by the value a
+ * roll must come in at or under to succeed. They are all d100: the rating IS
+ * the difficulty, which is why nothing in the engine carries a separate DC.
+ */
+const DEFAULT_RATINGS: { id: string; name: string; threshold: number }[] = [
+    { id: 'dt_bad', name: 'BAD', threshold: 10 },
+    { id: 'dt_decent', name: 'DECENT', threshold: 20 },
+    { id: 'dt_good', name: 'GOOD', threshold: 40 },
+    { id: 'dt_great', name: 'GREAT', threshold: 60 },
+    { id: 'dt_world_class', name: 'WORLD-CLASS', threshold: 80 },
+];
+
+/** The rating every default category starts on. */
+export const DEFAULT_RATING_ID = 'dt_decent';
+
+/**
+ * Percentile outcome bands for one skill rating.
+ *
+ * Roll d100: at or under the threshold succeeds. A double (11, 22 - 99) at or
+ * under the threshold is a Triumph; above it, a Fumble. 01 always Triumphs and
+ * 100 always Fumbles. Adjacent values sharing a label are coalesced, so the
+ * result tiles 1..100 exactly with no gap or overlap.
+ */
+export function buildRatingBands(threshold: number): OutcomeBand[] {
+    const bands: OutcomeBand[] = [];
+    for (let value = 1; value <= 100; value++) {
+        let label: string;
+        if (value === 1) label = 'Triumph';
+        else if (value === 100) label = 'Fumble';
+        else if (value % 11 === 0) label = value <= threshold ? 'Triumph' : 'Fumble';
+        else label = value <= threshold ? 'Success' : 'Failure';
+
+        const open = bands[bands.length - 1];
+        if (open && open.label === label && open.max === value - 1) open.max = value;
+        else bands.push({ id: bandId(), label, min: value, max: value });
+    }
+    return bands;
+}
+
+/** The five skill ratings, as die types. The default set for a new campaign. */
 export function buildDefaultDieTypes(): DieType[] {
+    return DEFAULT_RATINGS.map(r => ({
+        id: r.id,
+        name: r.name,
+        faces: 100,
+        bands: buildRatingBands(r.threshold),
+    }));
+}
+
+/**
+ * The pre-percentile die set: eight polyhedral dice with d20-centric bands.
+ * Retained ONLY so a campaign that predates the stored `diceSystem` keeps
+ * resolving the way it always has. New campaigns never see this.
+ */
+export function buildLegacyDieTypes(): DieType[] {
     return [
         {
             id: 'dt_d2', name: 'd2', faces: 2, bands: [
@@ -1085,26 +1139,30 @@ export function buildDefaultDieTypes(): DieType[] {
 
 const DEFAULT_CATEGORY_NAMES = ['Combat', 'Perception', 'Stealth', 'Social', 'Movement', 'Knowledge'];
 
+function defaultCategories(dieTypeId: string): DiceCategory[] {
+    return DEFAULT_CATEGORY_NAMES.map((name, i) => ({ id: `cat_default_${i}`, name, dieTypeId }));
+}
+
 export function buildDefaultDiceSystem(): DiceSystemConfig {
-    const dieTypes = buildDefaultDieTypes();
-    return {
-        dieTypes,
-        categories: DEFAULT_CATEGORY_NAMES.map((name, i) => ({
-            id: `cat_default_${i}`,
-            name,
-            dieTypeId: 'dt_d20',
-        })),
-    };
+    return { dieTypes: buildDefaultDieTypes(), categories: defaultCategories(DEFAULT_RATING_ID) };
+}
+
+/** The pre-percentile default, for saves that predate `diceSystem`. */
+export function buildLegacyDiceSystem(): DiceSystemConfig {
+    return { dieTypes: buildLegacyDieTypes(), categories: defaultCategories('dt_d20') };
 }
 
 /**
- * Migrate legacy `diceConfig` (d20-only threshold object) → `diceSystem`.
- * If `diceSystem` already exists, leave it. If only `diceConfig` exists, build
- * a d20 die type whose bands reflect the old thresholds.
+ * Migrate a context that has no `diceSystem` yet.
+ *
+ * A campaign old enough to lack one is a d20 campaign, so it is rebuilt on the
+ * LEGACY set rather than the current default, which would change how an
+ * in-progress campaign resolves. `diceConfig`, if present, supplies its
+ * thresholds.
  */
 function migrateDiceConfig(ctx: Partial<GameContext>): DiceSystemConfig {
     if (ctx.diceSystem) return ctx.diceSystem;
-    const sys = buildDefaultDiceSystem();
+    const sys = buildLegacyDiceSystem();
     const old = ctx.diceConfig;
     if (old) {
         const d20 = sys.dieTypes.find(d => d.id === 'dt_d20');

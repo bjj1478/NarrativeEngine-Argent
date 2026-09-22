@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Dices } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { buildDefaultDiceSystem } from '../../types';
+import { DEFAULT_RATING_ID, buildDefaultDiceSystem } from '../../types';
 import type { RollDefinition, RollModifier, RollAggregation, ManualRollRequest } from '../../types';
 
 /**
@@ -25,13 +25,20 @@ export function DiceRollModal() {
     // plain single roll; the player adjusts via the 3 gates before confirming.
     const defaultRollDef: RollDefinition = { modifier: 'none', count: 1, aggregation: 'pick_one' };
 
-    const [dieTypeId, setDieTypeId] = useState(diceSystem.dieTypes[0]?.id ?? '');
+    // Prefer the default rating over "whatever is first in the list" — the list
+    // is ordered worst-to-best, so `dieTypes[0]` opened the modal on the weakest
+    // die every time.
+    const openingDieId = diceSystem.dieTypes.find(d => d.id === DEFAULT_RATING_ID)?.id
+        ?? diceSystem.dieTypes[0]?.id
+        ?? '';
+
+    const [dieTypeId, setDieTypeId] = useState(openingDieId);
     const [rollDef, setRollDef] = useState<RollDefinition>(defaultRollDef);
     const openedAtRef = useRef(0);
 
     useEffect(() => {
         if (open) {
-            setDieTypeId(diceSystem.dieTypes[0]?.id ?? '');
+            setDieTypeId(openingDieId);
             setRollDef(defaultRollDef);
             openedAtRef.current = Date.now();
         }
@@ -61,7 +68,9 @@ export function DiceRollModal() {
             : !isTotalAll && rollDef.modifier === 'disadv'
             ? ' (disadv: lowest)'
             : isTotalAll ? ' (sum)' : '';
-        return `${rollDef.count}${selectedDie.name}${modLabel}`;
+        const notation = `${rollDef.count}d${selectedDie.faces}`;
+        const named = selectedDie.name === `d${selectedDie.faces}` ? notation : `${notation} (${selectedDie.name})`;
+        return `${named}${modLabel}`;
     })();
 
     return (
@@ -86,7 +95,9 @@ export function DiceRollModal() {
                             className="w-full bg-void border border-border focus:border-terminal text-[13px] text-text-primary rounded px-2 py-1.5 outline-none"
                         >
                             {diceSystem.dieTypes.map(d => (
-                                <option key={d.id} value={d.id}>{d.name} (1–{d.faces})</option>
+                                <option key={d.id} value={d.id}>
+                                    {d.name === `d${d.faces}` ? d.name : `${d.name} (d${d.faces})`}
+                                </option>
                             ))}
                         </select>
                     </div>

@@ -279,7 +279,14 @@ export async function hydrateCampaign(campaignId: string) {
     ]);
     const relationshipMemories = state?.context?.relationshipMemory === true ? await loadRelationshipMemories(campaignId) : { npcToMc: [], npcToNpc: [] };
 
-    const rawContext: GameContext = { ...DEFAULT_CONTEXT, ...(state?.context ?? {}) } as GameContext;
+    const storedContext = (state?.context ?? {}) as Partial<GameContext>;
+    const rawContext: GameContext = { ...DEFAULT_CONTEXT, ...storedContext } as GameContext;
+    // DEFAULT_CONTEXT pre-fills `diceSystem`, which hides from migrateLegacyContext
+    // whether this save ever had one of its own — its `!merged.diceSystem` guard
+    // could never fire. Drop the default back off for a save that predates the
+    // field, so the migration decides and a campaign in progress is not silently
+    // moved onto whatever the current default ladder happens to be.
+    if (!storedContext.diceSystem) delete (rawContext as Partial<GameContext>).diceSystem;
     const migratedContext = migrateLegacyContext(rawContext);
 
     // v1→v2 divergence register migration: wipe-and-restart
