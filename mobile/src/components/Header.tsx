@@ -239,7 +239,7 @@ export function Header() {
     return (
         <header className="bg-surface border-b border-border flex items-center px-2 sm:px-4 gap-1 shrink-0 safe-top min-h-9 md:min-h-10 py-0">
             <h1 className="hidden md:block text-terminal text-sm font-bold tracking-[0.3em] uppercase glow-green shrink-0">
-                Narrative Engine
+                Narrative Engine <span className="text-argent [text-shadow:none]">ARGENT</span>
             </h1>
 
             <div className="hidden md:flex flex-1 items-center gap-4">

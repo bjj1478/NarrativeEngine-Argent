@@ -111,7 +111,7 @@ export function Header() {
             </button>
 
             <h1 className="chrome-label hidden md:block text-terminal text-sm font-bold tracking-[0.3em] uppercase shrink-0">
-                {t('header.title')}
+                {t('header.title')} <span className="text-argent">{t('header.title.suffix')}</span>
             </h1>
             <span className="hidden md:inline text-[9px] font-mono text-text-dim shrink-0" title={t('header.version.tooltip', { version: APP_VERSION })}>
                 v{APP_VERSION}

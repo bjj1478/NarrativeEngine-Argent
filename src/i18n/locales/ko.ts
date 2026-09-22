@@ -30,7 +30,7 @@ export const ko: LocalePack = {
     'header.drawer.open': 'Open context drawer',
     'header.drawer.close': 'Close context drawer',
     'header.title': '내러티브 엔진',
-    'header.version.tooltip': '내러티브 엔진 버젼 {{version}}',
+    'header.version.tooltip': '내러티브 엔진 ARGENT 버젼 {{version}}',
     'header.backup.tooltip': '백업 만들기',
     'header.backup.aria': '백업 만들기',
     'header.backup.label': '백업',
@@ -64,7 +64,7 @@ export const ko: LocalePack = {
     // ── Settings modal (shell) ───────────────────────────────────────────
     'settings.dialog.aria': '설정',
     'settings.title': '⚙ 설정',
-    'settings.version.tooltip': '설치된 내러티브 엔진 버젼',
+    'settings.version.tooltip': '설치된 내러티브 엔진 ARGENT 버젼',
     'settings.close.aria': '설정 닫기',
     'settings.tab.providers': 'LLM 모델',
     'settings.tab.presets': '프리셋',

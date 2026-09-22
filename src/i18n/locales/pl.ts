@@ -37,7 +37,7 @@ export const pl: LocalePack = {
     'header.drawer.open': 'Otwórz panel kontekstowy',
     'header.drawer.close': 'Zamknij panel kontekstowy',
     'header.title': 'Narrative Engine',
-    'header.version.tooltip': 'Wersja Narrative Engine {{version}}',
+    'header.version.tooltip': 'Wersja Narrative Engine ARGENT {{version}}',
     'header.backup.tooltip': 'Utwórz kopię zapasową',
     'header.backup.aria': 'Utwórz kopię zapasową',
     'header.backup.label': 'Kopia zapasowa',
@@ -71,7 +71,7 @@ export const pl: LocalePack = {
     // ── Settings modal (shell) ───────────────────────────────────────────
     'settings.dialog.aria': 'Ustawienia',
     'settings.title': '⚙ USTAWIENIA',
-    'settings.version.tooltip': 'Zainstalowana wersja Narrative Engine',
+    'settings.version.tooltip': 'Zainstalowana wersja Narrative Engine ARGENT',
     'settings.close.aria': 'Zamknij ustawienia',
     'settings.tab.providers': 'Dostawcy LLM',
     'settings.tab.presets': 'Presety',

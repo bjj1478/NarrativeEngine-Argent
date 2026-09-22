@@ -79,7 +79,7 @@ describe('typed keys (MASTERPLAN acceptance gate 6)', () => {
 describe('interpolation (Locked Decision 6)', () => {
     it('substitutes named placeholders', () => {
         expect(translateIn('en', 'header.version.tooltip', { version: '1.0.2' }))
-            .toBe('Narrative Engine version 1.0.2');
+            .toBe('Narrative Engine ARGENT version 1.0.2');
     });
 
     it('substitutes into a quoted placeholder', () => {
@@ -88,7 +88,7 @@ describe('interpolation (Locked Decision 6)', () => {
     });
 
     it('leaves an unfilled placeholder intact rather than printing undefined', () => {
-        expect(translateIn('en', 'header.version.tooltip')).toBe('Narrative Engine version {{version}}');
+        expect(translateIn('en', 'header.version.tooltip')).toBe('Narrative Engine ARGENT version {{version}}');
     });
 });
 

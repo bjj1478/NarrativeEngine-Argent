@@ -18,6 +18,11 @@
 
   --color-danger: #EF4444;
 
+  /* Brand: the ARGENT half of the wordmark. Not --color-danger — red means
+     "error" elsewhere, and the wordmark is not a state. 5.32:1 on the white
+     surface, AA for the small caps it renders in. */
+  --color-argent: #AB4F49;
+
   --color-surface: #FFFFFF;
   --color-border: #E5E7EB;
 
@@ -52,6 +57,9 @@
   --color-ice-dim: #D4D4D4;
 
   --color-danger: #F87171;
+
+  /* Brand — see the light block. Lifted for the dark ground: 7.12:1. */
+  --color-argent: #E8827C;
 
   --color-surface: #111111;
   --color-border: #262626;

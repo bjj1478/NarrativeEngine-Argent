@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.nexus.aigm',
-  appName: 'Narrative Engine',
+  appName: 'Narrative Engine ARGENT',
   webDir: 'dist',
   android: {
     backgroundColor: '#0b0f12',

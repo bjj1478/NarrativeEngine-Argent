@@ -315,7 +315,7 @@ export function CampaignHub() {
 
             {/* Title */}
             <h1 className="text-terminal text-lg sm:text-2xl font-bold tracking-[0.2em] sm:tracking-[0.4em] uppercase glow-green mb-2">
-                Narrative Engine
+                Narrative Engine <span className="text-argent [text-shadow:none]">ARGENT</span>
             </h1>
             <p className="text-text-dim text-xs tracking-widest uppercase mb-6 sm:mb-10">
                 SELECT CAMPAIGN

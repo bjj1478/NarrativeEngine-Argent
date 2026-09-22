@@ -24,7 +24,10 @@ export const en = {
     'header.drawer.open': 'Open context drawer',
     'header.drawer.close': 'Close context drawer',
     'header.title': 'Narrative Engine',
-    'header.version.tooltip': 'Narrative Engine version {{version}}',
+    // The brand word is a proper noun, so it is never translated. Other locales
+    // inherit this entry through the en fallback rather than repeating it.
+    'header.title.suffix': 'ARGENT',
+    'header.version.tooltip': 'Narrative Engine ARGENT version {{version}}',
     'header.backup.tooltip': 'Create backup',
     'header.backup.aria': 'Create backup',
     'header.backup.label': 'Backup',
@@ -69,7 +72,7 @@ export const en = {
     // ── Settings modal (shell) ───────────────────────────────────────────
     'settings.dialog.aria': 'Settings',
     'settings.title': '⚙ SETTINGS',
-    'settings.version.tooltip': 'Installed Narrative Engine version',
+    'settings.version.tooltip': 'Installed Narrative Engine ARGENT version',
     'settings.close.aria': 'Close settings',
     'settings.tab.providers': 'Providers',
     'settings.tab.presets': 'Presets',

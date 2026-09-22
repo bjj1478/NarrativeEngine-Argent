@@ -56,6 +56,12 @@
   --color-danger: #C0392B;
   /* Red – errors                     */
 
+  /* Brand: the ARGENT half of the wordmark. Deliberately NOT --color-danger —
+     red means "error" everywhere else in this file, and the wordmark is not a
+     state. Softer and less saturated than danger so the two never read as the
+     same ink. 4.63:1 on --color-surface, AA for the small caps it renders in. */
+  --color-argent: #AB4F49;
+
   --color-surface: #F0EFED;
   /* Warm off-white – cards/modals    */
   --color-border: #DEDEDE;
@@ -118,6 +124,10 @@
   --color-ice-dim: #ADADAD;
 
   --color-danger: #E05555;
+
+  /* Brand — see the light block. Lifted for the dark ground: 6.29:1 on
+     --color-surface. */
+  --color-argent: #E8827C;
 
   --color-surface: #1C1E23;
   /* cards/modals/lightbox panel (was #1E1E21) */
