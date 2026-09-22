@@ -19,7 +19,7 @@ import { buildVoiceDirective } from '../npc/hexVoiceGuide';
 const KNOWN_TRAITS = new Set<string>(TRAIT_NAMES);
 
 /** The trait names offered to the model, filtered by maturity tier. */
-function offeredTraitNames(matureMode: boolean): string[] {
+export function offeredTraitNames(matureMode: boolean): string[] {
     return TRAIT_VOCAB.filter(t => matureMode || t.tier !== 'mature').map(t => t.text);
 }
 
@@ -34,7 +34,7 @@ function offeredTraitNames(matureMode: boolean): string[] {
  * ", " (preserving all values, matching the prompt's comma-separated contract),
  * other non-strings are stringified, null/undefined falls back to the default.
  */
-function coerceStringField(v: unknown, fallback = ''): string {
+export function coerceStringField(v: unknown, fallback = ''): string {
     if (typeof v === 'string') return v;
     if (Array.isArray(v)) return v.map(String).filter(Boolean).join(', ');
     if (v === null || v === undefined) return fallback;
@@ -54,7 +54,7 @@ function defaultLongWant(faction: string): string {
  * scenes. (Main's NPCEntry has no combat fields; combat tags are omitted — desktop combat is
  * bespoke per Upgrade doc 07.)
  */
-function buildDefaultFieldTags(npc: NPCEntry): Partial<Record<string, SceneEventType[]>> {
+export function buildDefaultFieldTags(npc: NPCEntry): Partial<Record<string, SceneEventType[]>> {
     void npc;
     const tags: Partial<Record<string, SceneEventType[]>> = {
         voice: ['relationship_shift', 'revelation', 'other'],

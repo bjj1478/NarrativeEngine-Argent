@@ -15,6 +15,10 @@ export function parseStoryMovement(text: string): { present: boolean; movement: 
         return { present, movement: { action: raw.action, place: raw.place?.trim(), feature: raw.feature?.trim() || null } };
     } catch { return { present, movement: null }; }
 }
+/** Remove every movement tag (closed, or unclosed mid-stream) — for text that must never carry one. */
+export function stripMovementTags(text: string): string {
+    return text.replace(/<!--\s*MOVEMENT\b[\s\S]*?(?:-->|$)/gi, '').trimEnd();
+}
 export function movementPositionKey(context: GameContext): string {
     return JSON.stringify([context.currentPlaceId ?? null, context.currentFeature ?? null, context.worldDay ?? null,
         context.travel ?? null, context.travelMinutesToday ?? 0]);

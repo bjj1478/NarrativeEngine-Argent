@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, Save, Loader2, Sparkles, Users, ScrollText, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { Trash2, Save, Loader2, Sparkles, Users, ScrollText, X, ChevronUp, ChevronDown, Search, ClipboardPaste } from 'lucide-react';
 import { NPCPortraitSection } from './NPCPortraitSection';
 import type { NPCEntry, NPCVisualProfile, NPCBehavioralTrigger, DivergenceCategory, HexAxis } from '../../types';
 import { DEFAULT_VISUAL_PROFILE } from '../../types';
@@ -15,20 +15,22 @@ type Props = {
     selectedId: string | null;
     isEditing: boolean;
     isAIUpdating: boolean;
+    isFromTextRunning: boolean;
     isGeneratingImage: boolean;
     onEdit: () => void;
     onSave: () => void;
     onCancel: () => void;
     onDelete: (id: string, e: React.MouseEvent) => void;
     onAIUpdate: () => void;
+    onFromText: () => void;
     onGeneratePortrait: () => void;
     onUploadPortrait: (file: File) => void;
     onRemovePortrait: () => void;
 };
 
 export function NPCEditForm({
-    form, setForm, selectedId, isEditing, isAIUpdating, isGeneratingImage,
-    onEdit, onSave, onCancel, onDelete, onAIUpdate, onGeneratePortrait, onUploadPortrait, onRemovePortrait,
+    form, setForm, selectedId, isEditing, isAIUpdating, isFromTextRunning, isGeneratingImage,
+    onEdit, onSave, onCancel, onDelete, onAIUpdate, onFromText, onGeneratePortrait, onUploadPortrait, onRemovePortrait,
 }: Props) {
     const handleVisualProfileChange = (field: keyof NPCVisualProfile, value: string) => {
         setForm(prev => ({
@@ -156,6 +158,15 @@ export function NPCEditForm({
                         >
                             {isAIUpdating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                             AI Update
+                        </button>
+                        <button
+                            onClick={onFromText}
+                            disabled={isFromTextRunning || !selectedId}
+                            title="Paste text to fill or refine this NPC"
+                            className="flex items-center gap-1.5 bg-void border border-terminal/30 px-3 py-1.5 text-xs text-terminal hover:border-terminal uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {isFromTextRunning ? <Loader2 size={12} className="animate-spin" /> : <ClipboardPaste size={12} />}
+                            From Text
                         </button>
                         <button
                             onClick={onEdit}

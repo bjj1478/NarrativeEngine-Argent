@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Plus, Users, LayoutGrid, List, CheckSquare, Upload, Download, BookOpen, Trash2, Search, ArrowDownAZ, ArrowUpZA, Sparkles, Images } from 'lucide-react';
+import { X, Plus, Users, LayoutGrid, List, CheckSquare, Upload, Download, BookOpen, Trash2, Search, ArrowDownAZ, ArrowUpZA, Sparkles, Images, ClipboardPaste } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { updateExistingNPCs } from '../services/chatEngine';
+import { updateExistingNPCs, extractNPCFromText } from '../services/chatEngine';
 import { parseNPCsFromLore } from '../services/lore/loreNPCParser';
 import type { NPCEntry, NPCVisualProfile } from '../types';
 import { DEFAULT_VISUAL_PROFILE } from '../types';
@@ -26,6 +26,7 @@ import { NPCListView } from './npc-ledger/NPCListView';
 import { NPCGalleryView } from './npc-ledger/NPCGalleryView';
 import { NPCEditForm } from './npc-ledger/NPCEditForm';
 import { NPCSuggestionsPanel } from './npc-ledger/NPCSuggestionsPanel';
+import { NPCFromTextDialog } from './npc-ledger/NPCFromTextDialog';
 import { NPCReviewModal } from './NPCReviewModal';
 import { ImportChoiceDialog } from './npc-ledger/ImportChoiceDialog';
 import { ImportOverwriteDialog } from './import/ImportOverwriteDialog';
@@ -55,6 +56,15 @@ type AdaptPhase = 'idle' | 'running' | 'done';
 /** The same sentence the wizard shows on a dead endpoint — one phrasing, two surfaces. */
 const NO_ENDPOINT_COPY = 'no utility or story endpoint is configured';
 
+/** The empty sheet a brand-new record starts from. */
+function blankNpcForm(): Partial<NPCEntry> {
+    return {
+        name: '', aliases: '', appearance: '', faction: '', storyRelevance: '', disposition: '',
+        status: 'Alive', goals: '', voice: '', personality: '', exampleOutput: '',
+        visualProfile: { ...DEFAULT_VISUAL_PROFILE }
+    };
+}
+
 /**
  * `File.arrayBuffer()` / `File.text()` exist in every browser this app ships to
  * but NOT in jsdom, where the whole quick-add path is tested. `FileReader` is
@@ -79,6 +89,8 @@ export function NPCLedgerModal() {
 
     const [viewMode, setViewMode] = useState<'list' | 'gallery'>('gallery');
     const [isAIUpdating, setIsAIUpdating] = useState(false);
+    const [fromTextMode, setFromTextMode] = useState<'create' | 'update' | null>(null);
+    const [isFromTextRunning, setIsFromTextRunning] = useState(false);
 
     const [selectMode, setSelectMode] = useState(false);
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -171,11 +183,7 @@ export function NPCLedgerModal() {
 
     const handleCreateNew = () => {
         setSelectedId(null);
-        setForm({
-            name: '', aliases: '', appearance: '', faction: '', storyRelevance: '', disposition: '',
-            status: 'Alive', goals: '', voice: '', personality: '', exampleOutput: '',
-            visualProfile: { ...DEFAULT_VISUAL_PROFILE }
-        });
+        setForm(blankNpcForm());
         setIsEditing(true);
         setSelectMode(false);
         setCheckedIds(new Set());
@@ -581,6 +589,43 @@ export function NPCLedgerModal() {
         }
     };
 
+    /**
+     * Paste-anything → NPC sheet. The result lands in edit mode and is NOT saved: Commit Record
+     * persists it (addNPC for a new record, updateNPC for the selected one) and Discard reverts.
+     */
+    const handleFromText = async (text: string) => {
+        if (!fromTextMode) return;
+        const state = useAppStore.getState();
+        const provider = state.getActiveStoryEndpoint();
+        if (!provider) { alert('Story AI endpoint is not configured.'); return; }
+        const existing = fromTextMode === 'update' ? npcLedger.find(n => n.id === selectedId) : undefined;
+        if (fromTextMode === 'update' && !existing) return;
+        setIsFromTextRunning(true);
+        try {
+            const patch = await extractNPCFromText(provider, text, {
+                existing,
+                ledger: npcLedger,
+                matureMode: state.settings.matureMode ?? false,
+            });
+            if (existing) {
+                setForm({ ...existing, visualProfile: existing.visualProfile || { ...DEFAULT_VISUAL_PROFILE }, ...patch });
+            } else {
+                setSelectedId(null);
+                setSelectMode(false);
+                setCheckedIds(new Set());
+                setForm({ ...blankNpcForm(), ...patch });
+            }
+            setIsEditing(true);
+            setFromTextMode(null);
+            toast.success('Sheet filled from text. Review it, then Commit Record.');
+        } catch (err: unknown) {
+            console.error('[NPC From Text] Error:', err);
+            toast.error(`Could not build an NPC from that text${err instanceof Error ? `: ${err.message}` : ''}`);
+        } finally {
+            setIsFromTextRunning(false);
+        }
+    };
+
     const handleCancelEdit = () => {
         const npc = npcLedger.find(n => n.id === selectedId);
         if (npc) setForm({ ...npc, visualProfile: npc.visualProfile || { ...DEFAULT_VISUAL_PROFILE } });
@@ -598,6 +643,16 @@ export function NPCLedgerModal() {
                     overlay's onClick={toggleNPCLedger}, closing the modal and unmounting the
                     input before the OS file dialog resolved — so onChange never fired. */}
                 <input ref={importRef} type="file" accept=".json,.png" multiple className="hidden" onChange={(e) => { void handleImportFile(e); }} />
+
+                {fromTextMode && (
+                    <NPCFromTextDialog
+                        mode={fromTextMode}
+                        npcName={fromTextMode === 'update' ? form.name : undefined}
+                        running={isFromTextRunning}
+                        onSubmit={(text) => { void handleFromText(text); }}
+                        onCancel={() => setFromTextMode(null)}
+                    />
+                )}
 
                 {pendingImport && (
                     <ImportChoiceDialog
@@ -705,6 +760,14 @@ export function NPCLedgerModal() {
                                 <Plus size={14} /> Create NPC
                             </button>
                             <button
+                                onClick={() => setFromTextMode('create')}
+                                disabled={isFromTextRunning}
+                                className="flex-1 flex items-center justify-center gap-1.5 border border-terminal/30 rounded text-xs uppercase tracking-wider text-terminal hover:bg-terminal/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Paste any text to create a new NPC from it"
+                            >
+                                <ClipboardPaste size={12} className="shrink-0" /> From Text
+                            </button>
+                            <button
                                 onClick={review.startReview}
                                 disabled={review.reviewRunning || npcLedger.length === 0}
                                 className="flex-1 flex items-center justify-center gap-1.5 border border-amber-500/30 rounded text-xs uppercase tracking-wider text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer animate-pulse-subtle"
@@ -779,12 +842,14 @@ export function NPCLedgerModal() {
                         selectedId={selectedId}
                         isEditing={isEditing}
                         isAIUpdating={isAIUpdating}
+                        isFromTextRunning={isFromTextRunning}
                         isGeneratingImage={portraits.isGeneratingImage}
                         onEdit={() => setIsEditing(true)}
                         onSave={handleSave}
                         onCancel={handleCancelEdit}
                         onDelete={handleDelete}
                         onAIUpdate={handleAIUpdate}
+                        onFromText={() => setFromTextMode('update')}
                         onGeneratePortrait={handleGeneratePortrait}
                         onUploadPortrait={handleUploadPortrait}
                         onRemovePortrait={handleRemovePortrait}

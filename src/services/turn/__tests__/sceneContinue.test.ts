@@ -9,6 +9,7 @@ import {
     SCENE_CONTINUE_DIVIDER,
 } from '../sceneContinue';
 import { extractAndStripSceneStakes } from '../sceneStakesTag';
+import { parseStoryMovement } from '../storyMovement';
 import type { OpenAIMessage } from '../../llm/llmService';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -212,6 +213,18 @@ describe('buildMergedContinueView', () => {
 
     it('returns just the partial when preContinueContent is empty', () => {
         expect(buildMergedContinueView('', 'partial')).toBe('partial');
+    });
+
+    it('keeps only the original reply\'s movement tag so the merged turn still parses', () => {
+        const tag = '<!-- MOVEMENT {"action":"stay"} -->';
+        const merged = buildMergedContinueView(`The nurse waits.\n\n${tag}`, `The door opens.\n\n${tag}`);
+        expect(merged.match(/<!--\s*MOVEMENT/g)).toHaveLength(1);
+        expect(merged.endsWith('The door opens.')).toBe(true);
+        expect(parseStoryMovement(merged).movement).toEqual({ action: 'stay', place: undefined, feature: null });
+    });
+
+    it('drops an unclosed movement tag from a streaming partial', () => {
+        expect(buildMergedContinueView('pre', 'more prose\n\n<!-- MOVEMENT {"act')).toBe(`pre${SCENE_CONTINUE_DIVIDER}more prose`);
     });
 });
 

@@ -3,7 +3,7 @@ import type { GameContext, LocationEntry } from '../../../types';
 const getState = vi.hoisted(() => vi.fn());
 vi.mock('../../../store/useAppStore', () => ({ useAppStore: { getState } }));
 import { applyStoryMovement } from '../applyStoryMovement';
-import { buildMovementContract, parseStoryMovement } from '../storyMovement';
+import { buildMovementContract, parseStoryMovement, stripMovementTags } from '../storyMovement';
 import { locationHeaderTrack } from '../tracks/sequential/locationHeaderTrack';
 import type { SequentialTrackContext } from '../tracks/types';
 import { proseForTTS } from '../../tts/proseStripper';
@@ -85,4 +85,10 @@ it('does not expose secret destinations or let a rumour start a journey', async 
     await applyStoryMovement(tag({ action: 'depart', place: 'b' }), 'c');
     expect(state.updateContext).not.toHaveBeenCalled();
     expect(state.addMessage).toHaveBeenCalled();
+});
+
+it('stripMovementTags removes closed and unclosed tags and leaves prose intact', () => {
+    expect(stripMovementTags('Prose here.\n\n<!-- MOVEMENT {"action":"stay"} -->')).toBe('Prose here.');
+    expect(stripMovementTags('Prose here.\n\n<!-- MOVEMENT {"action":"lo')).toBe('Prose here.');
+    expect(stripMovementTags('No tag <!-- other comment --> here.')).toBe('No tag <!-- other comment --> here.');
 });

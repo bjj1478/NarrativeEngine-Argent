@@ -5,6 +5,7 @@ import { sanitizePayloadForApi } from '../lib/payloadSanitizer';
 import { extractAndStripSceneStakes } from './sceneStakesTag';
 import { getToolDefinitions } from './toolHandlers';
 import { resolveToolHandler } from './toolRegistry';
+import { stripMovementTags } from './storyMovement';
 
 // ── Constants ──────────────────────────────────────────────────────────
 export const MAX_CONTINUE_TOOL_CALLS = 3;
@@ -117,8 +118,11 @@ export function computeLastSegmentWordCount(content: string): number {
 
 // ── Continue-merged view helper (exported for testing) ─────────────────
 export function buildMergedContinueView(preContinueContent: string, partial: string): string {
-    if (!preContinueContent) return partial;
-    return `${preContinueContent}${SCENE_CONTINUE_DIVIDER}${partial}`;
+    // A continuation never moves the scene, so its movement tag is dropped: the original
+    // reply's tag must stay the only one or parseStoryMovement rejects the turn.
+    const clean = stripMovementTags(partial);
+    if (!preContinueContent) return clean;
+    return `${preContinueContent}${SCENE_CONTINUE_DIVIDER}${clean}`;
 }
 
 // ── Filter to only the roll_dice tool definition ───────────────────────
@@ -133,7 +137,7 @@ function getRollDiceToolOnly(): unknown[] {
 // ── Post-process the final continuation text ───────────────────────────
 // R7: strip scene header, then strip stakes. Stakes is null when no tag was present.
 function postProcessContinuation(text: string): SceneContinueResult {
-    const headerStripped = stripLLMSceneHeader(text);
+    const headerStripped = stripLLMSceneHeader(stripMovementTags(text));
     const { displayText, stakes } = extractAndStripSceneStakes(headerStripped);
     const tagPresent = headerStripped !== displayText || stakes !== 'calm';
     return { text: displayText, stakes: tagPresent ? stakes : null };
