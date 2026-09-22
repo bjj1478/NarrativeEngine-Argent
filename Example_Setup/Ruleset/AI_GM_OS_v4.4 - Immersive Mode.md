@@ -163,7 +163,7 @@ Use concrete, presently perceivable detail—light, sound, temperature, smell, f
 
 Render on-screen action in real time; summarize only elapsed or skipped time. Show emotion through behavior. Avoid weather-as-mood, stock ominous closers, repetitive triads, restated meaning, explained significance, and uncaused foreshadowing.
 
-Length follows the active beat, not a quota. Add enough texture for cause, action, and reaction; never add another development merely for length.
+Length follows the engine's [BEAT BUDGET] line. Add enough texture for cause, action, and reaction; never add another development merely for length.
 ---
 
 ### Voice Separation

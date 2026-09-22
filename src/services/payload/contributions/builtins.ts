@@ -1,5 +1,5 @@
-import type { AppSettings, RelationshipStance } from '../../../types';
-import { isThinkingEnabled } from '../stable';
+import type { AppSettings, RelationshipStance, SceneStakes, ResponseLength } from '../../../types';
+import { isThinkingEnabled, WRITER_COT } from '../stable';
 import { formatAskGmBrief } from '../../ooc/askGmHandoff';
 import { buildAbsoluteCommandBlock } from '../../turn/absoluteCommand';
 import { createContributionRegistry } from './registry';
@@ -72,6 +72,12 @@ export interface FinalUserModuleInput {
     /** WO-5: scene-specific NPC readings; numbers and flat relationship arrows never enter v3. */
     relationshipStances?: readonly RelationshipStance[];
     relationshipStanceBudget?: number;
+    /** Scene stakes from the writer's own last [[SCENE_STAKES]] tag; drives the beat budget
+     *  when the response length is 'flexible'. */
+    sceneStakes?: SceneStakes;
+    /** Whether this turn's player message skips time ("3 weeks later", "a month later"). Only 'flexible'
+     *  reads it, to reach its longest budget. Computed in payloadBuilder via detectTimeskip. */
+    timeskipDetected?: boolean;
     directorBrief?: string;
     watchdogNudge?: string;
     absoluteCommand?: string;
@@ -84,6 +90,76 @@ export interface FinalUserModuleInput {
     facts?: TurnFacts;
 }
 
+/**
+ * Per-turn beat budget. The player picks the length from the dropdown beside the action box
+ * (`settings.responseLength`, global — not part of any ruleset or campaign); only 'flexible'
+ * still reads the scene: the stakes the writer tagged last turn (`[[SCENE_STAKES: …]]` →
+ * `context.lastSceneStakes`, parsed in sceneStakesTag.ts) and whether the player's message
+ * skips time.
+ *
+ * This replaced the flat "draft 5-8 beats" quota in WRITER_COT and the paragraph scales the
+ * rulesets used to carry. It lives here, below the cache boundary, rather than in the stable
+ * CoT — see the PACING note in stable.ts for why a per-turn VARYING string must never move up.
+ *
+ * Lengths are stated in WORDS, not tokens. A model cannot count its own tokens, so a token
+ * budget reads as a vague hint and is routinely overshot. The ranges are tuned directly in
+ * words against how the writer actually behaves — do not "correct" them into a token figure.
+ */
+const LENGTH_SPEC = {
+    short: '1 beat, 100-200 words',
+    medium: '2-3 beats, 250-400 words',
+    long: '3-5 beats, 800-1500 words',
+} as const;
+
+type FixedLength = keyof typeof LENGTH_SPEC;
+
+/**
+ * The tag name is load-bearing: user-authored rulesets (Custom_Setup/) say "when a [BEAT
+ * BUDGET] line is present it is the cap". Renaming it would silently break those prompt files.
+ *
+ * The closing clauses are on every variant on purpose. A stated range invites padding up to
+ * it, and padding is the failure mode this exists to kill. The override clause is what makes
+ * campaigns whose saved rules still carry an old paragraph scale follow the dropdown.
+ */
+const budget = (spec: FixedLength, flavour = ''): string =>
+    `[BEAT BUDGET: ${LENGTH_SPEC[spec]}.${flavour ? ` ${flavour}` : ''} Never pad to reach the ` +
+    'range — under-running it is correct. This overrides any length or paragraph guidance in the rules.]';
+
+/** Stakes flavour, used only by 'flexible'. A fixed setting is a deliberate instruction and
+ *  must not be talked out of its length by the scene. */
+const FLEXIBLE: Record<SceneStakes, string> = {
+    calm: budget('medium', 'The scene is calm, so it may breathe.'),
+    tense: budget('short', 'The scene is tense: end the turn the moment a decision faces the player and hand the beat back rather than resolving it for them.'),
+    dangerous: budget('short', 'The scene is dangerous: keep it close and physical, end on the moment that demands a response, and never resolve the danger on the player\'s behalf.'),
+};
+
+/** Flexible only reaches its longest budget on a time skip — the one case where a reply has
+ *  real ground to cover rather than a live scene to hand back. */
+const FLEXIBLE_TIMESKIP = budget('long', 'Time has skipped: cover the gap and what the player returns to.');
+
+const FIXED: Record<FixedLength, string> = {
+    short: budget('short', 'Land one development only.'),
+    medium: budget('medium'),
+    long: budget('long', 'There is room to cover real ground — elapsed time, travel, errands and downtime.'),
+};
+
+/**
+ * Every lookup is written `RECORD[key] ?? fallback`, which is not redundant with the
+ * `?? 'flexible'` / `?? 'calm'` defaults: those only catch null/undefined. A value outside the
+ * union at RUNTIME — an older save, a hand-edited file — indexes the record to `undefined`
+ * and would otherwise be interpolated into the prompt as the literal string "undefined".
+ */
+export const beatBudgetLine = (
+    length: ResponseLength | undefined,
+    stakes: SceneStakes | undefined,
+    timeskip = false,
+): string => {
+    const choice = length ?? 'flexible';
+    if (choice !== 'flexible') return FIXED[choice as FixedLength] ?? FLEXIBLE[stakes ?? 'calm'] ?? FLEXIBLE.calm;
+    if (timeskip) return FLEXIBLE_TIMESKIP;
+    return FLEXIBLE[stakes ?? 'calm'] ?? FLEXIBLE.calm;
+};
+
 export const GM_REMINDER =
     '[GM REMINDER: NPCs push back when their wants/boundaries are crossed. Do not default to facilitation.]';
 
@@ -93,6 +169,7 @@ export const BUILTIN_IDS = {
     relations: 'npc.relations',
     stance: 'npcStance',
     writerCot: 'writer.cot',
+    responseLength: 'writer.length',
     directorBrief: 'director.brief',
     gmReminder: 'gm.reminder',
     watchdogNudge: 'watchdog.nudge',
@@ -241,8 +318,13 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
             description: 'Asks the writer to work through the reasoning framework before writing.',
             details: {
                 "trigger": "Automatic when the active story provider has Thinking Effort set to Low, Medium, High, or Max.",
-                "prompt": "[WRITER REASONING FRAMEWORK]\nWork through these steps in your internal reasoning before writing the narrative. Never show the steps in the narrative output. Always produce the full narrative response after your reasoning ends.\nStep 1 — Deconstruct: break the player's input into discrete intents. Judge each against the rules and MC boundaries. Impossible or implausible demands are narrated as attempts with consequences, not successes.\nStep 2 - Director Brief: if a [DIRECTOR BRIEF] block is present, honor its MANDATORY world-law or fair-adjudication corrections and any compatible SUGGESTION. It does not schedule drama or dictate every character's reaction.\nStep 3 — On-stage minds: first state the player's visible action and result without moral interpretation. For each character in [ACTIVE NPC CONTEXT], consider their current goal and emotional state, what they know and do not know (check [FACTS KNOWN TO ON-STAGE CHARACTERS]), their disposition and competence, and their relationship to the player. Then choose a proportionate response: speech, action, observation, help, challenge, humour, silence, withdrawal, or a shared crowd response. Characters may converge when the same event gives them the same reason to react; they may differ when their perspectives differ. Do not force either. A boundary produces push-back only when the concrete action actually crosses it; never infer a larger injury, hostile intent, or moral failing merely to make drama.\nStep 4 — Engine truth: honor [DICE OUTCOMES] exactly as resolved — never soften failures or upgrade successes. Check each on-stage character against their signature kit. Check [LOCATION] logistics: travel time, weather, era-appropriate technology.\nStep 5 - Beat map: draft 5-8 beats. Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.\nStep 6 — Final audit: the player's action drives the scene; reactions are grounded in what each character observed and values; no unearned NPC chorus or retroactive moralisation; no cliches or purple prose. Then write the scene.\n\nFinal-turn invocation:\nWork through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.",
-                "tokenImpact": "The six-step framework is 467 input tokens in the stable prompt. The normal final-turn invocation is 18 more input tokens. There is no separate COT output-token cap; the provider/model controls hidden reasoning and answer limits.",
+                // Rendered from the live constant, not hand-copied, so the Block View can't
+                // document a prompt that is no longer sent.
+                "prompt": `${WRITER_COT}
+
+Final-turn invocation:
+Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.`,
+                "tokenImpact": "The six-step framework is 467 input tokens in the stable prompt. The normal final-turn invocation is 18 more input tokens. The [BEAT BUDGET] line is not part of this block — it is its own contribution (Response Length) and ships whether or not thinking is on. There is no separate COT output-token cap; the provider/model controls hidden reasoning and answer limits.",
                 "quietWhen": "Thinking Effort is Off. An Absolute Command swaps the normal invocation for a 38-token instruction that tells the model to follow the command where they conflict."
             },
             explain: 'Asks the writer to think through the scene before writing it, instead of answering straight away. Only does anything when thinking is switched on for your model — with thinking off it adds nothing at all.',
@@ -256,6 +338,38 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
                 : hasAbsolute(input)
                     ? 'Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.'
                     : 'Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.',
+        }),
+    ),
+
+    /**
+     * Response Length — the [BEAT BUDGET] line. Ordered immediately after the reasoning
+     * framework so the CoT's Step 5 reference lands next to the line it points at.
+     *
+     * Deliberately NOT gated on thinking. It is a setting the player chose from the composer,
+     * and a thinking-off writer needs the length guidance just as much.
+     */
+    single(
+        {
+            id: BUILTIN_IDS.responseLength,
+            name: 'Response Length',
+            description: 'Caps how long a reply runs, in beats and words.',
+            toggleable: true,
+            details: {
+                "trigger": "Every turn. Set it from the length dropdown beside the action box.",
+                "prompt": `Short:    ${beatBudgetLine('short', undefined)}
+Medium:   ${beatBudgetLine('medium', undefined)}
+Long:     ${beatBudgetLine('long', undefined)}
+Flexible: ${beatBudgetLine('flexible', 'calm')}`,
+                "tokenImpact": "One line, 45-65 input tokens depending on the setting. It caps OUTPUT tokens, which is where it pays for itself.",
+                "quietWhen": "The block is switched off here, or a mod suppresses it. Nothing else silences it — unlike the reasoning framework above, it ships with thinking off."
+            },
+            explain: 'How long a reply should be. Short hands the turn straight back; Long lets a scene cover real ground. Flexible reads the scene instead — quiet scenes get room, pressured ones stay tight, and only a time skip runs long.',
+            example: 'Same moment: a guard blocks the gate.\n\n**Short** — one exchange, and the turn is yours again.\n\n**Long** — the guard, the queue behind you, the captain being fetched, the weather turning.\n\n**Flexible** — tight here, because a guard blocking your way is a decision waiting on you.',
+        },
+        (input) => ({
+            id: BUILTIN_IDS.responseLength,
+            order: 210,
+            text: beatBudgetLine(input.settings.responseLength, input.sceneStakes, input.timeskipDetected),
         }),
     ),
 

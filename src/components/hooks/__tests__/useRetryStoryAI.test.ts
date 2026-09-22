@@ -30,6 +30,7 @@ vi.mock('../../../services/turn/swipeGeneration', () => ({
 vi.mock('../../../services/turn/pendingCommit', () => ({
     getCachedSwipePayload: () => getCachedSwipePayloadMock(),
     refreshPendingSnapshotMessage: (...args: unknown[]) => refreshPendingSnapshotMessageMock(...args),
+    getSwipeLengthOverride: () => undefined,
 }));
 
 vi.mock('../../../services/turn/gatherProgress', () => ({

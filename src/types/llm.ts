@@ -104,6 +104,15 @@ export type ProviderConfig = {
     modelName: string;
 };
 
+// How long a narrator reply should run. Consumed only by beatBudgetLine (payload/contributions/
+// builtins.ts), which turns it into the [BEAT BUDGET] line. A global setting, chosen from the
+// dropdown beside the action box, so it is engine-owned rather than part of any ruleset or
+// campaign. 'flexible' is the only value that still reads the scene (stakes + time skip); the
+// other three are fixed. A const tuple because the composer options and migrateSettings need
+// the values at runtime.
+export const RESPONSE_LENGTHS = ['short', 'medium', 'long', 'flexible'] as const;
+export type ResponseLength = typeof RESPONSE_LENGTHS[number];
+
 export type AppSettings = {
     presets: AIPreset[];
     activePresetId: string;
@@ -127,6 +136,8 @@ export type AppSettings = {
     enableArchivePlanner?: boolean;
     retrievalAlgorithm?: 'classic' | 'idf-rrf';
     archiveRecallDepth?: 'lean' | 'standard' | 'deep';  // archive recall ceiling; default 'standard' (desktop). 'lean' = mobile parity (3/4/5)
+    /** Narrator reply length. Absent reads as 'flexible' at the use site. */
+    responseLength?: ResponseLength;
     matureMode?: boolean;            // default false; gates mature-tier NPC traits/wants (NPC Agency Phase 2)
     /** WO-C §9.3 (C2) — feature flag for the optional AI adaptation pass on SillyTavern card
      *  import. Default OFF: when unset/false the import UI offers no AI option and makes no model

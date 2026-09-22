@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { AppSettings } from '../../../../types';
+import type { AppSettings, SceneStakes, ResponseLength } from '../../../../types';
+import { RESPONSE_LENGTHS } from '../../../../types';
 import { isThinkingEnabled } from '../../stable';
 import { formatAskGmBrief } from '../../../ooc/askGmHandoff';
 import { buildAbsoluteCommandBlock } from '../../../turn/absoluteCommand';
 import { assembleContributions } from '../assemble';
-import { createFinalUserRegistry, GM_REMINDER } from '../builtins';
+import { createFinalUserRegistry, GM_REMINDER, beatBudgetLine } from '../builtins';
 import type { FinalUserModuleInput } from '../builtins';
 
 /**
@@ -16,7 +17,16 @@ import type { FinalUserModuleInput } from '../builtins';
  * the flags that drove it (64 cases).
  *
  * If the migration changed the prompt by so much as one character, in any reachable
- * configuration, this fails. It also pins the debug-trace sequence, which the old code emitted
+ * configuration, this fails.
+ *
+ * DELIBERATE DIVERGENCE — the [BEAT BUDGET] line, which the legacy expression had no concept
+ * of. It is now its own contribution (`writer.length`, order 210), so it sits between the CoT
+ * invocation and the Director Brief, and — unlike the invocation it used to ride on — it ships
+ * whether or not thinking is enabled. The oracle below reproduces that placement and calls the
+ * SAME `beatBudgetLine` helper the contribution uses — as it already does for `GM_REMINDER` —
+ * because this test's job is to pin assembly, precedence and ordering, not to re-type the block
+ * text. The pacing text itself is covered by the 'beat budget' describe block at the bottom of
+ * this file. It also pins the debug-trace sequence, which the old code emitted
  * in a different source order (watchdog → director → absolute) than the new code sorts by
  * (director → watchdog → absolute); the two agree only because the Director Brief and the
  * watchdog nudge are mutually exclusive, and that is asserted here rather than assumed.
@@ -35,6 +45,10 @@ function legacy(input: FinalUserModuleInput): { text: string; traceSources: stri
             ? 'Work through the [WRITER REASONING FRAMEWORK] only where it does not conflict with [USER ABSOLUTE COMMAND]. Where they conflict, discard the framework step and follow the command.'
             : 'Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.';
 
+    // Response Length is its own contribution now, ordered immediately after the invocation and
+    // NOT gated on thinking — a turn can get the budget without the framework.
+    const beatBudget = beatBudgetLine(input.settings.responseLength, input.sceneStakes, input.timeskipDetected);
+
     const watchdogNudgeActive =
         input.watchdogNudge && !input.directorBrief && !hasAbsolute ? input.watchdogNudge : '';
 
@@ -43,7 +57,7 @@ function legacy(input: FinalUserModuleInput): { text: string; traceSources: stri
     const askGmBrief = formatAskGmBrief(input.nextTurnOocBrief);
 
     const text = [
-        input.volatileBlock, writerCotNudge, directorBriefBlock, gmReminderActive,
+        input.volatileBlock, writerCotNudge, beatBudget, directorBriefBlock, gmReminderActive,
         watchdogNudgeActive, askGmBrief, input.userMessage, absoluteCommandBlock,
     ].filter(Boolean).join('\n\n');
 
@@ -189,5 +203,118 @@ describe('WO-P2-02 — precedence rules survive as declared suppression', () => 
     it('every built-in is unbounded, which is what keeps the migration byte-identical', () => {
         const specs = createFinalUserRegistry().collect({ ...base, directorBrief: 'x' });
         expect(specs.every((s) => s.budget === undefined)).toBe(true);
+    });
+});
+
+// ─── Response Length ─────────────────────────────────────────────────────────────────────────
+describe('beat budget — the player picks the length, flexible follows the scene', () => {
+    const thinking: FinalUserModuleInput = {
+        settings: thinkingOn,
+        userMessage: 'I wait.',
+        volatileBlock: '',
+    };
+
+    /** The [BEAT BUDGET] line as actually emitted, from its own contribution. */
+    const lengthText = (input: FinalUserModuleInput): string =>
+        createFinalUserRegistry().collect(input).find((s) => s.id === 'writer.length')?.text ?? '';
+
+    const cotText = (input: FinalUserModuleInput): string =>
+        createFinalUserRegistry().collect(input).find((s) => s.id === 'writer.cot')?.text ?? '';
+
+    // The marker itself is load-bearing — the Example_Setup/ and Custom_Setup/ rulesets say "when a
+    // [BEAT BUDGET] line is present it is the cap". Renaming it breaks the user's own files.
+    it('always carries the [BEAT BUDGET] marker the rulesets key off', () => {
+        for (const length of RESPONSE_LENGTHS) {
+            expect(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: length } })).toContain('[BEAT BUDGET:');
+        }
+    });
+
+    it.each([
+        ['short', /1 beat, \d+-\d+ words/],
+        ['medium', /2-3 beats, \d+-\d+ words/],
+        ['long', /3-5 beats, \d+-\d+ words/],
+    ] as const)('%s selects its own fixed budget', (length, expected) => {
+        expect(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: length } })).toMatch(expected);
+    });
+
+    it.each(['short', 'medium', 'long'] as const)('a fixed %s ignores the scene stakes entirely', (length) => {
+        // The point of choosing a length is that the scene cannot talk you out of it.
+        const calm = lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: length }, sceneStakes: 'calm' });
+        const dangerous = lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: length }, sceneStakes: 'dangerous' });
+        expect(calm).toBe(dangerous);
+    });
+
+    it.each([
+        ['calm', /2-3 beats, \d+-\d+ words/],
+        ['tense', /1 beat, \d+-\d+ words/],
+        ['dangerous', /1 beat, \d+-\d+ words/],
+    ] as const)('flexible maps a %s scene onto its budget', (stakes, expected) => {
+        expect(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: stakes })).toMatch(expected);
+    });
+
+    it('flexible reaches the long budget only on a time skip', () => {
+        const skip = lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: 'dangerous', timeskipDetected: true });
+        expect(skip).toMatch(/3-5 beats, \d+-\d+ words/);
+        // …and a fixed setting is not overridden by one.
+        expect(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'short' }, timeskipDetected: true })).toContain('1 beat');
+    });
+
+    it('an absent responseLength reads as flexible', () => {
+        expect(lengthText({ ...thinking, sceneStakes: 'tense' }))
+            .toBe(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: 'tense' }));
+    });
+
+    it('absent stakes reads as calm, matching extractAndStripSceneStakes own fallback', () => {
+        expect(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: undefined }))
+            .toBe(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: 'calm' }));
+    });
+
+    // The `?? ` defaults guard null/undefined only. A value outside the union at runtime — an
+    // older save, a hand-edited context — indexes the record to `undefined` and would put the
+    // literal string "undefined" in the prompt.
+    it('a stakes value outside the union reads as calm, never the string "undefined"', () => {
+        const text = lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: 'urgent' as SceneStakes });
+        expect(text).toBe(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' }, sceneStakes: 'calm' }));
+        expect(text).not.toContain('undefined');
+    });
+
+    it('a responseLength outside the union still emits a real budget', () => {
+        const text = lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: 'epic' as ResponseLength }, sceneStakes: 'calm' });
+        expect(text).toContain('[BEAT BUDGET:');
+        expect(text).not.toContain('undefined');
+    });
+
+    // The regression this split exists to prevent: the budget used to ride on the CoT
+    // invocation, so a thinking-off campaign was sent no length guidance at all.
+    it('ships with thinking OFF, when the reasoning framework does not', () => {
+        const off = { ...thinking, settings: { ...thinkingOff, responseLength: 'medium' as const } };
+        expect(cotText(off)).toBe('');
+        expect(lengthText(off)).toMatch(/2-3 beats, \d+-\d+ words/);
+    });
+
+    it('an Absolute Command overrides the framework but NOT the pacing', () => {
+        // A command changes what the writer reasons about; it is not a licence to run long.
+        const input = { ...thinking, settings: { ...thinking.settings, responseLength: 'flexible' as const }, sceneStakes: 'dangerous' as const, absoluteCommand: 'Be terse.' };
+        expect(cotText(input)).toContain('USER ABSOLUTE COMMAND');
+        expect(lengthText(input)).toContain('1 beat');
+    });
+
+    // Campaigns keep their own saved copy of the rules, and older copies still carry paragraph
+    // scales. The line has to say it wins, or those campaigns never follow the dropdown.
+    it('states that it overrides length guidance in the rules', () => {
+        for (const length of RESPONSE_LENGTHS) {
+            expect(lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: length } }))
+                .toContain('overrides any length or paragraph guidance in the rules');
+        }
+    });
+
+    it('never states a padding-friendly quota', () => {
+        for (const length of RESPONSE_LENGTHS) {
+            for (const stakes of ['calm', 'tense', 'dangerous'] as const) {
+                const text = lengthText({ ...thinking, settings: { ...thinking.settings, responseLength: length }, sceneStakes: stakes });
+                expect(text).not.toContain('5-8');
+                expect(text).toContain('Never pad');
+            }
+        }
     });
 });

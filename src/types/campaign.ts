@@ -52,6 +52,10 @@ export type ChatMessage = {
     pendingCommit?: boolean;
     /** Swipe Generation v1 — the index of the currently-visible variant in swipeSet. */
     swipeActiveIndex?: number;
+    /** The scene stakes this GM reply was finally classified as — the writer's own tag, or the
+     *  utility classifier's answer when it omitted one. Stamped at commit, when `swipeSet` (which
+     *  carries the per-variant stakes) is dropped, so the bubble can keep showing it. */
+    sceneStakes?: SceneStakes;
     /** Durable-commit v1 — a deferred commit ran for this turn and could NOT archive the
      *  scene (server unreachable / rejected). PERSISTED, unlike `retryable`: it must survive
      *  a restart so the turn can be re-archived later. The turn stays armed (`pendingCommit`

@@ -67,12 +67,30 @@ async function loadModel() {
 
     ensureCacheDir();
 
-    const { pipeline } = await import('@huggingface/transformers');
-    extractor = await pipeline('feature-extraction', MODEL_ID, {
+    const { pipeline, env } = await import('@huggingface/transformers');
+
+    // "this.tokenizer is not a function" — transformers v4 decides whether a model HAS a
+    // tokenizer via get_tokenizer_files(), which calls get_file_metadata(modelId,
+    // 'tokenizer_config.json', {}) with EMPTY options: our `cache_dir` is dropped, so it looks in
+    // the library's default cache (not ours), then asks the Hub. When that request fails
+    // (offline, firewall, Hub outage, a flaky connection) it concludes there is no tokenizer and
+    // the pipeline is built with a plain object in its place — no error until the first embed.
+    // Pointing the default cache at ours lets that check find the cached tokenizer_config.json
+    // without the network. Safe to set globally: the only other transformers user, kokoro-js
+    // (TTS), bundles its own nested copy with a separate `env`.
+    env.cacheDir = CACHE_DIR;
+
+    const model = await pipeline('feature-extraction', MODEL_ID, {
         dtype: 'q8',
         cache_dir: CACHE_DIR,
     });
+    if (typeof model?.tokenizer !== 'function') {
+        throw new Error('tokenizer failed to load (model files incomplete, or the Hub was unreachable on first download)');
+    }
 
+    // Assigned only once usable: a broken pipeline memoised here would make every later
+    // warmup/embed fail the same way until the server restarts.
+    extractor = model;
     console.log(`[Embedder] Model loaded: ${MODEL_ID} (${ACTIVE_DIMS} dims, CPU)`);
     return extractor;
 }

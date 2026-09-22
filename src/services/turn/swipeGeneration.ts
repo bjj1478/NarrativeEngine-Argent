@@ -21,6 +21,10 @@ export interface SwipeGenerationOptions {
     abortSignal?: AbortSignal;
     /** Optional user guidance for this variant (e.g. "make it darker", "add more dialogue"). */
     guidance?: string;
+    /** A replacement [BEAT BUDGET] line, set only when the player changed the response-length
+     *  dropdown after the turn was sent (see getSwipeLengthOverride in pendingCommit.ts). The
+     *  cached payload still carries the turn's original line, so this rides at the tail. */
+    lengthOverride?: string;
 }
 
 export interface SwipeGenerationResult {
@@ -35,7 +39,7 @@ export function generateSwipeVariant(
     opts: SwipeGenerationOptions,
     onChunk: (text: string) => void,
 ): Promise<SwipeGenerationResult> {
-    const { provider, cachedPayload, modelName, temperature, abortSignal, guidance } = opts;
+    const { provider, cachedPayload, modelName, temperature, abortSignal, guidance, lengthOverride } = opts;
 
     // Sanitize with allowTools=false (swipes 2–5 never get tools).
     const sanitized = sanitizePayloadForApi(cachedPayload, false, modelName);
@@ -48,6 +52,12 @@ export function generateSwipeVariant(
         tailMessages.push({
             role: 'system',
             content: `Player guidance for this variant: ${guidance.trim()}`,
+        });
+    }
+    if (lengthOverride) {
+        tailMessages.push({
+            role: 'system',
+            content: `Length for this variant, replacing the earlier [BEAT BUDGET] line: ${lengthOverride}`,
         });
     }
 

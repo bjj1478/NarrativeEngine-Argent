@@ -26,17 +26,32 @@ export function isThinkingEnabled(settings: AppSettings): boolean {
 //   [LOCATION] (volatile.ts:189). [DIRECTOR BRIEF] does not exist yet — left verbatim per spec
 //   (Director Brief service lands in WO-04); the conditional "if present" wording keeps it forward-compatible.
 //
+// PACING — why the beat count is NOT in this constant. The old Step 5 read "draft 5-8
+// beats", a flat quota that ignored whether the scene was a quiet afternoon or a knife
+// fight. The number now comes from the per-turn Response Length contribution
+// (`writer.length` in builtins.ts, order 210), which the player sets from the dropdown beside
+// the action box.
+//
+// That split is deliberate. This block is the FIRST system message and carries
+// `cache_control: ephemeral`; everything after it — including all of history — caches
+// behind it. Varying it whenever the scene turned tense would invalidate that prefix on
+// every calm/tense transition, re-billing a 10k-token ruleset plus the whole campaign log.
+// The contribution lands below the cache boundary, costs nothing to vary, and sits nearer
+// the player's message, which is better for adherence anyway.
+//
 // Phrasing is model-agnostic ("internal reasoning, not shown to the player")
 // so the framework works for any provider: DeepSeek emits it in `reasoning_content`,
 // Claude in `thinking` blocks, GPT-5 in `reasoning` tokens, Gemini in `thinking_config`
 // parts, and legacy non-thinking models reason silently before the narrative.
-const WRITER_COT = `[WRITER REASONING FRAMEWORK]
+// Exported so builtins.ts's Block View documentation renders the real framework instead of a
+// hand-copied duplicate that can drift from what is actually sent.
+export const WRITER_COT = `[WRITER REASONING FRAMEWORK]
 Work through these steps in your internal reasoning before writing the narrative. Never show the steps in the narrative output. Always produce the full narrative response after your reasoning ends.
 Step 1 — Deconstruct: break the player's input into discrete intents. Judge each against the rules and MC boundaries. Impossible or implausible demands are narrated as attempts with consequences, not successes.
 Step 2 - Director Brief: if a [DIRECTOR BRIEF] block is present, honor its MANDATORY world-law or fair-adjudication corrections and any compatible SUGGESTION. It does not schedule drama or dictate every character's reaction.
 Step 3 - On-stage minds: first state the player's visible action and result without moral interpretation. For each character in [ACTIVE NPC CONTEXT], consider their current goal and emotional state, what they know and do not know (check [FACTS KNOWN TO ON-STAGE CHARACTERS]), their disposition and competence, and their relationship to the player. Then choose a proportionate response: speech, action, observation, help, challenge, humour, silence, withdrawal, or a shared crowd response. Characters may converge when the same event gives them the same reason to react; they may differ when their perspectives differ. Do not force either. A boundary produces push-back only when the concrete action actually crosses it; never infer a larger injury, hostile intent, or moral failing merely to make drama.
 Step 4 — Engine truth: honor [DICE OUTCOMES] exactly as resolved — never soften failures or upgrade successes. Check each on-stage character against their signature kit. Check [LOCATION] logistics: travel time, weather, era-appropriate technology.
-Step 5 - Beat map: draft 5-8 beats. Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.
+Step 5 - Beat map: draft exactly as many beats as the [BEAT BUDGET] line allows, and no more. Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.
 Step 6 — Final audit: the player's action drives the scene; reactions are grounded in what each character observed and values; no unearned NPC chorus or retroactive moralisation; no cliches or purple prose. Then write the scene.`;
 
 export function buildStable(opts: {
@@ -93,6 +108,24 @@ export function buildStable(opts: {
     if (context.headerIndexActive && context.headerIndex) stableParts.push(context.headerIndex);
     if (context.starterActive && context.starter) stableParts.push(context.starter);
     if (context.continuePromptActive && context.continuePrompt) stableParts.push(context.continuePrompt);
+
+    // Scene stakes. The receive side already existed — parsed by `extractAndStripSceneStakes`,
+    // stripped from the bubble in runGenerationStage, stored as `context.lastSceneStakes`, and
+    // consumed by the [BEAT BUDGET] contribution and NPC agency — but nothing ever ASKED for
+    // the tag, so stakes came only from the utility-model classifier at commit (off on lite,
+    // where every scene then read 'calm'). Rubric verbatim from mobile's
+    // payloadStableContent so the two apps classify a scene the same way.
+    //
+    // Deliberately OUTSIDE the thinking gate below: the tag is cheap output, not reasoning.
+    // It is a constant, so it costs exactly one prompt-cache bust on first run — see the
+    // PACING note above for why a VARYING string must never live in this block.
+    stableParts.push(
+        'On the LAST line of your response, output a scene-stakes tag:\n' +
+        '[[SCENE_STAKES: calm|tense|dangerous]]\n' +
+        'Rubric: calm = no immediate threat; tense = physical OR social/political threat looming;\n' +
+        'dangerous = active harm or imminent deadly/ruinous consequences. This tag is metadata —\n' +
+        'never reference it in your prose.'
+    );
 
     // Only inject when the active story provider has thinking mode enabled (any
     // effort level except 'off'). The `thinkingEffort` dropdown on the provider

@@ -96,11 +96,13 @@ ${section('Post-turn tracks', 'Background work that runs after the scene commits
         expect(html.length).toBeGreaterThan(1000);
         // Phase 8.3 — 27 built-in TierFeature ids (enemyDiscovery left with the
         // enemy subsystem). 2 tracks (npc + pressure; enemy-suggestion left with
-        // the subsystem). 9 contributions (WO-4 §4 added `npc.relations` — the
+        // the subsystem). 11 contributions (WO-4 §4 added `npc.relations` — the
         // on-stage NPC↔NPC relations block split out of the structural
-        // `volatile.block` so a mod can suppress it).
+        // `volatile.block` so a mod can suppress it; `writer.length` is the
+        // Response Length dropdown, its own block so the [BEAT BUDGET]
+        // line ships whether or not thinking is on).
         expect(tier.length).toBe(27);
-        expect(contributions.length).toBe(10);
+        expect(contributions.length).toBe(11);
         expect(tracks.length).toBe(2);
     });
 });

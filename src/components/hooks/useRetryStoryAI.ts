@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { generateSwipeVariant, SWIPE_BASE_TEMP_OFFSET, computeSwipeTemperature } from '../../services/turn/swipeGeneration';
-import { getCachedSwipePayload, refreshPendingSnapshotMessage } from '../../services/turn/pendingCommit';
+import { getCachedSwipePayload, getSwipeLengthOverride, refreshPendingSnapshotMessage } from '../../services/turn/pendingCommit';
 import { clearGatherStages } from '../../services/turn/gatherProgress';
 import type { ChatMessage } from '../../types';
 import { toast } from '../Toast';
@@ -107,6 +107,7 @@ export function useRetryStoryAI() {
                     modelName: provider.modelName,
                     temperature,
                     abortSignal,
+                    lengthOverride: getSwipeLengthOverride(),
                 },
                 (chunk) => {
                     if (abortSignal.aborted) return;

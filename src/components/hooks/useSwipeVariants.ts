@@ -6,7 +6,7 @@ import {
     SWIPE_BASE_TEMP_OFFSET,
     computeSwipeTemperature,
 } from '../../services/turn/swipeGeneration';
-import { getCachedSwipePayload } from '../../services/turn/pendingCommit';
+import { getCachedSwipePayload, getSwipeLengthOverride } from '../../services/turn/pendingCommit';
 import type { SwipeVariant, ChatMessage } from '../../types';
 import { toast } from '../Toast';
 import { debouncedSaveCampaignState } from '../../store/slices/campaignSlice';
@@ -204,6 +204,7 @@ export function useSwipeVariants(messageId: string | null) {
                     temperature,
                     abortSignal,
                     guidance,
+                    lengthOverride: getSwipeLengthOverride(),
                 },
                 (chunk) => {
                     // Guard 1: is this swipe set still active? If commit already

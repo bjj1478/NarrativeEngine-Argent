@@ -16,6 +16,8 @@ import { MessageBelowSlots } from './message/MessageBelowSlots';
 import { SceneImageAttachmentView } from './message/SceneImageAttachmentView';
 import { splitAttachmentBlock } from '../services/vision/describeImage';
 import { PlayerAttachmentView } from './message/PlayerAttachmentView';
+import { SceneStakesChip } from './message/SceneStakesChip';
+import { stakesForMessage } from './message/stakesForMessage';
 
 interface MessageBubbleProps {
     message: ChatMessage;
@@ -119,6 +121,7 @@ export function MessageBubble({
         && !!markdownContent.trim();
 
     const isUser = msg.role === 'user';
+    const stakes = stakesForMessage(msg);
 
     // ── Swipe Generation v1: touch-swipe gesture handling ──
     // Only the latest GM message (with a swipe set) responds to horizontal
@@ -209,6 +212,7 @@ export function MessageBubble({
                             [{msg.name}]
                         </span>
                     )}
+                    {msg.role === 'assistant' && stakes && <SceneStakesChip stakes={stakes} />}
                     {msg.role === 'assistant' && msg.sceneId && (
                         <span className="text-[9px] text-ice/60 tracking-wider" title="Archived scene">
                             SCENE {msg.sceneId}

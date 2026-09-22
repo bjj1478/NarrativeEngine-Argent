@@ -6,9 +6,17 @@ import { ChatAttachmentChip } from './ChatAttachmentChip';
 import type { ChatAttachment } from '../hooks/useChatAttachment';
 import { GalleryPicker, GalleryArmedChips, GallerySuggestions } from './GalleryComposerBar';
 import type { useGalleryMention } from '../hooks/useGalleryMention';
+import type { ResponseLength } from '../../types';
+
+const LENGTH_OPTIONS: { value: ResponseLength; label: string }[] = [
+    { value: 'flexible', label: 'Flexible' },
+    { value: 'short', label: 'Short' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'long', label: 'Long' },
+];
 
 /**
- * Bottom composer row: active-preset selector, deep-search armed chip,
+ * Bottom composer row: active-preset selector, response-length selector, deep-search armed chip,
  * auto-growing input textarea, and the send/stop toggle button.
  */
 export function ChatComposer({
@@ -102,6 +110,21 @@ export function ChatComposer({
                     >
                         {settings.presets.map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                    </select>
+                    <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-dim pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+                {/* Response length — global, read by the [BEAT BUDGET] contribution every turn. */}
+                <div className="relative shrink-0 mb-[4px]">
+                    <select
+                        value={settings.responseLength ?? 'flexible'}
+                        onChange={(e) => useAppStore.getState().updateSettings({ responseLength: e.target.value as ResponseLength })}
+                        className="h-[32px] bg-surface border border-border text-text-dim hover:text-terminal hover:border-terminal/50 pl-3 pr-7 text-[10px] uppercase tracking-widest focus:outline-none focus:border-terminal cursor-pointer appearance-none rounded transition-colors font-bold"
+                        title="Response length"
+                        aria-label="Response length"
+                    >
+                        {LENGTH_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                     </select>
                     <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text-dim pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>

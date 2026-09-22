@@ -496,6 +496,8 @@ export function buildTurnPayload(
         watchdogNudge: ctx.watchdogNudge,
         directorBrief: ctx.directorBrief,
         absoluteCommand: state.absoluteCommand ?? undefined,
+        // Read fresh: `context` predates the commit that stored last turn's stakes.
+        sceneStakes: state.getFreshContext().lastSceneStakes,
         elevatedScenes: ctx.gathered.elevatedScenes,
         slottedRagSnippets: ctx.gathered.slottedRagSnippets,
         relationshipStances: ctx.gathered.relationshipStances,

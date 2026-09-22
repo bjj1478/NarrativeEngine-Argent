@@ -13,6 +13,8 @@ import { saveCampaignState } from '../../store/campaignStore';
 import { API_BASE } from '../../lib/apiBase';
 import { buildHostFacade, hasHostModelRole } from './hostFacade';
 import { emitCoreEvent, emitCoreEventLazy } from '../mods/events';
+import { beatBudgetLine } from '../payload/contributions/builtins';
+import { detectTimeskip } from '../npc/agency/agencyTimeskipRun';
 
 // ── In-memory snapshot ─────────────────────────────────────────────────
 // Lost on crash — that's OK. Relaunch reconciliation rebuilds from the live
@@ -86,6 +88,22 @@ export function getPendingTurnSnapshot(): PendingTurnSnapshot | null {
 
 export function getCachedSwipePayload(): OpenAIMessage[] | null {
     return pendingSnapshot?.cachedPayload ?? null;
+}
+
+/**
+ * The [BEAT BUDGET] line a swipe or Smart Retry should use instead of the one baked into the
+ * cached payload — or `undefined` when the response-length dropdown still matches what the turn
+ * was sent with. Reads the current setting from the store and the turn's own inputs from the
+ * snapshot: the stakes are still the ones the turn was built with, because this turn's own
+ * stakes are only written to `lastSceneStakes` at commit.
+ */
+export function getSwipeLengthOverride(): string | undefined {
+    if (!pendingSnapshot) return undefined;
+    const current = useAppStore.getState().settings.responseLength ?? 'flexible';
+    const sent = pendingSnapshot.turnState.settings.responseLength ?? 'flexible';
+    if (current === sent) return undefined;
+    const stakes = pendingSnapshot.turnState.getFreshContext().lastSceneStakes;
+    return beatBudgetLine(current, stakes, detectTimeskip(pendingSnapshot.displayInput) !== null);
 }
 
 /**
@@ -459,7 +477,7 @@ async function runCommitPendingTurn(): Promise<void> {
 
     // Clear the swipe set + pendingCommit marker — the bubble is now a
     // normal historical message. Flush immediately (commit path should not debounce).
-    retirePendingMessage(pendingMsg.id, activeCampaignId);
+    retirePendingMessage(pendingMsg.id, activeCampaignId, sceneStakes);
     clearPendingTurnSnapshot();
 
     // Phase 3.2 / `EVENTS.md` §6.4 — the single point at which a pending turn
@@ -484,7 +502,7 @@ async function runCommitPendingTurn(): Promise<void> {
 // ── Message-state transitions (shared by commit + the recovery sweep) ───
 /** The turn is filed: drop the pre-commit markers so the bubble becomes ordinary
  *  history, and flush immediately. */
-function retirePendingMessage(messageId: string, activeCampaignId: string): void {
+function retirePendingMessage(messageId: string, activeCampaignId: string, sceneStakes?: SceneStakes): void {
     const freshMsgs = useAppStore.getState().messages;
     const idx = freshMsgs.findIndex(m => m.id === messageId);
     if (idx === -1) return;
@@ -495,6 +513,8 @@ function retirePendingMessage(messageId: string, activeCampaignId: string): void
     delete rest.pendingCommit;
     delete rest.swipeActiveIndex;
     delete rest.commitFailed;
+    // The swipe set carried the stakes; keep the committed reading for the bubble's stakes chip.
+    if (sceneStakes) rest.sceneStakes = sceneStakes;
     updated[idx] = rest as ChatMessage;
     useAppStore.setState({ messages: updated });
 

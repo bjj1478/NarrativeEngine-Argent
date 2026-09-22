@@ -1,4 +1,5 @@
-import type { AppSettings, LLMProvider, AIPreset, ApiFormat, AiTier } from '../../types';
+import type { AppSettings, LLMProvider, AIPreset, ApiFormat, AiTier, ResponseLength } from '../../types';
+import { RESPONSE_LENGTHS } from '../../types';
 import { set as idbSet } from 'idb-keyval';
 import { encryptSettingsProviders } from '../../services/infrastructure/settingsCrypto';
 import { uid } from '../../utils/uid';
@@ -105,6 +106,7 @@ export const defaultSettings: AppSettings = {
     enableArchivePlanner: false,
     retrievalAlgorithm: 'idf-rrf',
     archiveRecallDepth: 'standard',
+    responseLength: 'flexible',
     uiScale: 1.0,
     betaUi: false,
     imageStylePrompt: '',
@@ -412,6 +414,10 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
         enableArchivePlanner: (raw.enableArchivePlanner as boolean) ?? false,
         retrievalAlgorithm: (raw.retrievalAlgorithm as 'classic' | 'idf-rrf') ?? 'idf-rrf',
         archiveRecallDepth: (raw.archiveRecallDepth as 'lean' | 'standard' | 'deep') ?? 'standard',
+        // Validated, not cast: an unknown value would otherwise reach the prompt builder.
+        responseLength: (RESPONSE_LENGTHS as readonly string[]).includes(raw.responseLength as string)
+            ? raw.responseLength as ResponseLength
+            : 'flexible',
         matureMode: (raw.matureMode as boolean) ?? false,
         aiTier: raw.aiTier as AiTier | undefined,
         uiScale: (raw.uiScale as number) ?? 1.0,

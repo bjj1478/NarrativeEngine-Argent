@@ -71,8 +71,14 @@ describe('migrateSettings — input-shape coverage', () => {
         expect(out.contextLimit).toBe(4096);
         expect(out.retrievalAlgorithm).toBe('idf-rrf');
         expect(out.archiveRecallDepth).toBe('standard');
+        expect(out.responseLength).toBe('flexible');
         expect(out.uiScale).toBe(1.0);
         expect(out.matureMode).toBe(false);
+    });
+
+    it('keeps a valid responseLength and resets an unknown one to flexible', () => {
+        expect(migrateSettings({ responseLength: 'short' }).responseLength).toBe('short');
+        expect(migrateSettings({ responseLength: 'epic' }).responseLength).toBe('flexible');
     });
 
     it('dedupes providers with identical endpoint|model|key|format across presets', () => {

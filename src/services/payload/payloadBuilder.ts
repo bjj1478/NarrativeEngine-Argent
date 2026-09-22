@@ -1,4 +1,4 @@
-import type { AppSettings, ChatMessage, GameContext, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, PayloadTrace, TimelineEvent, DebugSection, InventoryItemCategory, DivergenceRegister, ArchiveChapter, PinnedExcerpt, SceneEventType, LocationEntry, RelationshipStance } from '../../types';
+import type { AppSettings, ChatMessage, GameContext, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, PayloadTrace, TimelineEvent, SceneStakes, DebugSection, InventoryItemCategory, DivergenceRegister, ArchiveChapter, PinnedExcerpt, SceneEventType, LocationEntry, RelationshipStance } from '../../types';
 import type { OpenAIMessage } from '../llm/llmService';
 import { createTraceCollector } from './traceCollector';
 import { computeBudgets } from './budgets';
@@ -21,6 +21,7 @@ import { isBlockEnabled } from '../turn/blockEnablement';
 import { BUILTIN_IDS } from './contributions/builtins';
 import { interceptorFaultStore, formatInterceptorFaultReason } from '../mods/interceptors/interceptorFaults';
 import { RELATIONSHIP_STANCE_TOKEN_BUDGET } from '../npc/relationshipStance';
+import { detectTimeskip } from '../npc/agency/agencyTimeskipRun';
 
 export type BuildPayloadOptions = {
     settings: AppSettings;
@@ -75,6 +76,11 @@ export type BuildPayloadOptions = {
      *  is swapped for a subordination line, and the command block is placed LAST — after
      *  userMessage — for maximum recency. Never enters chat history. */
     absoluteCommand?: string;
+    /** Scene stakes for the [BEAT BUDGET] line when the response length is 'flexible'.
+     *  Defaults to `context.lastSceneStakes`. The turn pipeline passes it explicitly because
+     *  its `context` is captured before `commitPendingTurn()` writes the previous turn's
+     *  stakes, so reading it off `context` would lag a turn behind. */
+    sceneStakes?: SceneStakes;
     /** Project 2: registry of final-user contributions. Defaults to built-ins only.
      *  Callers supply their own once mods can be loaded, so `buildPayload` never learns
      *  what a mod is. */
@@ -149,6 +155,7 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
         slottedRagSnippets,
         relationshipStances,
         absoluteCommand,
+        sceneStakes,
         finalUserRegistry,
         interception,
         publishedFacts,
@@ -338,6 +345,13 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
             relationsBlock,
             relationshipStances,
             relationshipStanceBudget,
+            // Drive the [BEAT BUDGET] line; only 'flexible' reads them. Absent stakes (a fresh
+            // campaign) read as calm, matching extractAndStripSceneStakes' own fallback.
+            // detectTimeskip is a pure regex over the player's words ("3 weeks later", "a month later") —
+            // no LLM call, so it is safe on the payload path. An ambiguous match ("a season
+            // later") still counts: the turn is covering a gap either way.
+            sceneStakes: sceneStakes ?? context.lastSceneStakes,
+            timeskipDetected: detectTimeskip(userMessage) !== null,
             directorBrief,
             watchdogNudge,
             absoluteCommand,
