@@ -12,7 +12,9 @@ You are an expert worldbuilder for a tabletop RPG engine. I need you to generate
 
 You **MUST** format the output exactly according to the structured template below.
 Do not deviate from the `### Category — Title` header structure, as it is parsed programmatically by the engine's RegEx.
-For characters, you MUST include the expected bolded fields (Aliases, Appearance, Disposition, Goals, Faction, Status, Axes).
+For characters, you MUST include the expected bolded fields (Aliases, Appearance, Disposition, Personality, Voice, Status, Faction, Goals, StoryRelevance, Example Output, Affinity).
+
+KEEP GAME MECHANICS OUT OF THE LORE. This document is fed to the narrator, so anything written here can surface in the prose the player reads. Write no dice, rolls, outcome or difficulty labels, tiers, ratings, thresholds, bonuses or stat syntax (`+2`, `DC 15`, `3d6`). The engine owns resolution; the lore owns the world.
 
 Here is the exact structure you must use:
 
@@ -48,8 +50,9 @@ Here is the exact structure you must use:
 **Faction:** [Faction Name or None]
 **Goals:** [Describe what they want to achieve.]
 **StoryRelevance:** [Why this character matters to the plot or world.]
-**Example Output:** [One line of dialogue that perfectly captures their voice.]
-**Affinity:** [0–100] (0 = hostile, 50 = neutral, 100 = devoted)
+[How capable they are belongs in the prose below, described the way a person would describe it — "the finest blade in three provinces", "competent, never brilliant". Never a rating, a tier or a number.]
+**Example Output:** [One line of dialogue that perfectly captures their voice. In character only — it is copied as a voice exemplar, so it must never name an outcome, a roll or a tier.]
+**Affinity:** [0–100] (0 = hostile, 50 = neutral, 100 = devoted) — read by the engine, never spoken in prose.
 [Describe their background and relevance to the story.]
 
 ### CHARACTER INTRO FLAGS (optional — controls when/where this character appears in play)
@@ -66,7 +69,7 @@ Here is the exact structure you must use:
 
 ## 5. POWER SYSTEM & RULES
 ### POWER_SYSTEM — [Name of Magic/Tech]
-[Explain how magic, technology, or special abilities work. What are the limitations?]
+[Explain how magic, technology, or special abilities work. What are the limitations? Describe costs and limits in fiction — what it takes, what it breaks, who it frightens — not as checks, difficulties or numbers.]
 
 ## 6. ECONOMY
 ### ECONOMY — [Currency / Trade]
