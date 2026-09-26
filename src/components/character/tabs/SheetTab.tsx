@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ClipboardPaste } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../../store/useAppStore';
 import type { PlayerCharacter, CharacterProfileState, NPCEntry } from '../../../types';
@@ -8,6 +8,8 @@ import { toast } from '../../Toast';
 import { PCEditForm } from '../PCEditForm';
 import { useNpcPortraits } from '../../hooks/useNpcPortraits';
 import { uid } from '../../../utils/uid';
+import { NPCFromTextDialog } from '../../npc-ledger/NPCFromTextDialog';
+import { extractPCFromText } from '../../../services/character/pcFromText';
 
 /**
  * Imperative handle exposed to the Character Ledger host so it can guard the
@@ -42,6 +44,17 @@ export interface SheetTabHandle {
 // CharacterLedgerModal, which imports this file.
 type LedgerTab = 'sheet' | 'record' | 'inventory' | 'stats';
 
+/** The empty draft a brand-new PC starts from (also the create-mode dirty baseline). */
+function blankPcForm(): Partial<PlayerCharacter> {
+    return {
+        isPC: true,
+        name: '',
+        status: 'Alive',
+        tier: 'recurring',
+        visualProfile: { ...DEFAULT_VISUAL_PROFILE },
+    };
+}
+
 export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () => void; onNavigateTab?: (tab: LedgerTab) => void }>(function SheetTab({ onStartGuidedCreation, onNavigateTab }, ref) {
     const {
         playerCharacter,
@@ -65,6 +78,8 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
 
     const [isEditing, setIsEditing] = useState(false);
     const [form, setForm] = useState<Partial<PlayerCharacter>>({});
+    const [fromTextMode, setFromTextMode] = useState<'create' | 'update' | null>(null);
+    const [isFromTextRunning, setIsFromTextRunning] = useState(false);
 
     // Sync form when the PC id changes. Render-phase setForm pattern (same as
     // the prior PCPanelModal) avoids a stale-closure effect when the PC is
@@ -76,13 +91,7 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
             setForm({ ...playerCharacter });
             setIsEditing(false);
         } else {
-            setForm({
-                isPC: true,
-                name: '',
-                status: 'Alive',
-                tier: 'recurring',
-                visualProfile: { ...DEFAULT_VISUAL_PROFILE },
-            });
+            setForm(blankPcForm());
             // WO-A2 §2.1: with no PC we must land on the Manual / AI-Guided
             // chooser (NoPCState), NOT straight into the manual form — otherwise
             // AI-Guided Creation is unreachable. `Manual Creation` sets isEditing.
@@ -131,13 +140,7 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
             setForm({ ...playerCharacter });
             setIsEditing(false);
         } else {
-            setForm({
-                isPC: true,
-                name: '',
-                status: 'Alive',
-                tier: 'recurring',
-                visualProfile: { ...DEFAULT_VISUAL_PROFILE },
-            });
+            setForm(blankPcForm());
             setIsEditing(false);
         }
     }, [playerCharacter]);
@@ -150,7 +153,7 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
         if (!isEditing) return false;
         const baseline = playerCharacter
             ? { ...playerCharacter }
-            : { isPC: true, name: '', status: 'Alive', tier: 'recurring', visualProfile: { ...DEFAULT_VISUAL_PROFILE } };
+            : blankPcForm();
         return JSON.stringify(form) !== JSON.stringify(baseline);
     }, [isEditing, form, playerCharacter]);
 
@@ -159,6 +162,37 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
         save: handleSave,
         discard: handleDiscard,
     }), [isDirty, handleSave, handleDiscard]);
+
+    /**
+     * Paste-anything → PC sheet. The result lands in edit mode and is NOT saved:
+     * Save Character persists it through handleSave and Discard reverts.
+     */
+    const handleFromText = async (text: string) => {
+        if (!fromTextMode) return;
+        const state = useAppStore.getState();
+        const provider = state.getActiveStoryEndpoint();
+        if (!provider) { toast.error('Story AI endpoint is not configured.'); return; }
+        const existing = fromTextMode === 'update' ? playerCharacter ?? undefined : undefined;
+        if (fromTextMode === 'update' && !existing) return;
+        setIsFromTextRunning(true);
+        try {
+            const patch = await extractPCFromText(provider, text, {
+                existing,
+                matureMode: state.settings.matureMode ?? false,
+            });
+            setForm(existing
+                ? { ...existing, visualProfile: existing.visualProfile || { ...DEFAULT_VISUAL_PROFILE }, ...patch }
+                : { ...blankPcForm(), ...patch });
+            setIsEditing(true);
+            setFromTextMode(null);
+            toast.success('Sheet filled from text. Review it, then Save Character.');
+        } catch (err: unknown) {
+            console.error('[PC From Text] Error:', err);
+            toast.error(`Could not build a character from that text${err instanceof Error ? `: ${err.message}` : ''}`);
+        } finally {
+            setIsFromTextRunning(false);
+        }
+    };
 
     const handleUploadPortrait = (file: File) => {
         const targetId = playerCharacter?.id || 'new-pc';
@@ -187,48 +221,58 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
         if (playerCharacter) updatePlayerCharacter(patch);
     };
 
-    if (playerCharacter) {
-        return (
+    const fromTextDialog = fromTextMode && (
+        <NPCFromTextDialog
+            mode={fromTextMode}
+            title={fromTextMode === 'create' ? 'Create Character from Text' : `Update ${form.name || 'Character'} from Text`}
+            description={fromTextMode === 'create'
+                ? 'Paste any description of your character (a wiki page, a bio, a story excerpt, notes). The AI will fill in the character sheet for you to review before saving.'
+                : 'Paste extra material about your character. The AI will add or correct only what the text supports, then open the sheet for review before saving.'}
+            running={isFromTextRunning}
+            onSubmit={(text) => { void handleFromText(text); }}
+            onCancel={() => setFromTextMode(null)}
+        />
+    );
+
+    let body: React.ReactNode;
+    if (playerCharacter || isEditing) {
+        body = (
             <PCEditForm
                 form={form}
                 setForm={setForm}
-                selectedId={playerCharacter.id}
-                isEditing={isEditing}
+                selectedId={playerCharacter?.id ?? null}
+                isEditing={playerCharacter ? isEditing : true}
                 isGeneratingImage={portraits.isGeneratingImage}
+                isFromTextRunning={isFromTextRunning}
                 onEdit={() => setIsEditing(true)}
                 onSave={handleSave}
                 onCancel={handleDiscard}
                 onGeneratePortrait={handleGeneratePortrait}
                 onUploadPortrait={handleUploadPortrait}
                 onRemovePortrait={handleRemovePortrait}
+                onFromText={playerCharacter ? () => setFromTextMode('update') : undefined}
                 onNavigateTab={onNavigateTab}
+            />
+        );
+    } else {
+        body = (
+            <NoPCState
+                onStartManual={() => setIsEditing(true)}
+                onStartGuidedCreation={onStartGuidedCreation}
+                onStartFromText={() => setFromTextMode('create')}
             />
         );
     }
 
-    if (isEditing) {
-        return (
-            <PCEditForm
-                form={form}
-                setForm={setForm}
-                selectedId={null}
-                isEditing={true}
-                isGeneratingImage={portraits.isGeneratingImage}
-                onEdit={() => setIsEditing(true)}
-                onSave={handleSave}
-                onCancel={handleDiscard}
-                onGeneratePortrait={handleGeneratePortrait}
-                onUploadPortrait={handleUploadPortrait}
-                onRemovePortrait={handleRemovePortrait}
-                onNavigateTab={onNavigateTab}
-            />
-        );
-    }
-
-    return <NoPCState onStartManual={() => setIsEditing(true)} onStartGuidedCreation={onStartGuidedCreation} />;
+    return (
+        <div className="relative flex-1 flex flex-col min-h-0">
+            {fromTextDialog}
+            {body}
+        </div>
+    );
 });
 
-function NoPCState({ onStartManual, onStartGuidedCreation }: { onStartManual: () => void; onStartGuidedCreation?: () => void }) {
+function NoPCState({ onStartManual, onStartGuidedCreation, onStartFromText }: { onStartManual: () => void; onStartGuidedCreation?: () => void; onStartFromText: () => void }) {
     return (
         <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
             <div className="w-16 h-16 rounded-full bg-terminal/10 border border-terminal/30 flex items-center justify-center mb-4">
@@ -253,6 +297,12 @@ function NoPCState({ onStartManual, onStartGuidedCreation }: { onStartManual: ()
                         AI-Guided Creation
                     </button>
                 )}
+                <button
+                    onClick={onStartFromText}
+                    className="flex items-center justify-center gap-1.5 px-5 py-2 bg-void text-text-dim border border-border rounded hover:border-terminal hover:text-terminal transition-colors text-[11px] uppercase tracking-widest"
+                >
+                    <ClipboardPaste size={12} /> Create from Text
+                </button>
             </div>
         </div>
     );

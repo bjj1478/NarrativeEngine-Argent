@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, Save, ScrollText, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { Trash2, Save, ScrollText, X, ChevronUp, ChevronDown, Search, ClipboardPaste, Loader2 } from 'lucide-react';
 import { NPCPortraitSection } from '../npc-ledger/NPCPortraitSection';
 import type { NPCVisualProfile, NPCBehavioralTrigger, DivergenceCategory, HexAxis, PlayerCharacter } from '../../types';
 import { DEFAULT_VISUAL_PROFILE } from '../../types';
@@ -47,19 +47,21 @@ type Props = {
     selectedId: string | null;
     isEditing: boolean;
     isGeneratingImage: boolean;
+    isFromTextRunning?: boolean;
     onEdit: () => void;
     onSave: () => void;
     onCancel: () => void;
     onGeneratePortrait: () => void;
     onUploadPortrait: (file: File) => void;
     onRemovePortrait: () => void;
+    onFromText?: () => void;
     onNavigateTab?: (tab: LedgerTab) => void;
 };
 
 export function PCEditForm({
-    form, setForm, selectedId, isEditing, isGeneratingImage,
+    form, setForm, selectedId, isEditing, isGeneratingImage, isFromTextRunning,
     onEdit, onSave, onCancel, onGeneratePortrait, onUploadPortrait, onRemovePortrait,
-    onNavigateTab,
+    onFromText, onNavigateTab,
 }: Props) {
     // Subscribed, not read through `getState()` in the render body: the
     // Events panel below is built from these two, and an imperative read
@@ -178,6 +180,17 @@ export function PCEditForm({
                 </div>
                 {!isEditing && selectedId && (
                     <div className="flex items-center gap-2">
+                        {onFromText && (
+                            <button
+                                onClick={onFromText}
+                                disabled={isFromTextRunning}
+                                title="Paste text to fill or refine your character"
+                                className="flex items-center gap-1.5 bg-void border border-terminal/30 px-3 py-1.5 text-xs text-terminal hover:border-terminal uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {isFromTextRunning ? <Loader2 size={12} className="animate-spin" /> : <ClipboardPaste size={12} />}
+                                From Text
+                            </button>
+                        )}
                         <button
                             onClick={onEdit}
                             className="bg-void border border-border px-4 py-1.5 text-xs text-text-dim hover:text-terminal hover:border-terminal uppercase tracking-widest transition-colors"
