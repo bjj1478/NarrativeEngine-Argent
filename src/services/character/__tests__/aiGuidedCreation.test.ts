@@ -208,7 +208,7 @@ describe('WO-A2 §4.7 — commitCharacterDraft', () => {
             inventoryItems: [],
             context: { characterProfile: { identity: {}, activeTraits: [] } },
             characterProfileData: { name: '', level: 1, hp: { current: 20, max: 20 } },
-        } as Partial<ReturnType<typeof useAppStore.getState>>);
+        } as unknown as Partial<ReturnType<typeof useAppStore.getState>>);
     });
 
     it('writes playerCharacter, seeds profileData, mirrors name, clears the draft', () => {
@@ -242,7 +242,7 @@ describe('WO-A2 §4.7 — commitCharacterDraft', () => {
         expect(savedPc!.traits).toEqual(traits);
         expect(savedPc!.storyRelevance).toBe('from the hills');
         expect(savedPc!.faction).toBe('Ironspire');
-        expect(savedPc!.wants.long).toBe('find the sword');
+        expect(savedPc!.wants?.long).toBe('find the sword');
 
         // Inventory from slot 8.
         expect(savedInventory.length).toBe(2);
@@ -301,7 +301,6 @@ describe('WO-A2 §4.8 — pcUpdater whitelist', () => {
             traits: ['ruthless'],
             relations: { x: 2 },
             pcRelation: 2,
-            // @ts-expect-error — legacy field
             drives: { coreWant: 'x', sessionWant: 'y', sceneWant: 'z' },
             affinity: 99,
         };

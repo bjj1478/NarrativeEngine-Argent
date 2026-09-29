@@ -98,10 +98,10 @@ afterEach(() => {
 describe('Phase 4.9.3 — Item 1: conflict rule per shape (MOUNTS.md §4)', () => {
     it('chrome regions are additive: two mods each get their entry, both render (§4.1)', () => {
         const { probe, probeTwo } = resolvedIndices();
-        registerModChrome('header.actions', PROBE, noopEntry('openProbeWindow'), probe);
-        registerModChrome('header.actions', PROBE_TWO, noopEntry('openProbeTwoWindow'), probeTwo);
-        registerModChrome('message.actions', PROBE, noopEntry('probeAction'), probe);
-        registerModChrome('message.actions', PROBE_TWO, noopEntry('probeTwoAction'), probeTwo);
+        registerModChrome('header.actions', PROBE, noopEntry('openProbeWindow'), probe, undefined);
+        registerModChrome('header.actions', PROBE_TWO, noopEntry('openProbeTwoWindow'), probeTwo, undefined);
+        registerModChrome('message.actions', PROBE, noopEntry('probeAction'), probe, undefined);
+        registerModChrome('message.actions', PROBE_TWO, noopEntry('probeTwoAction'), probeTwo, undefined);
 
         const headerMods = readRegion('header.actions').filter((e) => e.mod !== undefined);
         expect(headerMods.map((e) => e.qualifiedId)).toContain('mod.probe.openProbeWindow');
@@ -194,10 +194,10 @@ describe('Phase 4.9.3 — Item 2: order follows loadOrder in every region', () =
         const { probe, probeTwo } = resolvedIndices();
         expect(probe).toBeLessThan(probeTwo); // 100 < 200
 
-        registerModChrome('header.actions', PROBE, noopEntry('h'), probe);
-        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo);
-        registerModChrome('message.actions', PROBE, noopEntry('a'), probe);
-        registerModChrome('message.actions', PROBE_TWO, noopEntry('a'), probeTwo);
+        registerModChrome('header.actions', PROBE, noopEntry('h'), probe, undefined);
+        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo, undefined);
+        registerModChrome('message.actions', PROBE, noopEntry('a'), probe, undefined);
+        registerModChrome('message.actions', PROBE_TWO, noopEntry('a'), probeTwo, undefined);
         registerModRail(PROBE, noopPanel('r', 'Probe'), probe, {});
         registerModRail(PROBE_TWO, noopPanel('r', 'Probe-Two'), probeTwo, {});
         registerModMessageBelow(PROBE, noopSlot('b'), probe, {});
@@ -228,10 +228,10 @@ describe('Phase 4.9.3 — Item 3: swap load orders → visual order swaps', () =
         const probe = 10;
         const probeTwo = 9;
 
-        registerModChrome('header.actions', PROBE, noopEntry('h'), probe);
-        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo);
-        registerModChrome('message.actions', PROBE, noopEntry('a'), probe);
-        registerModChrome('message.actions', PROBE_TWO, noopEntry('a'), probeTwo);
+        registerModChrome('header.actions', PROBE, noopEntry('h'), probe, undefined);
+        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo, undefined);
+        registerModChrome('message.actions', PROBE, noopEntry('a'), probe, undefined);
+        registerModChrome('message.actions', PROBE_TWO, noopEntry('a'), probeTwo, undefined);
         registerModRail(PROBE, noopPanel('r', 'Probe'), probe, {});
         registerModRail(PROBE_TWO, noopPanel('r', 'Probe-Two'), probeTwo, {});
         registerModMessageBelow(PROBE, noopSlot('b'), probe, {});
@@ -325,11 +325,11 @@ describe('Phase 4.9.3 — Item 4: equal loadOrder → deterministic by id ascend
 describe('Phase 4.9.3 — Item 5: budget fault is surfaced with a reason (§5)', () => {
     it('a mod exceeding its header.actions budget (2) faults naming mod+region+entry', () => {
         const { probe } = resolvedIndices();
-        registerModChrome('header.actions', PROBE, noopEntry('h1'), probe);
-        registerModChrome('header.actions', PROBE, noopEntry('h2'), probe);
+        registerModChrome('header.actions', PROBE, noopEntry('h1'), probe, undefined);
+        registerModChrome('header.actions', PROBE, noopEntry('h2'), probe, undefined);
         expect(getModEntryCount('header.actions', 'probe')).toBe(2);
 
-        const over = registerModChrome('header.actions', PROBE, noopEntry('h3'), probe);
+        const over = registerModChrome('header.actions', PROBE, noopEntry('h3'), probe, undefined);
         // Not silently truncated: the count stays at the cap, AND a fault is
         // recorded with a reason naming the mod, region, and entry.
         expect(getModEntryCount('header.actions', 'probe')).toBe(2);
@@ -376,8 +376,8 @@ describe('Phase 4.9.3 — Item 5: budget fault is surfaced with a reason (§5)',
 describe('Phase 4.9.3 — Item 6: disable one, the other reflows; re-enable restores order', () => {
     it('disabling probe leaves probe-two in place and working in every region', () => {
         const { probe, probeTwo } = resolvedIndices();
-        registerModChrome('header.actions', PROBE, noopEntry('h'), probe);
-        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo);
+        registerModChrome('header.actions', PROBE, noopEntry('h'), probe, undefined);
+        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo, undefined);
         registerModRail(PROBE, noopPanel('r', 'Probe'), probe, {});
         registerModRail(PROBE_TWO, noopPanel('r', 'Probe-Two'), probeTwo, {});
         registerModMessageBelow(PROBE, noopSlot('b'), probe, {});
@@ -411,8 +411,8 @@ describe('Phase 4.9.3 — Item 6: disable one, the other reflows; re-enable rest
 
     it('re-enabling probe restores the original two-mod order (no append, §3.2)', () => {
         const { probe, probeTwo } = resolvedIndices();
-        registerModChrome('header.actions', PROBE, noopEntry('h'), probe);
-        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo);
+        registerModChrome('header.actions', PROBE, noopEntry('h'), probe, undefined);
+        registerModChrome('header.actions', PROBE_TWO, noopEntry('h'), probeTwo, undefined);
         const originalOrder = readRegion('header.actions').filter((e) => e.mod !== undefined).map((e) => e.qualifiedId);
         expect(originalOrder).toEqual(['mod.probe.h', 'mod.probe-two.h']);
 
@@ -420,7 +420,7 @@ describe('Phase 4.9.3 — Item 6: disable one, the other reflows; re-enable rest
         enableModMounts('probe');
         // Re-register probe (its `activate` re-runs on re-enable). It INSERTS
         // at its proper place (loadIndex 9 < probe-two's 10), NOT appends.
-        registerModChrome('header.actions', PROBE, noopEntry('h'), probe);
+        registerModChrome('header.actions', PROBE, noopEntry('h'), probe, undefined);
 
         const restored = readRegion('header.actions').filter((e) => e.mod !== undefined).map((e) => e.qualifiedId);
         expect(restored).toEqual(originalOrder);

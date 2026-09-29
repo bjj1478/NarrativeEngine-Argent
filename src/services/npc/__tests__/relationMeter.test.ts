@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { NPCEntry } from '../../types';
+import type { NPCEntry } from '../../../types';
 import { applyRelationTone, isRelationTone } from '../relationMeter';
 
 const npc = (over: Partial<NPCEntry> = {}): NPCEntry => ({

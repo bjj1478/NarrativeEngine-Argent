@@ -19,7 +19,7 @@ const snapshot: OocCampaignSnapshot = {
     messages: [{ id: 'latest', role: 'assistant', content: 'Default reply', timestamp: 1, pendingCommit: true, swipeActiveIndex: 1, swipeSet: [{ id: 'a', text: 'Old swipe', sceneStakes: 'calm', tagPresent: false }, { id: 'b', text: 'Visible latest swipe', sceneStakes: 'calm', tagPresent: false }] }],
     semanticFacts: [{ id: 'fact-1', subject: 'Mira', predicate: 'holds', object: 'the key', importance: 8, sceneId: '001', timestamp: 1 }],
     loreChunks: [], archiveIndex: [], npcLedger: [],
-};
+} as unknown as OocCampaignSnapshot;
 
 function answerWith(text: string, toolCall?: { id: string; name: string; arguments: string }) {
     sendMessage.mockImplementation((_provider, _messages, onChunk, onDone) => {

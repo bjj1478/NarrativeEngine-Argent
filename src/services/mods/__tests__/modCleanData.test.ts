@@ -47,7 +47,7 @@ const mod = (): ValidatedMod => ({
     dependencies: {},
     contributions: [],
     tables: [{ name: 'powers', recordShape: 'array' }],
-});
+} as unknown as ValidatedMod);
 
 beforeEach(() => {
     vi.clearAllMocks();

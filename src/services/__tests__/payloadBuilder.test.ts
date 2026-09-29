@@ -48,7 +48,7 @@ const baseContext = (): GameContext => ({
     notebook: [],
     notebookActive: true,
     worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-} as GameContext);
+} as unknown as GameContext);
 
 const baseSettings = (): AppSettings => ({
     debugMode: true,
@@ -107,7 +107,6 @@ function makeLoreChunk(overrides: Partial<LoreChunk> & { category: LoreChunk['ca
         alwaysInclude: false,
         triggerKeywords: [],
         scanDepth: 3,
-        category: overrides.category,
         linkedEntities: [],
         priority: 1,
         ...overrides,

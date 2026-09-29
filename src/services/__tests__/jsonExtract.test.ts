@@ -9,7 +9,7 @@ describe('extractJsonRobust', () => {
             const { value, parseOk } = extractJsonRobust(raw, { groups: [] });
             expect(parseOk).toBe(true);
             expect(value.groups).toHaveLength(1);
-            expect(value.groups[0].name).toBe('a');
+            expect((value.groups as { name: string }[])[0].name).toBe('a');
         });
 
         it('strips think blocks before parsing', () => {
@@ -23,7 +23,7 @@ describe('extractJsonRobust', () => {
             const raw = '```json\n{"groups":[{"name":"x","factIds":["1","2"]}]}\n```';
             const { value, parseOk } = extractJsonRobust(raw, { groups: [] });
             expect(parseOk).toBe(true);
-            expect(value.groups[0].name).toBe('x');
+            expect((value.groups as { name: string }[])[0].name).toBe('x');
         });
 
         it('recovers from truncated object at depth 1', () => {
@@ -31,14 +31,14 @@ describe('extractJsonRobust', () => {
             const { value, parseOk } = extractJsonRobust(raw, { groups: [] });
             expect(parseOk).toBe(true);
             expect(value.groups).toHaveLength(1);
-            expect(value.groups[0].name).toBe('a');
+            expect((value.groups as { name: string }[])[0].name).toBe('a');
         });
 
         it('handles escaped strings inside JSON', () => {
             const raw = '{"groups":[{"name":"he said \\"hello\\"","factIds":["1"]}]}';
             const { value, parseOk } = extractJsonRobust(raw, { groups: [] });
             expect(parseOk).toBe(true);
-            expect(value.groups[0].name).toBe('he said "hello"');
+            expect((value.groups as { name: string }[])[0].name).toBe('he said "hello"');
         });
 
         it('returns fallback when no JSON found', () => {

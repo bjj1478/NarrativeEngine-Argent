@@ -6,7 +6,7 @@ import {
     rateRelationshipMemory,
     type RelationshipMemoryParticipants,
 } from '../relationshipMemory';
-import type { NPCEntry } from '../../../types';
+import type { NPCEntry, RelationshipMemoryRecord } from '../../../types';
 
 function makeNpc(id: string, name: string): NPCEntry {
     return {
@@ -80,7 +80,7 @@ describe('relationship memory recorder', () => {
         const existing = [{
             sceneId: '000', subject: 'a', target: 'MC', mood: 'tender', impact: 'passing',
             outcome: 'smiled', source: 'user' as const,
-        }];
+        }] as RelationshipMemoryRecord[];
         const failed = await rateRelationshipMemory('001', 'scene', makeParticipants(), async () => ({ content: 'not json' }));
         const merged = mergeRelationshipMemoryCollections(existing, [], failed);
 

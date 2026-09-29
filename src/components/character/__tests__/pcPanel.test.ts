@@ -153,7 +153,7 @@ describe('WO-A §6.4: buildPcKitLine + volatile payload', () => {
         notebookActive: true,
         worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
         playerCharacter: null,
-    } as GameContext);
+    } as unknown as GameContext);
 
     const baseSettings = (): AppSettings => ({ debugMode: true, contextLimit: 8192 } as unknown as AppSettings);
 

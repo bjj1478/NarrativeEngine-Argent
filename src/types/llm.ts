@@ -88,7 +88,22 @@ export type LLMProvider = {
     comfyUi?: ComfyUiSettings;
 };
 
+export type InjectionTrigger = 'reply' | 'swipe' | 'continue';
+export type PromptInjection = {
+    id: string;
+    name: string;
+    enabled: boolean;
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+    depth: number;
+    /** Array order breaks ties at the same depth. */
+    triggers: InjectionTrigger[];
+    mode: 'message' | 'prefill' | 'reasoning';
+};
+
 export type AIPreset = {
+    /** Legacy preset injections: retained only for explicit copying into a campaign. */
+    promptInjections?: PromptInjection[];
     id: string;
     name: string;
     // Two-tier (new) — references into settings.providers

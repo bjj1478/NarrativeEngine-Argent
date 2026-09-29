@@ -60,7 +60,7 @@ describe('shouldAutoSeal', () => {
         themes: [],
         sceneCount: parseInt(sceneRange[1], 10) - parseInt(sceneRange[0], 10) + 1,
         _lastSeenSessionId: sessionId,
-    });
+    } as unknown as ArchiveChapter);
 
     it('returns false when no open chapter exists', () => {
         const chapters: ArchiveChapter[] = [
@@ -128,7 +128,7 @@ describe('sealChapter', () => {
         tone: '',
         themes: [],
         sceneCount: parseInt(sceneRange[1], 10) - parseInt(sceneRange[0], 10) + 1,
-    });
+    } as unknown as ArchiveChapter);
 
     it('seals open chapter by setting sealedAt to current timestamp', () => {
         const beforeTime = Date.now();
@@ -202,7 +202,7 @@ describe('updateChapterSessionId', () => {
         themes: [],
         sceneCount: 5,
         _lastSeenSessionId: sessionId,
-    });
+    } as unknown as ArchiveChapter);
 
     it('updates sessionId when not set', () => {
         const chapters: ArchiveChapter[] = [
@@ -256,7 +256,7 @@ describe('scoreChapter', () => {
         themes: [],
         sceneCount: parseInt(sceneRange[1], 10) - parseInt(sceneRange[0], 10) + 1,
         sealedAt: Date.now(),
-    });
+    } as unknown as ArchiveChapter);
 
     it('returns positive score for chapter with no context overlap (recency + importance only)', () => {
         const chapter = createChapter(['001', '010']);
@@ -360,7 +360,7 @@ describe('rankChapters', () => {
         themes: [],
         sceneCount: parseInt(sceneRange[1], 10) - parseInt(sceneRange[0], 10) + 1,
         sealedAt,
-    });
+    } as unknown as ArchiveChapter);
 
     it('returns empty array when no sealed chapters exist', () => {
         const chapters: ArchiveChapter[] = [
@@ -537,7 +537,7 @@ describe('iterativeChapterFilter', () => {
         themes: [],
         sceneCount: parseInt(sceneRange[1], 10) - parseInt(sceneRange[0], 10) + 1,
         sealedAt: Date.now(),
-    });
+    } as unknown as ArchiveChapter);
 
     const createMockProvider = () => ({
         endpoint: 'http://localhost:1234',
@@ -819,7 +819,7 @@ describe('recallWithChapterFunnel', () => {
         themes: ['fantasy'],
         sceneCount: parseInt(sceneRange[1], 10) - parseInt(sceneRange[0], 10) + 1,
         sealedAt: sealed ? Date.now() : undefined,
-    });
+    } as unknown as ArchiveChapter);
 
     const createIndexEntry = (sceneId: string): ArchiveIndexEntry => ({
         sceneId,

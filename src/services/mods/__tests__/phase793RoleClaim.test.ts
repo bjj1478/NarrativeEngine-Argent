@@ -482,7 +482,14 @@ describe('Phase 7.9.3 · item 5 — the claiming mod throws', () => {
         for (let i = 0; i < 3; i++) await askViaSite();
         expect(serviceRoles.activeProviderFor('memory.recall')?.providerId).toBe(CORE_PROVIDER_ID);
 
-        // `ROLES.md` §5.1: "cleared by a reload or a disable/enable".
+        // `ROLES.md` §5.1: latched off "for the session", "cleared by a reload
+        // or a disable/enable". A refresh inside the session (Rescan, opening
+        // Extensions) runs the load cycle again and leaves the latch alone.
+        await appLoad({ enablement: { [`mod.${CLAIMANT}`]: false, [`mod.${RIVAL}`]: false } });
+        expect(serviceRoles.activeProviderFor('memory.recall')?.providerId).toBe(CORE_PROVIDER_ID);
+
+        // A reload is a new page: fresh host state, then the load cycle.
+        host.reset();
         await appLoad({ enablement: { [`mod.${CLAIMANT}`]: false, [`mod.${RIVAL}`]: false } });
         expect(serviceRoles.activeProviderFor('memory.recall')?.modId).toBe(FAULTY);
     });

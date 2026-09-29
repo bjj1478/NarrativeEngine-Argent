@@ -50,7 +50,7 @@ const mod = (overrides: Partial<ValidatedMod> = {}): ValidatedMod => ({
     file: 'probe.mod.json',
     contributions: [],
     ...overrides,
-});
+} as unknown as ValidatedMod);
 
 const input = (facts?: ModFacts): FinalUserModuleInput =>
     ({ facts } as unknown as FinalUserModuleInput);

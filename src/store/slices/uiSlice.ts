@@ -1,4 +1,4 @@
-﻿import type { StateCreator } from 'zustand';
+import type { StateCreator } from 'zustand';
 import type { PayloadTrace, PipelinePhase, StreamingStats, LoreCheckResult, LoreCheckSelection, ArmedLoot, ArmedGalleryRecall, ArmedTimeskip, GallerySource } from '../../types';
 import type { OneShotEventId } from '../../services/oneshot/oneShotEvents';
 
@@ -11,6 +11,9 @@ export type ContextScreenId = 'sys' | 'world' | 'eng' | 'chpt' | 'mem';
 // ── Slice type ─────────────────────────────────────────────────────────
 
 export type UISlice = {
+    injectionModifierOpen: boolean;
+    openInjectionModifier: () => void;
+    closeInjectionModifier: () => void;
     settingsOpen: boolean;
     drawerOpen: boolean;
     npcLedgerOpen: boolean;
@@ -117,6 +120,9 @@ export type UISlice = {
 // ── Slice creator ──────────────────────────────────────────────────────
 
 export const createUISlice: StateCreator<UISlice, [], [], UISlice> = (set) => ({
+    injectionModifierOpen: false,
+    openInjectionModifier: () => set({ injectionModifierOpen: true }),
+    closeInjectionModifier: () => set({ injectionModifierOpen: false }),
     settingsOpen: false,
     drawerOpen: true,
     npcLedgerOpen: false,

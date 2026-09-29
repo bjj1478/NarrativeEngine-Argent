@@ -942,7 +942,8 @@ export async function runGenerationStage(
             tools ? [...tools] : undefined,
             abortController,
             state.sampling,
-            (state.provider as EndpointConfig).thinkingEffort as ThinkingEffort | undefined
+            (state.provider as EndpointConfig).thinkingEffort as ThinkingEffort | undefined,
+            'story-generation'
         );
     };
 

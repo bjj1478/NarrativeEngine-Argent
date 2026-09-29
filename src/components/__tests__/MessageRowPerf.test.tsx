@@ -110,12 +110,13 @@ describe('Phase 4.4 — long-chat performance (measured, not asserted)', () => {
     });
 
     it('MessageActionsOverlay: 200 rows, zero-mod vs one-mod render time', () => {
+        const rowMessages = makeMessages(ROW_COUNT);
         // Zero-mod: each MessageActionsOverlay renders null (no entry claimed).
         const zeroModMs = measureMs(() => {
             render(
                 <div>
                     {Array.from({ length: ROW_COUNT }, (_, i) => (
-                        <MessageActionsOverlay key={i} />
+                        <MessageActionsOverlay key={i} message={rowMessages[i]} />
                     ))}
                 </div>,
             );
@@ -129,12 +130,12 @@ describe('Phase 4.4 — long-chat performance (measured, not asserted)', () => {
             label: 'Tag',
             tooltip: 'Tag',
             onSelect: () => undefined,
-        }, 0);
+        }, 0, undefined);
         const oneModMs = measureMs(() => {
             render(
                 <div>
                     {Array.from({ length: ROW_COUNT }, (_, i) => (
-                        <MessageActionsOverlay key={i} />
+                        <MessageActionsOverlay key={i} message={rowMessages[i]} />
                     ))}
                 </div>,
             );

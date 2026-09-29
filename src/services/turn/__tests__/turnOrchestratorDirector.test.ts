@@ -22,8 +22,8 @@ import type { TurnState, TurnCallbacks } from '../turnOrchestrator';
 // The Director service mock — tracks invocations. The real `lastAssistantContent`
 // is a pure function but we mock it too so the test never touches the real module
 // (keeps the SUT's only Director dependency the gated `runDirectorBrief` call).
-const runDirectorBriefMock = vi.fn(async () => null as string | null);
-const lastAssistantContentMock = vi.fn(() => 'LAST_GM_TEXT');
+const runDirectorBriefMock = vi.fn(async (..._args: unknown[]) => null as string | null);
+const lastAssistantContentMock = vi.fn((..._args: unknown[]) => 'LAST_GM_TEXT');
 vi.mock('../directorBrief', () => ({
     runDirectorBrief: (...args: unknown[]) => runDirectorBriefMock(...args),
     lastAssistantContent: (...args: unknown[]) => lastAssistantContentMock(...args),
@@ -60,7 +60,7 @@ vi.mock('../contextGatherer', () => ({
 
 // chatEngine mock — buildPayload returns a one-message payload; sendMessage
 // invokes the onDone callback synchronously so `runTurn` resolves cleanly.
-const buildPayloadMock = vi.fn(() => ({
+const buildPayloadMock = vi.fn((..._args: unknown[]) => ({
     messages: [{ role: 'user', content: 'hello' }],
     trace: [],
     debugSections: [],

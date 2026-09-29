@@ -119,9 +119,9 @@ describe('Phase 7.1.1 — a mod claims memory.recall', () => {
         const { mods, faults } = loadMods(FIXTURES_DIR, appVersion);
 
         expect(faults.map((f: { file: string; reason: string }) => `${f.file}: ${f.reason}`)).toEqual([]);
-        const claimant = mods.find((m: { id: string }) => m.id === fixtureManifest.id);
+        const claimant = (mods as Array<{ id: string; roles?: string[] }>).find((m) => m.id === fixtureManifest.id);
         expect(claimant, 'the loader must return the claimant').toBeDefined();
-        expect(claimant.roles).toEqual(['memory.recall']);
+        expect(claimant?.roles).toEqual(['memory.recall']);
     });
 
     it('every role the manifest declares is a role the host actually registers', () => {

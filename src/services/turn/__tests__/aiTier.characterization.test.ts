@@ -28,13 +28,13 @@ import type { AiTier } from '../../../types';
 const TIERS: AiTier[] = ['lite', 'pro', 'max'];
 
 /**
- * The 26 TierFeature ids declared in `aiTier.ts` (post-Phase 8.3). Phase 8.3
+ * The 27 TierFeature ids declared in `aiTier.ts`. Phase 8.3
  * removed `enemyDiscovery` from the union; the mod (8.5) declares its own
  * `mod.enemies.enemyDiscovery` through the 7.3 registry.
  */
 const FEATURES: TierFeature[] = [
     'introEngine', 'planner', 'expandQuery', 'reranker', 'archiveFunnel',
-    'deepScan', 'recommender',
+    'deepScan', 'recommender', 'npcStance',
     'importanceRating', 'witnessAux', 'npcValidate', 'npcProfileGen',
     'npcUpdate', 'drivesBackfill', 'profileScan', 'inventoryScan', 'locationScan', 'locationEnrich', 'sealChapter',
     'sceneStakesClassify',
@@ -52,7 +52,7 @@ const FEATURES: TierFeature[] = [
 const EXPECTED: Record<AiTier, Record<TierFeature, boolean>> = {
     lite: {
         introEngine: false, planner: false, expandQuery: false, reranker: false, archiveFunnel: false,
-        deepScan: false, recommender: false,
+        deepScan: false, recommender: false, npcStance: true,
         importanceRating: false, witnessAux: false, npcValidate: false, npcProfileGen: false,
         npcUpdate: false, drivesBackfill: false, profileScan: false, inventoryScan: false, locationScan: false, locationEnrich: false, sealChapter: false,
         sceneStakesClassify: false,
@@ -64,7 +64,7 @@ const EXPECTED: Record<AiTier, Record<TierFeature, boolean>> = {
     },
     pro: {
         introEngine: false, planner: true, expandQuery: false, reranker: false, archiveFunnel: true,
-        deepScan: true, recommender: true,
+        deepScan: true, recommender: true, npcStance: true,
         importanceRating: false, witnessAux: false, npcValidate: true, npcProfileGen: true,
         npcUpdate: true, drivesBackfill: false, profileScan: false, inventoryScan: false, locationScan: false, locationEnrich: true, sealChapter: true,
         sceneStakesClassify: true,
@@ -76,7 +76,7 @@ const EXPECTED: Record<AiTier, Record<TierFeature, boolean>> = {
     },
     max: {
         introEngine: true, planner: true, expandQuery: true, reranker: true, archiveFunnel: true,
-        deepScan: true, recommender: true,
+        deepScan: true, recommender: true, npcStance: true,
         importanceRating: true, witnessAux: true, npcValidate: true, npcProfileGen: true,
         npcUpdate: true, drivesBackfill: true, profileScan: true, inventoryScan: true, locationScan: true, locationEnrich: true, sealChapter: true,
         sceneStakesClassify: true,

@@ -59,7 +59,7 @@ const plainMod = (id: string): ValidatedMod => ({
     panels: [],
     screens: [],
     screenSources: [],
-});
+} as unknown as ValidatedMod);
 
 beforeEach(() => {
     vi.clearAllMocks();

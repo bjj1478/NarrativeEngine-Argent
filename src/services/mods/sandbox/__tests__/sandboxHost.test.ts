@@ -22,7 +22,11 @@ class FakeWorker implements SandboxWorkerLike {
     readonly sent: SandboxHostMessage[] = [];
     terminated = false;
 
-    constructor(private readonly handle: WorkerHandler = () => undefined) {}
+    private readonly handle: WorkerHandler;
+
+    constructor(handle: WorkerHandler = () => undefined) {
+        this.handle = handle;
+    }
 
     postMessage(message: SandboxHostMessage): void {
         this.sent.push(message);
@@ -48,13 +52,13 @@ class FakeWorker implements SandboxWorkerLike {
 function makeFacade(overrides: Partial<HostFacade> = {}): HostFacade {
     const controller = new AbortController();
     const facade: HostFacade = {
-        data: { context: {}, messages: [] } as HostFacade['data'],
+        data: { context: {}, messages: [] } as unknown as HostFacade['data'],
         config: { contextLimit: 4096 } as HostFacade['config'],
         write: {
             updateContext: vi.fn(),
             updateNPC: vi.fn(),
             addMessage: vi.fn(),
-            addEnemySuggestions: vi.fn(),
+            requestBackup: vi.fn(),
             setDivergenceRegister: vi.fn(),
             addNpcSuggestions: vi.fn(),
             archiveNPC: vi.fn(),
@@ -522,7 +526,7 @@ describe('runSandbox', () => {
         // `FacadeConfig`. The `data` shape is `ModData` (e.g. `playerInput`,
         // not `input`).
         const refreshed = makeFacade({
-            data: { context: { input: 'fresh' } as HostFacade['data']['context'], input: 'fresh' } as HostFacade['data'],
+            data: { context: { input: 'fresh' } as unknown as HostFacade['data']['context'], input: 'fresh' } as HostFacade['data'],
             config: { contextLimit: 2048 } as HostFacade['config'],
         });
         const facade = makeFacade({ refresh: vi.fn(() => refreshed) });
@@ -619,6 +623,31 @@ describe('runSandbox', () => {
         expect(() => applyJournal(facade, writes, ['write:updateContext']))
             .toThrow(`maximum ${MAX_JOURNAL_ENTRIES} entries exceeded`);
         expect(updateContext).not.toHaveBeenCalled();
+    });
+
+    it('rejects a journal that adds a tool message, applying none of it', () => {
+        const updateContext = vi.fn();
+        const addMessage = vi.fn();
+        const facade = makeFacade({ write: { ...makeFacade().write, updateContext, addMessage } });
+        const writes = [
+            { kind: 'store' as const, name: 'updateContext', args: [{}] },
+            { kind: 'store' as const, name: 'addMessage', args: [{ id: 't', role: 'tool', content: '{}' }] },
+        ];
+
+        expect(() => applyJournal(facade, writes, ['write:updateContext', 'write:addMessage']))
+            .toThrow('addMessage cannot add a tool message');
+        expect(updateContext).not.toHaveBeenCalled();
+        expect(addMessage).not.toHaveBeenCalled();
+    });
+
+    it('still applies an ordinary addMessage', () => {
+        const addMessage = vi.fn();
+        const facade = makeFacade({ write: { ...makeFacade().write, addMessage } });
+        const message = { id: 'n', role: 'system', content: 'A bell tolls.' };
+
+        applyJournal(facade, [{ kind: 'store' as const, name: 'addMessage', args: [message] }], ['write:addMessage']);
+
+        expect(addMessage).toHaveBeenCalledWith(message);
     });
 });
 

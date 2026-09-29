@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { NPCEntry, PersonalityHex } from '../../types';
+import type { NPCEntry, PersonalityHex } from '../../../types';
 import { REACTION_VOCAB } from '../agency/agencyPools';
 import {
     repressKind,

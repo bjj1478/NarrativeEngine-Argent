@@ -37,7 +37,7 @@ function baseContext(): GameContext {
         sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
         worldVibe: '', notebook: [], notebookActive: false,
         worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-    } as GameContext;
+    } as unknown as GameContext;
 }
 
 function baseSettings(over: Partial<AppSettings> = {}): AppSettings {
@@ -319,14 +319,14 @@ describe('WO-11b Correction 3 — timeout timer cleanup', () => {
             expect(result.rankedSceneIds).toEqual(['001']);
 
             // No timeout warning should have been emitted.
-            const timeoutCalls = warnSpy.mock.calls.filter(c =>
+            const timeoutCalls = warnSpy.mock.calls.filter((c: unknown[]) =>
                 String(c[0]).includes('[DynamicElevation] timeout')
             );
             expect(timeoutCalls).toHaveLength(0);
 
             // Advance well past the 5s boundary — no pending timer fires (no late warning).
             vi.advanceTimersByTime(10000);
-            const timeoutCallsAfterAdvance = warnSpy.mock.calls.filter(c =>
+            const timeoutCallsAfterAdvance = warnSpy.mock.calls.filter((c: unknown[]) =>
                 String(c[0]).includes('[DynamicElevation] timeout')
             );
             expect(timeoutCallsAfterAdvance).toHaveLength(0);

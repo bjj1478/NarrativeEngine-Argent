@@ -41,7 +41,7 @@ describe('createTableSlice', () => {
                 currentFeature: 'market-square',
             },
         };
-        const slice = createTableSlice<Location[], LocationState>(descriptor, []);
+        const slice = createTableSlice<Location[], LocationState>(descriptor as TableDescriptor & { recordShape: 'array' }, []);
 
         const result = slice.remove(
             [{ id: 'standing-here', name: 'Market' }, { id: 'elsewhere', name: 'Docks' }],
@@ -68,7 +68,7 @@ describe('createTableSlice', () => {
                 )) as never,
             },
         };
-        const slice = createTableSlice<Location[], LocationState>(descriptor, []);
+        const slice = createTableSlice<Location[], LocationState>(descriptor as TableDescriptor & { recordShape: 'array' }, []);
 
         const result = slice.remove(
             [{ id: 'standing-here', name: 'Market' }, { id: 'elsewhere', name: 'Docks' }],

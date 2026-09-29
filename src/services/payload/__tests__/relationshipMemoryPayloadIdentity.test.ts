@@ -14,7 +14,7 @@ const baseContext = (relationshipMemory: boolean): GameContext => ({
     sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     worldVibe: '', notebook: [], notebookActive: true,
     relationshipMemory,
-} as GameContext);
+} as unknown as GameContext);
 
 const baseSettings = (): AppSettings => ({
     debugMode: true,

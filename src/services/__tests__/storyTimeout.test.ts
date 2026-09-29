@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import type { EndpointConfig } from '../../types';
 
 const state = vi.hoisted(() => ({ settings: { storyTimeoutSeconds: 900 as number | undefined } }));
@@ -21,12 +21,12 @@ const provider = { endpoint: 'http://localhost/v1', modelName: 'test', apiKey: '
 let stream: ReadableStreamDefaultController<Uint8Array>;
 let controller: AbortController;
 let pending: Promise<void>;
-let onError: ReturnType<typeof vi.fn>;
-let onDone: ReturnType<typeof vi.fn>;
+let onError: Mock<(...args: unknown[]) => void>;
+let onDone: Mock<(...args: unknown[]) => void>;
 
 async function start() {
-    onError = vi.fn();
-    onDone = vi.fn();
+    onError = vi.fn<(...args: unknown[]) => void>();
+    onDone = vi.fn<(...args: unknown[]) => void>();
     controller = new AbortController();
     vi.mocked(llmFetch).mockImplementation(async (_url, init) => {
         const body = new ReadableStream<Uint8Array>({
@@ -37,7 +37,7 @@ async function start() {
         });
         return { ok: true, body } as Response;
     });
-    pending = sendMessage(provider, [], vi.fn(), onDone, onError, undefined, controller);
+    pending = sendMessage(provider, [], vi.fn(() => undefined), onDone, onError, undefined, controller);
     await vi.advanceTimersByTimeAsync(0);
 }
 
@@ -104,8 +104,8 @@ describe('global story timeout', () => {
 
 describe('cache telemetry attribution', () => {
     async function completeStreamWithLabel(trackingLabel?: string) {
-        onError = vi.fn();
-        onDone = vi.fn();
+        onError = vi.fn<(...args: unknown[]) => void>();
+        onDone = vi.fn<(...args: unknown[]) => void>();
         controller = new AbortController();
         const encoder = new TextEncoder();
         vi.mocked(llmFetch).mockImplementation(async () => {
@@ -118,7 +118,7 @@ describe('cache telemetry attribution', () => {
             });
             return { ok: true, body } as Response;
         });
-        pending = sendMessage(provider, [], vi.fn(), onDone, onError, undefined, controller,
+        pending = sendMessage(provider, [], vi.fn(() => undefined), onDone, onError, undefined, controller,
             undefined, undefined, trackingLabel);
         await vi.advanceTimersByTimeAsync(0);
         await pending;

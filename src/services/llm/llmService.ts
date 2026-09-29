@@ -1,3 +1,5 @@
+import { applyInjections, injectionTrigger, activeInjections, injectionText } from '../payload/promptInjections';
+import { countTokens } from '../infrastructure/tokenizer';
 import type { EndpointConfig, ProviderConfig, SamplingConfig, ThinkingEffort } from '../../types';
 import { uid } from '../../utils/uid';
 import { getQueueForEndpoint } from './llmRequestQueue';
@@ -56,7 +58,22 @@ export async function sendMessage(
     });
 
     try {
-        const payload = buildChatBody(provider, messages, { stream: true, tools: tools ?? [], sampling, thinkingEffort });
+        const requestState = useAppStore.getState();
+        const settings = requestState.settings;
+        const trigger = injectionTrigger(trackingLabel);
+        const injections = requestState.activeCampaignId ? requestState.context?.promptInjections : undefined;
+        if (trigger) {
+            const tokens = activeInjections(injections, trigger).reduce((sum, item) => sum + countTokens(injectionText(item)) + 8, 0);
+            if (tokens >= (settings.contextLimit || 8192)) throw new Error('Prompt injections exceed the context budget. Shorten or disable an injection.');
+        }
+        const requestMessages = trigger ? applyInjections(messages, injections, trigger, format) : messages;
+        if (requestMessages !== messages) {
+            const requestTokens = requestMessages.reduce((sum, message) => sum + countTokens(message.content ?? '') + 8, 0);
+            if (requestTokens > (settings.contextLimit || 8192)) {
+                throw new Error('This request plus prompt injections exceeds the context budget. Shorten the injections or start a new turn to refit history.');
+            }
+        }
+        const payload = buildChatBody(provider, requestMessages, { stream: true, tools: tools ?? [], sampling, thinkingEffort });
 
         // Gemini auth: append ?key= to URL
         let fetchUrl = url;

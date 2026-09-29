@@ -15,7 +15,7 @@ const modWithScreen: ValidatedMod = {
     panels: [],
     screens: [{ id: 'gate-screen', file: 'gate.js', label: 'Gate Screen' }],
     screenSources: ['export default function () { document.body.innerHTML = "<p>ok</p>"; }'],
-};
+} as unknown as ValidatedMod;
 
 /**
  * Expand every collapsed mod screen.

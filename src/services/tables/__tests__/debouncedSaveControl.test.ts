@@ -29,7 +29,7 @@ describe('createDebouncedSave controls', () => {
         await vi.advanceTimersByTimeAsync(1_000);
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual([{ id: 'latest' }]);
+        expect(JSON.parse(((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).body as string)).toEqual([{ id: 'latest' }]);
 
         save([{ id: 'discarded' }]);
         save.cancel();

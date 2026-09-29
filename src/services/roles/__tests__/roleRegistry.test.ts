@@ -42,8 +42,8 @@ describe('createServiceRoleRegistry', () => {
     it('arbitrates opaque role IDs by resolved load index, then provider key', async () => {
         const registry = createServiceRoleRegistry();
         registry.register(makeRole());
-        registry.provide('opaque.alpha', provider('zeta', 2, () => ({ result: 2 })));
-        registry.provide('opaque.alpha', provider('alpha', 2, () => ({ result: 1 })));
+        registry.provide('opaque.alpha', provider('zeta', 2, () => ({ result: 2 } as unknown as Promise<never>)));
+        registry.provide('opaque.alpha', provider('alpha', 2, () => ({ result: 1 } as unknown as Promise<never>)));
 
         expect(registry.activeProviderFor('opaque.alpha')?.modId).toBe('alpha');
         await expect(registry.ask<OpaqueInput, OpaqueAnswer>('opaque.alpha', { value: 1 }))
@@ -112,7 +112,7 @@ describe('createServiceRoleRegistry', () => {
             });
 
             // Conflict: the higher load index registers first and must lose.
-            registry.provide(n.role, provider(n.loser, 5, () => ({ result: 5 })));
+            registry.provide(n.role, provider(n.loser, 5, () => ({ result: 5 } as unknown as Promise<never>)));
             registry.provide(n.role, provider(n.winner, 1, () => {
                 throw new Error('provider failed');
             }));
@@ -166,13 +166,13 @@ describe('createServiceRoleRegistry', () => {
             isEnabled: (providerId) => enabled.get(providerId) !== false,
         });
         registry.register(makeRole());
-        registry.provide('opaque.alpha', provider('one', 0, () => ({ result: 1 })));
+        registry.provide('opaque.alpha', provider('one', 0, () => ({ result: 1 } as unknown as Promise<never>)));
         enabled.set('mod.one', false);
         await expect(registry.ask('opaque.alpha', { value: 1 })).resolves.toEqual({ result: 0 });
 
         enabled.set('mod.one', true);
         registry.enable('one');
-        registry.provide('opaque.alpha', provider('one', 0, () => ({ result: 1 })));
+        registry.provide('opaque.alpha', provider('one', 0, () => ({ result: 1 } as unknown as Promise<never>)));
         registry.revoke('one');
         await expect(registry.ask('opaque.alpha', { value: 1 })).resolves.toEqual({ result: 0 });
         expect(roleFaultStore.getRecords()).not.toEqual(expect.arrayContaining([

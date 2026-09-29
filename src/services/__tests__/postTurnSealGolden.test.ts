@@ -23,7 +23,7 @@ import type { TurnState, TurnCallbacks } from '../turn/turnOrchestrator';
 // Mock the sealChapterCombined service so we capture what args reach it
 // (those args are the byte-identical guard — if the hoist changes a value, the
 // captured args differ).
-const sealChapterCombinedMock = vi.fn(async () => ({
+const sealChapterCombinedMock = vi.fn(async (..._args: unknown[]) => ({
     summary: { title: 'Sealed Chapter', themes: ['hope'], keywords: ['battle'], npcs: ['Aldric'], majorEvents: ['victory'], unresolvedThreads: ['the relic'], tone: 'grim', sceneCount: 3 },
     divergences: [{ id: 'd1', chapterId: 'CH01', category: 'world_state', text: 'The harbor flooded.', sceneRef: '001', npcIds: [], pinned: false, enabled: true, source: 'seal', importance: 7 }],
     divergenceParseError: false,
@@ -141,7 +141,7 @@ function makeSealInputs(overrides: Partial<{ divergenceScanBudget: number; conte
     return {
         npcLedger: STORE_STATE.npcLedger,
         archiveIndex: STORE_STATE.archiveIndex,
-        divergenceScanBudget: overrides.divergenceScanBudget ?? STORE_STATE.settings.divergenceScanBudget,
+        divergenceScanBudget: (overrides.divergenceScanBudget ?? STORE_STATE.settings.divergenceScanBudget)!,
         contextLimit: overrides.contextLimit ?? STORE_STATE.settings.contextLimit,
         divergenceRegister: STORE_STATE.divergenceRegister,
     };

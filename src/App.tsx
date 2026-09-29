@@ -1,4 +1,5 @@
-﻿import './index.css';
+import { InjectionModifierPanel } from './components/injections/InjectionModifierPanel';
+import './index.css';
 import './styles/beta.css';
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/useAppStore';
@@ -32,6 +33,7 @@ import { loadBackground } from './services/background/backgroundManager';
 import { refreshMods } from './services/mods/modBootstrap';
 
 export default function App() {
+  const injectionModifierOpen = useAppStore(s => s.injectionModifierOpen);
   const activeCampaignId = useAppStore((s) => s.activeCampaignId);
   useRulesIndexer();
   useFlushSavesOnExit();
@@ -191,7 +193,8 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         <ContextDrawer />
         <ChatArea />
-        <ChatRightRail />
+        <InjectionModifierPanel />
+        <div className={injectionModifierOpen ? 'hidden' : 'contents'}><ChatRightRail /></div>
       </div>
       {/* Phase 4.5 — `window.layer`. Renders null when no mod has opened a
           floating window (MOUNTS.md §2.8), so zero-mod DOM is byte-identical

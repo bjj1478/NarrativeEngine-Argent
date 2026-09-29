@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LocationEntry, TravelHop } from '../../types';
+import type { LocationEntry, TravelHop } from '../../../types';
 import {
     departMultiHop,
     advance,

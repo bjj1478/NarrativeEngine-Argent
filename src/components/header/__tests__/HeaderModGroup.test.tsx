@@ -49,7 +49,7 @@ function registerEntries(count: number, onSelect?: (index: number) => void): voi
             'header.actions',
             { id: `mod-${i}`, name: `Mod ${i}` },
             entry(`entry-${i}`, `Action ${i}`, () => onSelect?.(i)),
-            i,
+            i, undefined,
         );
     }
 }
@@ -218,7 +218,7 @@ describe('HeaderModGroup', () => {
             'header.actions',
             { id: 'example-window-mod', name: 'Example Window Mod' },
             entry('openWindow', 'WINDOW'),
-            0,
+            0, undefined,
         );
         render(<HeaderModGroup entries={modEntries()} t={t} />);
 
@@ -235,7 +235,7 @@ describe('HeaderModGroup', () => {
             'header.actions',
             { id: 'translated-mod', name: 'Translated Mod' },
             entry('open', 'openWindow'),
-            0,
+            0, undefined,
         );
         render(<HeaderModGroup entries={modEntries()} t={translating} />);
 

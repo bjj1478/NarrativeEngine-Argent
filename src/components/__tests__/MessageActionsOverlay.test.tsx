@@ -23,6 +23,9 @@ import {
     resetMountRegistryForTests,
 } from '../../services/mods/mounts/mountRegistry';
 import { MessageActionsOverlay } from '../message/MessageActionsOverlay';
+import type { ChromeEntry, MessageRef } from '../../services/mods/mounts/mountTypes';
+
+const MESSAGE: MessageRef = { id: 'm1', role: 'assistant', sceneId: '001' };
 
 const MOD_A = { id: 'mod-a', name: 'Mod A' };
 const MOD_B = { id: 'mod-b', name: 'Mod B' };
@@ -40,7 +43,7 @@ const MOD_B = { id: 'mod-b', name: 'Mod B' };
  * header button reading `MOD.EXAMPLE-WINDOW-MOD.WINDOW`.
  */
 
-const noopEntry = (id: string, overrides: Partial<{ icon: string; label: string; tooltip: string; onSelect: () => void; state: () => unknown }> = {}) => ({
+const noopEntry = (id: string, overrides: Partial<ChromeEntry> = {}): ChromeEntry => ({
     id,
     icon: 'Tag',
     label: id,
@@ -59,19 +62,19 @@ afterEach(() => {
 
 describe('Phase 4.4 — MessageActionsOverlay', () => {
     it('renders nothing when no mod has claimed message.actions (zero-mod DOM, §2.8)', () => {
-        const { container } = render(<MessageActionsOverlay />);
+        const { container } = render(<MessageActionsOverlay message={MESSAGE} />);
         expect(container.firstChild).toBeNull();
     });
 
     it('renders nothing while editing (§2.5)', () => {
-        registerModChrome('message.actions', MOD_A, noopEntry('tag'), 0);
-        const { container } = render(<MessageActionsOverlay isEditing={true} />);
+        registerModChrome('message.actions', MOD_A, noopEntry('tag'), 0, undefined);
+        const { container } = render(<MessageActionsOverlay isEditing={true} message={MESSAGE} />);
         expect(container.firstChild).toBeNull();
     });
 
     it('renders a native icon button per claimed entry', () => {
-        registerModChrome('message.actions', MOD_A, noopEntry('tag', { tooltip: 'Tag this message' }), 0);
-        render(<MessageActionsOverlay />);
+        registerModChrome('message.actions', MOD_A, noopEntry('tag', { tooltip: 'Tag this message' }), 0, undefined);
+        render(<MessageActionsOverlay message={MESSAGE} />);
         const button = screen.getByRole('button', { name: 'Tag this message' });
         expect(button).toBeInTheDocument();
         // The button uses the same classes as the built-in rail buttons —
@@ -81,9 +84,9 @@ describe('Phase 4.4 — MessageActionsOverlay', () => {
     });
 
     it('orders entries by (loadIndex, withinModIndex) — a lower loadIndex sorts first', () => {
-        registerModChrome('message.actions', MOD_A, noopEntry('late', { tooltip: 'Late' }), 5);
-        registerModChrome('message.actions', MOD_B, noopEntry('early', { tooltip: 'Early' }), 1);
-        render(<MessageActionsOverlay />);
+        registerModChrome('message.actions', MOD_A, noopEntry('late', { tooltip: 'Late' }), 5, undefined);
+        registerModChrome('message.actions', MOD_B, noopEntry('early', { tooltip: 'Early' }), 1, undefined);
+        render(<MessageActionsOverlay message={MESSAGE} />);
         const buttons = screen.getAllByRole('button');
         // MOD_B (loadIndex 1) sorts first; MOD_A (loadIndex 5) sorts second.
         expect(buttons[0].getAttribute('aria-label')).toBe('Early');
@@ -94,11 +97,11 @@ describe('Phase 4.4 — MessageActionsOverlay', () => {
         registerModChrome('message.actions', MOD_A, noopEntry('hidden-one', {
             tooltip: 'Hide me',
             state: () => ({ hidden: true }),
-        }), 0);
+        }), 0, undefined);
         registerModChrome('message.actions', MOD_B, noopEntry('visible-one', {
             tooltip: 'Show me',
-        }), 1);
-        render(<MessageActionsOverlay />);
+        }), 1, undefined);
+        render(<MessageActionsOverlay message={MESSAGE} />);
         expect(screen.queryByRole('button', { name: 'Hide me' })).toBeNull();
         expect(screen.getByRole('button', { name: 'Show me' })).toBeInTheDocument();
     });
@@ -107,22 +110,22 @@ describe('Phase 4.4 — MessageActionsOverlay', () => {
         registerModChrome('message.actions', MOD_A, noopEntry('active-one', {
             tooltip: 'Active',
             state: () => ({ active: true }),
-        }), 0);
-        render(<MessageActionsOverlay />);
+        }), 0, undefined);
+        render(<MessageActionsOverlay message={MESSAGE} />);
         const button = screen.getByRole('button', { name: 'Active' });
         expect(button.className).toContain('text-terminal');
     });
 
     it('clicking the button drains a pending commit before dispatching onSelect (§8.8)', async () => {
         const onSelect = vi.fn();
-        registerModChrome('message.actions', MOD_A, noopEntry('tag', { tooltip: 'Tag', onSelect }), 0);
+        registerModChrome('message.actions', MOD_A, noopEntry('tag', { tooltip: 'Tag', onSelect }), 0, undefined);
 
         // Mock the lazy import of commitPendingTurn so we can assert the drain
         // runs before onSelect. The dynamic import is mocked at module scope.
         const commitPendingTurn = vi.fn(async () => undefined);
         vi.doMock('../../services/turn/pendingCommit', () => ({ commitPendingTurn }));
 
-        render(<MessageActionsOverlay />);
+        render(<MessageActionsOverlay message={MESSAGE} />);
         const button = screen.getByRole('button', { name: 'Tag' });
         fireEvent.click(button);
 
@@ -135,8 +138,8 @@ describe('Phase 4.4 — MessageActionsOverlay', () => {
     });
 
     it('disable removes the entry from the overlay (§8.5)', async () => {
-        registerModChrome('message.actions', MOD_A, noopEntry('tag', { tooltip: 'Tag' }), 0);
-        render(<MessageActionsOverlay />);
+        registerModChrome('message.actions', MOD_A, noopEntry('tag', { tooltip: 'Tag' }), 0, undefined);
+        render(<MessageActionsOverlay message={MESSAGE} />);
         expect(screen.getByRole('button', { name: 'Tag' })).toBeInTheDocument();
         disableModMounts('mod-a');
         await waitFor(() => expect(screen.queryByRole('button', { name: 'Tag' })).toBeNull());
@@ -146,10 +149,10 @@ describe('Phase 4.4 — MessageActionsOverlay', () => {
         registerModChrome('message.actions', MOD_A, noopEntry('flaky', {
             tooltip: 'Flaky',
             state: () => { throw new Error('state blew up'); },
-        }), 0);
+        }), 0, undefined);
         // The renderer reads state() in a try/catch; a throw renders from the
         // last good state (undefined initially) and does not crash.
-        expect(() => render(<MessageActionsOverlay />)).not.toThrow();
+        expect(() => render(<MessageActionsOverlay message={MESSAGE} />)).not.toThrow();
         expect(screen.getByRole('button', { name: 'Flaky' })).toBeInTheDocument();
     });
 });

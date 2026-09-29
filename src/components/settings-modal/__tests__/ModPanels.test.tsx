@@ -33,7 +33,7 @@ const modWithPanel: ValidatedMod = {
         crud: { create: true, read: true, update: true, delete: true },
         sort: { field: 'name', direction: 'asc' },
     }],
-};
+} as unknown as ValidatedMod;
 
 describe('ModPanels — Extensions-tab rendering and edit round-trip', () => {
     beforeEach(() => {

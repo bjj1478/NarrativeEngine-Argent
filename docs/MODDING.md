@@ -820,7 +820,7 @@ unfreezing this.
 |---|---|---|
 | `campaignId` | `string \| null` | The active campaign, or `null` at load before one is open. |
 | `playerInput` | `string` | The player's input for the current turn. |
-| `messages` | `readonly ChatMessage[]` | The chat history. |
+| `messages` | `readonly ChatMessage[]` | The chat history, including the tool results the engine recorded mid-turn (`role: 'tool'`, the tool's name in `name`). |
 | `archiveIndex` | `readonly ArchiveIndexEntry[]` | Long-term memory index. |
 | `chapters` | `readonly ModChapter[]` | Projected `ArchiveChapter`. `sealedAt: number \| null` — `null` is the open chapter. Read-only; sealing is the host's. |
 | `timeline` | `readonly TimelineEvent[]` | The campaign timeline. Append through `write.addTimelineEvent`. |
@@ -882,7 +882,7 @@ alias so existing JSDoc `@param {NPCEntry}` references keep compiling.
 | `archiveNPC(id, turn, reason)` | — | Pairs with `restoreNPC`. |
 | `restoreNPC(id)` | — | |
 | `addNpcSuggestions(names, context?)` | — | Append-only; needs no read. |
-| `addMessage(msg)` | `ChatMessage` | |
+| `addMessage(msg)` | `ChatMessage` | `role` is `'user'`, `'assistant'` or `'system'`. A `'tool'` message is refused: only the engine records those, paired with the call they answer. |
 | `addTimelineEvent(event)` | `TimelineEvent` | Append-only, deduped by `id`. |
 | `updatePlayerCharacter(patch)` | `Partial<PlayerCharacter>` | |
 | `setCharacterSheet(profile)` | `CharacterProfile` | **Whole-replacement** — pair with `data.characterSheet`. |

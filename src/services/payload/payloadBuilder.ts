@@ -1,3 +1,5 @@
+import { normalizeInjections, injectionText } from './promptInjections';
+import { countTokens } from '../infrastructure/tokenizer';
 import type { AppSettings, ChatMessage, GameContext, LoreChunk, NPCEntry, ArchiveScene, ArchiveIndexEntry, PayloadTrace, TimelineEvent, SceneStakes, DebugSection, InventoryItemCategory, DivergenceRegister, ArchiveChapter, PinnedExcerpt, SceneEventType, LocationEntry, RelationshipStance } from '../../types';
 import type { OpenAIMessage } from '../llm/llmService';
 import { createTraceCollector } from './traceCollector';
@@ -166,7 +168,10 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
         volatileSegments,
     } = options;
     const isDebug = settings.debugMode === true;
-    const limit = settings.contextLimit || 8192;
+    const injectionReserve = normalizeInjections(context.promptInjections)
+        .filter(item => item.enabled && item.content.trim() && item.triggers.length > 0)
+        .reduce((sum, item) => sum + countTokens(injectionText(item)) + 8, 0);
+    const limit = Math.max(1, (settings.contextLimit || 8192) - injectionReserve);
     const collector = createTraceCollector(isDebug);
     // Phase 7.4 — the budget map is keyed by claim id, not by feature name.
     // `computeBudgets` runs every registered claim (core's four structural

@@ -82,7 +82,12 @@ export interface ModelResponse {
 
 export interface ChatMessage {
     id: string;
-    role: 'user' | 'assistant' | 'system';
+    /**
+     * `'tool'` is a tool result the engine recorded mid-turn (a dice roll, a
+     * lore lookup, a scene-notebook update), with the tool's name in `name`.
+     * Only the engine creates these; `ctx.write.addMessage` refuses them.
+     */
+    role: 'user' | 'assistant' | 'system' | 'tool';
     name?: string;
     content: string;
     timestamp?: number;
@@ -576,7 +581,12 @@ export interface ModWrites {
     archiveNPC(id: string, turn: number, reason: string): void;
     restoreNPC(id: string): void;
     addNpcSuggestions(names: string[], context?: string): void;
-    addMessage(msg: ChatMessage): void;
+    /**
+     * Add a user, assistant or system message. A `'tool'` role is refused:
+     * the engine pairs every tool result with the call it answers, and one
+     * without its call would show in the chat but never reach the model.
+     */
+    addMessage(msg: ChatMessage & { role: 'user' | 'assistant' | 'system' }): void;
     updatePlayerCharacter(patch: Partial<PlayerCharacter>): void;
     /** Whole-replacement — pair with `data.characterSheet`. */
     setCharacterSheet(profile: CharacterProfile): void;

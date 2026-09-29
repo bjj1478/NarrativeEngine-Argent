@@ -44,8 +44,8 @@ afterEach(() => {
 
 function optionalFieldWarnings(): string[] {
     return warnSpy.mock.calls
-        .map(c => String(c[0]))
-        .filter(msg => msg.includes('Optional field'));
+        .map((c: unknown[]) => String(c[0]))
+        .filter((msg: string) => msg.includes('Optional field'));
 }
 
 describe('parseCombinedSealOutput — WO-06 synopsis fields', () => {

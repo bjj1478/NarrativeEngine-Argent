@@ -23,7 +23,7 @@ import type { AppSettings, GameContext, CondenserState, EndpointConfig } from '.
 // ── Mocks (hoisted by vitest) ────────────────────────────────────────────────
 
 const runTurnMock = vi.fn();
-const commitPendingTurnMock = vi.fn(async () => {});
+const commitPendingTurnMock = vi.fn(async (..._args: unknown[]) => {});
 const debouncedSaveCampaignStateMock = vi.fn();
 
 vi.mock('../../services/turn/turnOrchestrator', () => ({

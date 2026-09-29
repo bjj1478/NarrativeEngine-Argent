@@ -58,7 +58,7 @@ const lazyClearPendingTurnSnapshot = async () => (await import('../../pendingCom
 
 export type CanonicalTurnResult = {
     trace: CanonicalTrace;
-    fetchLog: FetchLog;
+    fetchLog: FetchLog[];
     modsRegistered: boolean;
     computeTracksRegistered: boolean;
 };

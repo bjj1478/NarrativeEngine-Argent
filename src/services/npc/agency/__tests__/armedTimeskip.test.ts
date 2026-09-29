@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { TurnCallbacks, TurnState } from '../../../turn/turnOrchestrator';
 
-const runTimeskip = vi.fn(() => ({
+const runTimeskip = vi.fn((_input: unknown) => ({
     deltas: [],
     narration: '',
     updatedNPCs: [],

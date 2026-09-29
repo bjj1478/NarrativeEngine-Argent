@@ -28,7 +28,7 @@ import {
     recordingLoader,
     type RecordingMod,
 } from '../lifecycleFixtures';
-import type { LifecycleFaultStore, ModEnablementMap } from '../lifecycleTypes';
+import type { LifecycleFaultStore, ModContext, ModEnablementMap } from '../lifecycleTypes';
 import { createNativeLoader, NativeMissingExportError } from '../../native/nativeLoader';
 
 const allEnabled = (mods: readonly RecordingMod[]): ModEnablementMap => {
@@ -92,12 +92,28 @@ describe('Phase 1.4 — lifecycle host', () => {
             expect(callSequence(rec.calls)).toEqual(['activate']);
         });
 
-        it('install never fires again, even after disable/enable', async () => {
+        it('install never fires again on the next app load', async () => {
             const rec = makeRecordingMod({ id: 'alpha' });
             const state = makeInMemoryStateStore();
-            const host = createLifecycleHost({
+            const makeHost = () => createLifecycleHost({
                 loadHooks: recordingLoader([rec]),
                 stateStore: state,
+                faultStore,
+            });
+
+            await makeHost().runLoadCycle({ mods: [rec.mod], enablement: allEnabled([rec]) });
+            rec.reset();
+            // A reload is a new page: a fresh host over the same persisted state.
+            await makeHost().runLoadCycle({ mods: [rec.mod], enablement: allEnabled([rec]) });
+
+            expect(callSequence(rec.calls)).toEqual(['activate']);
+        });
+
+        it('a refresh in the same session fires nothing for a mod already running', async () => {
+            const rec = makeRecordingMod({ id: 'alpha' });
+            const host = createLifecycleHost({
+                loadHooks: recordingLoader([rec]),
+                stateStore: makeInMemoryStateStore(),
                 faultStore,
             });
 
@@ -105,7 +121,29 @@ describe('Phase 1.4 — lifecycle host', () => {
             rec.reset();
             await host.runLoadCycle({ mods: [rec.mod], enablement: allEnabled([rec]) });
 
-            expect(callSequence(rec.calls)).toEqual(['activate']);
+            expect(callSequence(rec.calls)).toEqual([]);
+        });
+
+        it('a refresh retries a mod whose activate faulted', async () => {
+            let fail = true;
+            const rec = makeRecordingMod({
+                id: 'alpha',
+                overrides: { activate: () => { if (fail) throw new Error('boom'); } },
+            });
+            const host = createLifecycleHost({
+                loadHooks: recordingLoader([rec]),
+                stateStore: makeInMemoryStateStore(),
+                faultStore,
+            });
+
+            await host.runLoadCycle({ mods: [rec.mod], enablement: allEnabled([rec]) });
+            fail = false;
+            rec.reset();
+            await host.runLoadCycle({ mods: [rec.mod], enablement: allEnabled([rec]) });
+            expect(callSequence(rec.calls)).toEqual(['activate']);   // retried
+            rec.reset();
+            await host.runLoadCycle({ mods: [rec.mod], enablement: allEnabled([rec]) });
+            expect(callSequence(rec.calls)).toEqual([]);             // now running, left alone
         });
 
         it('skips a disabled mod entirely (no install, no activate)', async () => {
@@ -293,7 +331,7 @@ describe('Phase 1.4 — lifecycle host', () => {
         it('a faulted load (import throws) is surfaced and the app still starts', async () => {
             const bad = makeRecordingMod({ id: 'broken-import' });
             const good = makeRecordingMod({ id: 'good' });
-            const loader = (mod: { id: string }) => {
+            const loader = (mod: Parameters<ReturnType<typeof recordingLoader>>[0]) => {
                 if (mod.id === 'broken-import') {
                     throw new Error('import failed: syntax error');
                 }
@@ -479,7 +517,7 @@ describe('Phase 1.4 — lifecycle host', () => {
         });
 
         it('the mod context argument is passed through to each hook', async () => {
-            const ctx = { sentinel: 0xABCD };
+            const ctx = { sentinel: 0xABCD } as unknown as ModContext;
             const rec = makeRecordingMod({
                 id: 'ctx-mod',
                 overrides: {

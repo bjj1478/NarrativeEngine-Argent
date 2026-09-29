@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractNPCNames } from '../../npc/npcDetector';
-import type { NPCEntry } from '../../types';
+import type { NPCEntry } from '../../../types';
 
 function makeNpc(name: string, extra: Partial<NPCEntry> = {}): NPCEntry {
     return {

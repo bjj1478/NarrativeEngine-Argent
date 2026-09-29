@@ -45,7 +45,7 @@ describe('scanPressure — engaged/ignored deltas and reasons', () => {
         expect(out).toEqual([]);
     });
     it('name mention → engaged +1, reason "name mentioned"', () => {
-        const out = scanPressure('Aldric, come here', [baseNPC()]);
+        const out = scanPressure('Aldric, come here', [baseNPC({})]);
         expect(out).toHaveLength(1);
         expect(out[0].engagedDelta).toBe(1);
         expect(out[0].ignoredDelta).toBe(0);
@@ -58,7 +58,7 @@ describe('scanPressure — engaged/ignored deltas and reasons', () => {
         expect(out[0].reasons).toContain('name mentioned');
     });
     it('pronoun near name → engaged +0.5 (on top of +1 name mention = 1.5)', () => {
-        const out = scanPressure('Aldric, she is here with me', [baseNPC()]);
+        const out = scanPressure('Aldric, she is here with me', [baseNPC({})]);
         // mentionsName +1, pronounNearName +0.5 -> 1.5
         expect(out[0].engagedDelta).toBeCloseTo(1.5);
         expect(out[0].reasons).toContain('pronoun near name');
@@ -71,13 +71,13 @@ describe('scanPressure — engaged/ignored deltas and reasons', () => {
     });
     it('directed action ("talk to aldric") → engaged +2 on top of +1 name mention = 3', () => {
         // "talk to Aldric" both mentions the name (+1) AND triggers directsActionAt (+2)
-        const out = scanPressure('I want to talk to Aldric about the map', [baseNPC()]);
+        const out = scanPressure('I want to talk to Aldric about the map', [baseNPC({})]);
         expect(out[0].engagedDelta).toBe(3);
         expect(out[0].reasons).toContain('directed action at NPC');
         expect(out[0].reasons).toContain('name mentioned');
     });
     it('"i ask aldric" also triggers directed action (+2) alongside name mention (+1) = 3', () => {
-        const out = scanPressure('i ask Aldric a question', [baseNPC()]);
+        const out = scanPressure('i ask Aldric a question', [baseNPC({})]);
         expect(out[0].engagedDelta).toBe(3);
         expect(out[0].reasons).toContain('directed action at NPC');
     });
@@ -99,7 +99,7 @@ describe('scanPressure — engaged/ignored deltas and reasons', () => {
         expect(out).toEqual([]); // nothing triggered, drives exist but no name/boundary
     });
     it('GM response: name mention +0.8 engaged, pronoun near +0.3 engaged (player input has no mention)', () => {
-        const out = scanPressure('hello', [baseNPC()], 'Aldric arrives, he looks tired');
+        const out = scanPressure('hello', [baseNPC({})], 'Aldric arrives, he looks tired');
         // player: no mention ; GM: mention +0.8 + pronoun +0.3 = 1.1
         expect(out[0].engagedDelta).toBeCloseTo(1.1);
         expect(out[0].reasons).toContain('GM mentioned NPC');
@@ -114,7 +114,7 @@ describe('scanPressure — engaged/ignored deltas and reasons', () => {
     });
     it('emits no update when neither ignored nor engaged delta is positive', () => {
         // Player input doesn't mention NPC, no triggers, no boundaries — GM response empty
-        const out = scanPressure('the weather is nice', [baseNPC()]);
+        const out = scanPressure('the weather is nice', [baseNPC({})]);
         expect(out).toEqual([]);
     });
     it('npcId on the update matches the npc.id that triggered it', () => {

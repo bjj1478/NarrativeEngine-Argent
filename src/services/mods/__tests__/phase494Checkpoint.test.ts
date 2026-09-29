@@ -32,7 +32,7 @@
  * assertions so the listener counts are exact.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
     modEventBus,
     eventFaultStore,
@@ -40,7 +40,6 @@ import {
     type ModEventOwner,
 } from '../events';
 import { useAppStore } from '../../../store/useAppStore';
-import type { ChatMessage } from '../../../types';
 
 // The two probe owners, mirroring the manifest ids in `mods/probe/` and
 // `mods/probe-two/`. Lower loadOrder sorts first (MANIFEST.md §6.3), so
@@ -67,7 +66,6 @@ function samplePayload(): { campaignId: string; messageIds: string[] } {
     return { campaignId: 'camp_a', messageIds: ['m1', 'm2'] };
 }
 
-const msg = (id: string): ChatMessage => ({ id, role: 'assistant', content: `${id} body`, timestamp: 0 });
 
 beforeEach(() => {
     modEventBus.reset();
@@ -137,7 +135,7 @@ describe('Phase 4.9.4 — Item 2: payload immutability (§3)', () => {
         // First listener tries to push into the frozen array and to set a field.
         modEventBus.on('message.deleted', (p) => {
             try {
-                (p as { messageIds: string[] }).messageIds.push('injected');
+                (p as unknown as { messageIds: string[] }).messageIds.push('injected');
             } catch {
                 // strict mode throws — silent in sloppy; either way the host's
                 // object is untouched.
@@ -158,7 +156,7 @@ describe('Phase 4.9.4 — Item 2: payload immutability (§3)', () => {
 
         expect(seen).toHaveLength(1);
         expect(seen[0].messageIds).toEqual(['m1', 'm2']);
-        expect((seen[0] as { campaignId: string }).campaignId).toBe('camp_a');
+        expect((seen[0] as unknown as { campaignId: string }).campaignId).toBe('camp_a');
         // The caller's own object is not mutated either (the bus copies).
         expect(source.messageIds).toEqual(['m1', 'm2']);
         expect(source.campaignId).toBe('camp_a');

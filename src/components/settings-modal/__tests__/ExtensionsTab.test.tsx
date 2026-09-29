@@ -123,7 +123,7 @@ const nativeMod = (): ValidatedMod => ({
     screens: [],
     native: { js: 'index.js' },
     provenance: 'installed',
-});
+} as unknown as ValidatedMod);
 
 const declarativeMod = (): ValidatedMod => ({
     id: 'decl-mod',
@@ -139,7 +139,7 @@ const declarativeMod = (): ValidatedMod => ({
     tables: [],
     screens: [],
     provenance: 'installed',
-});
+} as unknown as ValidatedMod);
 
 // ── Harness ───────────────────────────────────────────────────────────────
 

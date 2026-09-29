@@ -86,7 +86,7 @@ describe('legacy saves keep the system they were played on', () => {
         mine.categories[0].dieTypeId = 'dt_world_class';
         const out = migrateLegacyContext({ diceSystem: mine } as Partial<GameContext>);
         expect(out.diceSystem).toBe(mine);
-        expect(out.diceSystem.categories[0].dieTypeId).toBe('dt_world_class');
+        expect(out.diceSystem!.categories[0].dieTypeId).toBe('dt_world_class');
     });
 
     it('a save with only a legacy diceConfig lands on d20, not the new ladder', () => {
@@ -94,9 +94,9 @@ describe('legacy saves keep the system they were played on', () => {
             diceConfig: { catastrophe: 2, failure: 6, success: 15, triumph: 19, crit: 20 },
         } as Partial<GameContext>);
 
-        const d20 = out.diceSystem.dieTypes.find(d => d.id === 'dt_d20');
+        const d20 = out.diceSystem!.dieTypes.find(d => d.id === 'dt_d20');
         expect(d20, 'legacy campaigns must still get a d20').toBeDefined();
-        expect(out.diceSystem.categories.every(c => c.dieTypeId === 'dt_d20')).toBe(true);
+        expect(out.diceSystem!.categories.every(c => c.dieTypeId === 'dt_d20')).toBe(true);
         expect(mapTier(1, d20!)).toBe('Catastrophe');
         expect(mapTier(20, d20!)).toBe('Narrative Boon');
     });
@@ -105,7 +105,7 @@ describe('legacy saves keep the system they were played on', () => {
         const out = migrateLegacyContext({
             diceConfig: { catastrophe: 4, failure: 9, success: 14, triumph: 18, crit: 20 },
         } as Partial<GameContext>);
-        const d20 = out.diceSystem.dieTypes.find(d => d.id === 'dt_d20')!;
+        const d20 = out.diceSystem!.dieTypes.find(d => d.id === 'dt_d20')!;
         expect(mapTier(4, d20)).toBe('Catastrophe');
         expect(mapTier(5, d20)).toBe('Failure');
         expect(mapTier(14, d20)).toBe('Success');
@@ -114,6 +114,6 @@ describe('legacy saves keep the system they were played on', () => {
 
     it('a save with neither still gets the legacy set, never the new one', () => {
         const out = migrateLegacyContext({} as Partial<GameContext>);
-        expect(out.diceSystem.dieTypes.map(d => d.name)).toEqual(buildLegacyDiceSystem().dieTypes.map(d => d.name));
+        expect(out.diceSystem!.dieTypes.map(d => d.name)).toEqual(buildLegacyDiceSystem().dieTypes.map(d => d.name));
     });
 });

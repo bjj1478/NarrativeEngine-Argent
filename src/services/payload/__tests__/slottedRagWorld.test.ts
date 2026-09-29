@@ -34,7 +34,7 @@ function baseContext(): GameContext {
         sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
         worldVibe: '', notebook: [], notebookActive: false,
         worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-    } as GameContext;
+    } as unknown as GameContext;
 }
 
 function baseSettings(over: Partial<AppSettings> = {}): AppSettings {

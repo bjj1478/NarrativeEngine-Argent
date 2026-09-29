@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NPCEditForm } from '../NPCEditForm';
 import { useAppStore } from '../../../store/useAppStore';
 import type { NPCEntry, PlayerCharacter } from '../../../types';
@@ -23,6 +23,8 @@ function TestWrapper({ npc }: { npc: NPCEntry }) {
             onGeneratePortrait={() => {}}
             onUploadPortrait={() => {}}
             onRemovePortrait={() => {}}
+            isFromTextRunning={false}
+            onFromText={() => {}}
         />
     );
 }
@@ -34,7 +36,7 @@ describe('NPCEditForm — Character Ledger (Player Character) Relationship Integ
         isPC: true,
         status: 'Alive',
         tier: 'recurring',
-    };
+    } as unknown as NPCEntry;
 
     const mockNPC: NPCEntry = {
         id: 'npc-456',
@@ -43,7 +45,7 @@ describe('NPCEditForm — Character Ledger (Player Character) Relationship Integ
         tier: 'recurring',
         relations: {},
         pcRelation: 0,
-    };
+    } as unknown as NPCEntry;
 
     beforeEach(() => {
         useAppStore.setState({

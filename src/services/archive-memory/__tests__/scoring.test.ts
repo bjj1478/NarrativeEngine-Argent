@@ -5,7 +5,7 @@ import {
     expandActivationsWithFacts,
     applyEventBoost,
 } from '../scoring';
-import type { ArchiveIndexEntry, ChatMessage, NPCEntry } from '../../../types';
+import type { ArchiveIndexEntry, ChatMessage, NPCEntry, SceneEvent } from '../../../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EXEMPLAR test (Refactor 19-06 Plan 04, wave 1). This file sets the QUALITY BAR
@@ -152,7 +152,7 @@ describe('expandActivationsWithFacts', () => {
 describe('applyEventBoost', () => {
     it('sums importance(≥7)=+1.5, character match=+1.0, location match=+1.0', () => {
         const boost = applyEventBoost(
-            [entry({ sceneId: 's1', events: [{ importance: 8, characters: ['Aldric'], locations: ['Harbor'] }] }) as ArchiveIndexEntry],
+            [entry({ sceneId: 's1', events: [{ importance: 8, characters: ['Aldric'], locations: ['Harbor'] } as unknown as SceneEvent] }) as ArchiveIndexEntry],
             'aldric at the harbor', [],
         );
         expect(boost.get('s1')).toBe(3.5);
@@ -162,7 +162,7 @@ describe('applyEventBoost', () => {
         const boost = applyEventBoost(
             [
                 entry({ sceneId: 'none', events: [] }) as ArchiveIndexEntry,
-                entry({ sceneId: 'low', events: [{ importance: 3, characters: ['Nobody'], locations: [] }] }) as ArchiveIndexEntry,
+                entry({ sceneId: 'low', events: [{ importance: 3, characters: ['Nobody'], locations: [] } as unknown as SceneEvent] }) as ArchiveIndexEntry,
             ],
             'unrelated text', [],
         );

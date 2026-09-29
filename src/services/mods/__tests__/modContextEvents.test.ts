@@ -15,7 +15,8 @@ import { buildHostFacade } from '../../turn/hostFacade';
 import { buildModContext } from '../modContext';
 import { modEventBus, ModEventNameRejected } from '../events';
 import { createLifecycleHost, noNativeHooks } from '../lifecycle/lifecycleHost';
-import type { AppSettings, TurnCallbacks, TurnState } from '../../../types';
+import type { AppSettings } from '../../../types';
+import type { TurnCallbacks, TurnState } from '../../turn/turnOrchestrator';
 
 const makeState = (): TurnState => ({
     input: 'hello',
@@ -26,8 +27,6 @@ const makeState = (): TurnState => ({
     condenser: { condensedUpToIndex: 0 } as TurnState['condenser'],
     loreChunks: [],
     npcLedger: [],
-    enemyCompendium: [],
-    enemyCombatConfig: {} as TurnState['enemyCombatConfig'],
     archiveIndex: [],
     activeCampaignId: 'campaign-1',
     provider: { endpoint: 'http://test', apiKey: 'k', modelName: 'm' },
@@ -200,7 +199,7 @@ describe('Phase 3.3 — ctx.events', () => {
         it('disabling a mod removes all subscriptions registered by its context', async () => {
             const host = createLifecycleHost({
                 loadHooks: noNativeHooks,
-                stateStore: { get: async () => undefined, set: async () => {} },
+                stateStore: { get: async () => undefined, set: async () => {}, clear: async () => {} },
             });
 
             const facade = buildHostFacade(makeState(), makeCallbacks());

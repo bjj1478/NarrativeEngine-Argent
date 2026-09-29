@@ -86,7 +86,7 @@ describe('Phase 4.6 — Live theme push updates to ScreenFrame', () => {
         document.documentElement.setAttribute('data-theme', 'light');
         modEventBus.emit('settings.changed', { changedKeys: ['theme'] });
 
-        const themeUpdate = postSpy.mock.calls.map(([message]) => message).find((message) => (
+        const themeUpdate = postSpy.mock.calls.map(([message]: unknown[]) => message).find((message: unknown) => (
             typeof message === 'object' && message !== null && (message as { __screenThemeUpdate?: boolean }).__screenThemeUpdate === true
         )) as { __screenThemeUpdate: boolean; theme: typeof LIGHT_SCREEN_THEME } | undefined;
 
@@ -102,7 +102,7 @@ describe('Phase 4.6 — Live theme push updates to ScreenFrame', () => {
         document.documentElement.setAttribute('data-theme', 'dark');
         await new Promise((r) => setTimeout(r, 20));
 
-        const themeUpdate = postSpy.mock.calls.map(([message]) => message).find((message) => (
+        const themeUpdate = postSpy.mock.calls.map(([message]: unknown[]) => message).find((message: unknown) => (
             typeof message === 'object' && message !== null && (message as { __screenThemeUpdate?: boolean }).__screenThemeUpdate === true
         )) as { __screenThemeUpdate: boolean; theme: typeof DARK_SCREEN_THEME } | undefined;
 

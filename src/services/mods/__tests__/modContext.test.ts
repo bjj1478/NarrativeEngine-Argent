@@ -22,12 +22,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildHostFacade, type HostFacade } from '../../turn/hostFacade';
 import { buildModContext, type ModContext } from '../modContext';
 import { budgetClaims } from '../../payload/budgetClaims';
-import type {
-    AppSettings,
-    EndpointConfig,
-    TurnCallbacks,
-    TurnState,
-} from '../../../types';
+import type { AppSettings, CharacterProfile, ChatMessage, EndpointConfig, InventoryItem } from '../../../types';
+import type { TurnCallbacks, TurnState } from '../../turn/turnOrchestrator';
 import type { LocationEntry } from '../../../types';
 import { APP_VERSION } from '../../../version';
 
@@ -37,6 +33,9 @@ const endpoint = (modelName: string): EndpointConfig => ({
     modelName,
 });
 
+// Carries fields TurnState no longer has (enemyCompendium, enemyCombatConfig,
+// legacy fact shapes) so the tests below can prove the mod context does not
+// expose them; hence the cast at the end.
 const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
     input: 'I draw my sword and advance.',
     displayInput: 'I draw my sword and advance.',
@@ -69,7 +68,7 @@ const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
     loreChunks: [{ id: 'l1', header: 'Lore', content: 'text' }],
     npcLedger: [{ id: 'n1', name: 'Nadia' }],
     enemyCompendium: [{ id: 'e1', name: 'Goblin' }],
-    enemyCombatConfig: { enemyDiscoveryEnabled: true } as TurnState['enemyCombatConfig'],
+    enemyCombatConfig: { enemyDiscoveryEnabled: true },
     archiveIndex: [{ sceneId: '001', summary: 'scene' }],
     activeCampaignId,
     provider: endpoint('story'),
@@ -91,7 +90,7 @@ const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
     getFreshContext: () => ({ currentPlaceId: 'place-a' } as TurnState['context']),
     divergenceRegister: { entries: [], chapterToggles: {}, categoryToggles: {}, lastUpdatedSceneId: '', lastUpdatedAt: 0, version: 2 },
     semanticFacts: [{ id: 'f1', fact: 'fact' }],
-});
+} as unknown as TurnState);
 
 const makeCallbacks = (): TurnCallbacks => ({
     onCheckingNotes: vi.fn(),
@@ -102,7 +101,7 @@ const makeCallbacks = (): TurnCallbacks => ({
     updateContext: vi.fn(),
     getFreshLocationState: vi.fn(() => ({
         activeCampaignId: 'campaign-a',
-        locationLedger: [{ id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['training-yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' as const }],
+        locationLedger: [{ id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['training-yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' as const } as LocationEntry],
         context: {} as TurnState['context'],
     })),
     setCharacterProfileData: vi.fn(),
@@ -175,8 +174,8 @@ describe('Phase 2.3 — buildModContext', () => {
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(),
             });
-            expect((ctx.write as Record<string, unknown>).addEnemySuggestions).toBeUndefined();
-            expect((ctx.write as Record<string, unknown>).onDirectorBriefPhase).toBeUndefined();
+            expect((ctx.write as unknown as Record<string, unknown>).addEnemySuggestions).toBeUndefined();
+            expect((ctx.write as unknown as Record<string, unknown>).onDirectorBriefPhase).toBeUndefined();
         });
     });
 
@@ -187,7 +186,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 facade: makeFacade(),
             });
             expect(ctx.mod).toEqual({ id: 'arc', name: 'Arc Engine', version: '1.2.3' });
-            expect((ctx.mod as Record<string, unknown>).folder).toBeUndefined();
+            expect((ctx.mod as unknown as Record<string, unknown>).folder).toBeUndefined();
         });
 
         it('ctx.api.version equals the app version', () => {
@@ -250,7 +249,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(),
             });
-            expect((ctx.data as Record<string, unknown>).context).toBeUndefined();
+            expect((ctx.data as unknown as Record<string, unknown>).context).toBeUndefined();
         });
 
         it('does not expose enemyCompendium or enemyCombatConfig (Phase 8 deletes them)', () => {
@@ -258,8 +257,8 @@ describe('Phase 2.3 — buildModContext', () => {
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(),
             });
-            expect((ctx.data as Record<string, unknown>).enemyCompendium).toBeUndefined();
-            expect((ctx.data as Record<string, unknown>).enemyCombatConfig).toBeUndefined();
+            expect((ctx.data as unknown as Record<string, unknown>).enemyCompendium).toBeUndefined();
+            expect((ctx.data as unknown as Record<string, unknown>).enemyCombatConfig).toBeUndefined();
         });
 
         it('does not expose condenser or semanticFacts (no measured consumer)', () => {
@@ -267,15 +266,15 @@ describe('Phase 2.3 — buildModContext', () => {
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(),
             });
-            expect((ctx.data as Record<string, unknown>).condenser).toBeUndefined();
-            expect((ctx.data as Record<string, unknown>).semanticFacts).toBeUndefined();
+            expect((ctx.data as unknown as Record<string, unknown>).condenser).toBeUndefined();
+            expect((ctx.data as unknown as Record<string, unknown>).semanticFacts).toBeUndefined();
         });
     });
 
     describe('data.location — the derived entry', () => {
         it('populates location from the locationState option when supplied', () => {
             const ledger: LocationEntry[] = [
-                { id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' },
+                { id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' } as unknown as LocationEntry,
             ];
             const ctx = buildModContext({
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
@@ -291,7 +290,7 @@ describe('Phase 2.3 — buildModContext', () => {
         it('prefers getLocationState over the captured locationState value', () => {
             const stale: LocationEntry[] = [];
             const live: LocationEntry[] = [
-                { id: 'place-b', name: 'Point B', broadLocation: '', features: [], firstSeenScene: '002', lastSeenScene: '002', source: 'llm' },
+                { id: 'place-b', name: 'Point B', broadLocation: '', features: [], firstSeenScene: '002', lastSeenScene: '002', source: 'llm' } as unknown as LocationEntry,
             ];
             const ctx = buildModContext({
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
@@ -318,7 +317,7 @@ describe('Phase 2.3 — buildModContext', () => {
             expect(ctx.data.location.ledger).toEqual([]);
 
             ledger = [
-                { id: 'place-a', name: 'Point A', broadLocation: '', features: [], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' },
+                { id: 'place-a', name: 'Point A', broadLocation: '', features: [], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' } as unknown as LocationEntry,
             ];
             const refreshed = await ctx.refresh();
             expect(refreshed.data.location.ledger).toHaveLength(1);
@@ -355,7 +354,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 locationState: {
                     currentPlaceId: 'place-a',
                     currentFeature: 'yard',
-                    ledger: [{ id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' }],
+                    ledger: [{ id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' } as unknown as LocationEntry],
                 },
             });
             expect(Object.isFrozen(ctx.data.location)).toBe(true);
@@ -370,7 +369,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(makeState(), callbacks),
             });
-            const profile = { name: 'Hero', hp: 12, stats: { str: 11, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } };
+            const profile = { name: 'Hero', hp: 12, stats: { str: 11, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } } as unknown as CharacterProfile;
             ctx.write.setCharacterSheet(profile);
             expect(callbacks.setCharacterProfileData).toHaveBeenCalledWith(profile);
         });
@@ -381,7 +380,7 @@ describe('Phase 2.3 — buildModContext', () => {
                 mod: { id: 'm', name: 'M', version: '1.0.0' },
                 facade: makeFacade(makeState(), callbacks),
             });
-            const items = [{ id: 'i-2', name: 'Bow', category: 'weapon', quantity: 1 }];
+            const items = [{ id: 'i-2', name: 'Bow', category: 'weapon', quantity: 1 }] as unknown as InventoryItem[];
             ctx.write.setInventory(items);
             expect(callbacks.setInventoryItems).toHaveBeenCalledWith(items);
         });
@@ -393,11 +392,34 @@ describe('Phase 2.3 — buildModContext', () => {
                 facade: makeFacade(makeState(), callbacks),
             });
             ctx.write.updateContext({ arcDigest: 'test' });
-            ctx.write.addMessage({ id: 'x', role: 'system', content: 'c' });
+            ctx.write.addMessage({ id: 'x', role: 'system', content: 'c', timestamp: 0 });
             ctx.write.updateNPC('n1', { name: 'Nadia Updated' });
             expect(callbacks.updateContext).toHaveBeenCalledWith({ arcDigest: 'test' });
             expect(callbacks.addMessage).toHaveBeenCalled();
             expect(callbacks.updateNPC).toHaveBeenCalledWith('n1', { name: 'Nadia Updated' });
+        });
+
+        it('refuses a tool message: only the engine records those', () => {
+            const callbacks = makeCallbacks();
+            const ctx = buildModContext({
+                mod: { id: 'm', name: 'M', version: '1.0.0' },
+                facade: makeFacade(makeState(), callbacks),
+            });
+            const toolMessage = { id: 't', role: 'tool', content: '{}', timestamp: 0 } as unknown as Parameters<typeof ctx.write.addMessage>[0];
+
+            expect(() => ctx.write.addMessage(toolMessage)).toThrow('[mod:m] ctx.write.addMessage cannot add a tool message');
+            expect(callbacks.addMessage).not.toHaveBeenCalled();
+        });
+
+        it('shows mods the tool messages already in the chat', () => {
+            const state = makeState();
+            const toolMessage = { id: 'tool-1', role: 'tool', name: 'roll_dice', content: '{"total":14}', timestamp: 0 } as ChatMessage;
+            const ctx = buildModContext({
+                mod: { id: 'm', name: 'M', version: '1.0.0' },
+                facade: makeFacade({ ...state, messages: [...state.messages, toolMessage] }, makeCallbacks()),
+            });
+
+            expect(ctx.data.messages.at(-1)).toMatchObject({ role: 'tool', name: 'roll_dice' });
         });
 
         it('writes are synchronous and void (no promise)', () => {
@@ -607,6 +629,12 @@ describe('Phase 2.3 — buildModContext', () => {
                 },
             });
 
+            // Known drift, open for the owner: the published API types three
+            // things differently from what mods receive — CharacterProfile
+            // (`hp` is `{ current, max }`, plus race/class/level/skills/...),
+            // InventoryItem (`qty`, not `quantity`), and
+            // DivergenceRegister.categoryToggles (chapter → category → boolean).
+            // @ts-expect-error — remove once docs/narrative-mod-api.d.ts matches
             exerciseSurface(ctx);
 
             // Read happened (no throw). Write happened.

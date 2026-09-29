@@ -55,7 +55,7 @@ const baseContext = (): GameContext => ({
     sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     worldVibe: '',
     notebook: [], notebookActive: true,
-} as GameContext);
+} as unknown as GameContext);
 
 const baseSettings = (): AppSettings => ({
     debugMode: false,

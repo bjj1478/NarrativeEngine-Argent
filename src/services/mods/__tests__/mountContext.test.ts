@@ -12,7 +12,7 @@
  *     teardown, §8.5) and `enable` clears the revoked lease.
  */
 
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
 import { buildHostFacade } from '../../turn/hostFacade';
 import { buildModContext, type ModContext } from '../modContext';
 import { createLifecycleHost } from '../lifecycle/lifecycleHost';
@@ -26,11 +26,13 @@ import {
     readMessageBelowSlots,
 } from '../mounts/mountRegistry';
 import { mountFaultStore } from '../mounts/mountFaults';
+import { emitCoreEvent, modEventBus } from '../events';
 import { registerHeaderBuiltins } from '../mounts/headerBuiltins';
 import { registerComposerBuiltins } from '../mounts/composerBuiltins';
 import { readWindowState } from '../mounts/windowStore';
 import { buildWorkerSource } from '../sandbox/workerPrelude';
-import type { AppSettings, TurnCallbacks, TurnState } from '../../../types';
+import type { AppSettings } from '../../../types';
+import type { TurnCallbacks, TurnState } from '../../turn/turnOrchestrator';
 
 const makeState = (): TurnState => ({
     input: 'hello',
@@ -345,6 +347,97 @@ describe('Phase 4.2 — host-owned teardown through the lifecycle host', () => {
         });
         expect(isModMountsRevoked('fixture-mod')).toBe(false);
         expect(getModEntryCount('header.actions', 'fixture-mod')).toBe(1);
+    });
+});
+
+// Opening Settings → Extensions, pressing Rescan and changing the load order
+// all run the load cycle again. It used to fire `activate` again for every mod
+// already running: the mount registry rejected the second registration as a
+// duplicate and handed back a no-op handle, which the Arc Engine kept, so its
+// Inject Arc button stopped repainting; and every `events.on` listener doubled.
+describe('a refresh does not re-activate a running mod', () => {
+    const fixtureMod = {
+        id: 'fixture-mod', name: 'Fixture', version: '1.0.0', file: 'fixture',
+        dependencies: {}, folder: 'fixture', native: { js: 'index.js' },
+    };
+    const otherMod = { ...fixtureMod, id: 'other-mod', name: 'Other', file: 'other', folder: 'other' };
+
+    function setup() {
+        registerHeaderBuiltins();
+        mountFaultStore.clear();
+        const activations = { count: 0 };
+        const turnsSeen = { count: 0 };
+        const fixtureHooks = {
+            activate: (ctx: ModContext | undefined) => {
+                if (!ctx?.mounts) return;
+                activations.count += 1;
+                ctx.mounts.header({ id: 'fixture', icon: 'Swords', label: 'Fixture', onSelect: () => undefined });
+                ctx.events.on('turn.committed', () => { turnsSeen.count += 1; });
+            },
+        };
+        const loadHooks = (mod: { id: string }) => Promise.resolve(mod.id === fixtureMod.id ? fixtureHooks : {});
+        const host = createLifecycleHost({
+            loadHooks,
+            stateStore: { get: async () => undefined, set: async () => undefined, clear: async () => undefined },
+            faultStore: createLifecycleFaultStore(),
+        });
+        const facade = buildHostFacade(makeState(), makeCallbacks());
+        const ctxForMod = ((mod: { id: string; name: string; version: string; loadIndex: number }) =>
+            buildModContext({ mod, facade, loadIndex: mod.loadIndex })) as never;
+        const emitTurn = () => emitCoreEvent('turn.committed', { turnId: null, campaignId: 'campaign-1', messageId: 'm', sceneId: '001' });
+        return { host, ctxForMod, activations, turnsSeen, emitTurn };
+    }
+
+    afterEach(() => { modEventBus.reset(); });
+
+    it('keeps the running mod as it is when nothing changed', async () => {
+        const { host, ctxForMod, activations, turnsSeen, emitTurn } = setup();
+        const cycle = () => host.runLoadCycle({ mods: [fixtureMod, otherMod], enablement: {}, ctxForMod });
+
+        await cycle();
+        await cycle();
+        await cycle();
+
+        expect(activations.count).toBe(1);
+        expect(getModEntryCount('header.actions', 'fixture-mod')).toBe(1);
+        expect(mountFaultStore.getRecords()).toEqual([]);
+        emitTurn();
+        expect(turnsSeen.count).toBe(1);
+    });
+
+    it('replays from a clean slate when the load order changes, with no duplicates', async () => {
+        const { host, ctxForMod, activations, turnsSeen, emitTurn } = setup();
+
+        await host.runLoadCycle({ mods: [fixtureMod, otherMod], enablement: {}, ctxForMod });
+        await host.runLoadCycle({ mods: [otherMod, fixtureMod], enablement: {}, ctxForMod });
+
+        expect(activations.count).toBe(2);
+        expect(getModEntryCount('header.actions', 'fixture-mod')).toBe(1);
+        expect(mountFaultStore.getRecords()).toEqual([]);
+        emitTurn();
+        expect(turnsSeen.count).toBe(1);
+    });
+
+    it('tears down a mod that is no longer enabled', async () => {
+        const { host, ctxForMod, turnsSeen, emitTurn } = setup();
+
+        await host.runLoadCycle({ mods: [fixtureMod], enablement: {}, ctxForMod });
+        await host.runLoadCycle({ mods: [fixtureMod], enablement: { 'mod.fixture-mod': false }, ctxForMod });
+
+        expect(getModEntryCount('header.actions', 'fixture-mod')).toBe(0);
+        emitTurn();
+        expect(turnsSeen.count).toBe(0);
+    });
+
+    it('does not re-activate a mod the user just enabled', async () => {
+        const { host, ctxForMod, activations } = setup();
+
+        await host.runLoadCycle({ mods: [fixtureMod], enablement: { 'mod.fixture-mod': false }, ctxForMod });
+        await host.enable({ mod: { ...fixtureMod, loadIndex: 0 }, ctxForMod });
+        await host.runLoadCycle({ mods: [fixtureMod], enablement: {}, ctxForMod });
+
+        expect(activations.count).toBe(1);
+        expect(mountFaultStore.getRecords()).toEqual([]);
     });
 });
 

@@ -17,9 +17,9 @@ import { renderHook, act } from '@testing-library/react';
 // ── Service mocks (hoisted) ──────────────────────────────────────────────
 const generateSwipeVariantMock = vi.fn();
 const getCachedSwipePayloadMock = vi.fn();
-const refreshPendingSnapshotMessageMock = vi.fn();
-const clearGatherStagesMock = vi.fn();
-const saveCampaignStateMock = vi.fn(async () => {});
+const refreshPendingSnapshotMessageMock = vi.fn((..._args: unknown[]) => undefined);
+const clearGatherStagesMock = vi.fn((..._args: unknown[]) => undefined);
+const saveCampaignStateMock = vi.fn(async (..._args: unknown[]) => {});
 
 vi.mock('../../../services/turn/swipeGeneration', () => ({
     generateSwipeVariant: (...args: unknown[]) => generateSwipeVariantMock(...args),
@@ -105,7 +105,7 @@ describe('Smart Retry v1 — useRetryStoryAI hook', () => {
         // §2.1: refreshPendingSnapshotMessage called with the final variant text.
         expect(refreshPendingSnapshotMessageMock).toHaveBeenCalledWith('a1', { content: finalText });
         // The store message now carries the final text + swipeSet + pendingCommit.
-        const stamped = useAppStore.getState().messages.find((m: any) => m.id === 'a1');
+        const stamped = useAppStore.getState().messages.find((m: any) => m.id === 'a1')!;
         expect(stamped.content).toBe(finalText);
         expect(stamped.swipeSet?.[0]?.text).toBe(finalText);
         expect(stamped.pendingCommit).toBe(true);
@@ -127,7 +127,7 @@ describe('Smart Retry v1 — useRetryStoryAI hook', () => {
             await result.current.retryStoryAI('a1');
         });
 
-        const stamped = useAppStore.getState().messages.find((m: any) => m.id === 'a1');
+        const stamped = useAppStore.getState().messages.find((m: any) => m.id === 'a1')!;
         // Re-armed: retryable back to true so the Retry button renders again.
         expect(stamped.retryable).toBe(true);
         // No snapshot refresh on abort.
@@ -144,7 +144,7 @@ describe('Smart Retry v1 — useRetryStoryAI hook', () => {
             await result.current.retryStoryAI('a1');
         });
 
-        const stamped = useAppStore.getState().messages.find((m: any) => m.id === 'a1');
+        const stamped = useAppStore.getState().messages.find((m: any) => m.id === 'a1')!;
         expect(stamped.retryable).toBe(true);
         expect(refreshPendingSnapshotMessageMock).not.toHaveBeenCalled();
     });

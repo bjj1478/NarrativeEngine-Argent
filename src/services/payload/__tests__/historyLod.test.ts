@@ -83,7 +83,7 @@ function baseContext(): GameContext {
         notebook: [],
         notebookActive: false,
         worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-    } as GameContext;
+    } as unknown as GameContext;
 }
 
 function baseSettings(over: Partial<AppSettings> = {}): AppSettings {

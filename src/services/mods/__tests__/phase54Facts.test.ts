@@ -48,7 +48,7 @@ const baseContext = (): GameContext => ({
     sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     worldVibe: '',
     notebook: [], notebookActive: true,
-} as GameContext);
+} as unknown as GameContext);
 
 const baseSettings = (): AppSettings => ({
     debugMode: false,
@@ -106,7 +106,7 @@ const consumerMod: ValidatedMod = {
     panels: [],
     screens: [],
     screenSources: [],
-};
+} as unknown as ValidatedMod;
 
 /** Register the consumer mod's contribution module so buildPayload sees it. */
 function registerConsumerMod(): void {
@@ -332,11 +332,11 @@ describe('fixture mod — activate / disable lifecycle', () => {
         let registered = false;
         onActivate({
             facts: {
-                register: (name, publisher, opts) => {
+                register: (name: string, publisher: unknown, opts: unknown) => {
                     registered = true;
                     expect(name).toBe('inCombat');
                     expect(typeof publisher).toBe('function');
-                    expect(opts?.claims).toBe('inCombat');
+                    expect((opts as { claims?: string } | undefined)?.claims).toBe('inCombat');
                     return () => {};
                 },
             },

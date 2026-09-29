@@ -117,7 +117,7 @@ function matrix(): Case[] {
                                     watchdogNudge,
                                     absoluteCommand,
                                     nextTurnOocBrief,
-                                },
+                                } as FinalUserModuleInput,
                             });
                         }
                     }
@@ -162,7 +162,7 @@ describe('WO-P2-02 — precedence rules survive as declared suppression', () => 
         settings: thinkingOff,
         userMessage: 'I wait.',
         volatileBlock: '',
-    };
+    } as unknown as FinalUserModuleInput;
 
     it('an Absolute Command removes GM_REMINDER and the watchdog nudge', () => {
         const assembled = assembleContributions(createFinalUserRegistry().collect({
@@ -212,6 +212,7 @@ describe('beat budget — the player picks the length, flexible follows the scen
         settings: thinkingOn,
         userMessage: 'I wait.',
         volatileBlock: '',
+        relationsBlock: '',
     };
 
     /** The [BEAT BUDGET] line as actually emitted, from its own contribution. */

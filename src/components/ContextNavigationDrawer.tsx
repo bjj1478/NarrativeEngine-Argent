@@ -1,7 +1,9 @@
+import { InjectionQuickControls } from './injections/InjectionQuickControls';
+import { normalizeInjections } from '../services/payload/promptInjections';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import {
     Archive, BookOpen, Brain, ChevronDown, ChevronRight, Database, FileText,
-    Image as ImageIcon, MapPin, Pin, ScrollText, Sparkles, UserCircle, Users, Workflow,
+    Image as ImageIcon, MapPin, Pin, ScrollText, SlidersHorizontal, Sparkles, UserCircle, Users, Workflow,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import type { ContextScreenId } from '../store/slices/uiSlice';
@@ -19,7 +21,7 @@ import { resolveModText } from '../services/mods/mounts/chromeRenderers';
 import { buildGallery } from '../services/gallery/galleryIndex';
 import { useTranslation } from '../i18n/useTranslation';
 
-type GroupId = 'story' | 'world' | 'play' | 'gallery' | 'mods';
+type GroupId = 'story' | 'world' | 'play' | 'gallery' | 'injections' | 'mods';
 type NavIcon = typeof ScrollText;
 
 interface NavLeaf {
@@ -46,6 +48,7 @@ const GROUPS: Array<{ id: GroupId; label: string; icon: NavIcon }> = [
     { id: 'world', label: 'World', icon: Database },
     { id: 'play', label: 'Play', icon: Sparkles },
     { id: 'gallery', label: 'Gallery', icon: ImageIcon },
+    { id: 'injections', label: 'Injection Modifier', icon: SlidersHorizontal },
     { id: 'mods', label: 'Mods', icon: Workflow },
 ];
 
@@ -96,10 +99,11 @@ export function ContextNavigationDrawer() {
         () => buildGallery(galleryMessages, galleryUploads, 'uploaded').length,
         [galleryMessages, galleryUploads],
     );
+    const injectionCount = useAppStore(s => normalizeInjections(s.context.promptInjections).filter(item => item.enabled && item.content.trim() && item.triggers.length).length);
     const headerEntries = useHeaderEntries();
     const { t } = useTranslation();
     const [expanded, setExpanded] = useState<Record<GroupId, boolean>>({
-        story: true, world: true, play: true, gallery: false, mods: false,
+        story: true, world: true, play: true, gallery: false, injections: true, mods: false,
     });
 
     const modEntries = useMemo(
@@ -131,6 +135,7 @@ export function ContextNavigationDrawer() {
             { id: 'gallery-generated', label: 'AI Generated', icon: Sparkles, badge: generatedCount, onSelect: () => useAppStore.getState().openGallery('generated') },
             { id: 'gallery-uploaded', label: 'Uploaded', icon: ImageIcon, badge: uploadedCount, onSelect: () => useAppStore.getState().openGallery('uploaded') },
         ],
+        injections: [],
         mods: modEntries.map((entry) => ({
             id: entry.qualifiedId,
             label: resolveModText(entry.mod!.id, entry.entry.label, modT) ?? entry.mod!.name,
@@ -168,7 +173,7 @@ export function ContextNavigationDrawer() {
                         {GROUPS.map((group) => {
                             const GroupIcon = group.icon;
                             const isExpanded = expanded[group.id];
-                            const groupBadge = group.id === 'mods' && modCount > 0 ? modCount : undefined;
+                            const groupBadge = group.id === 'injections' ? injectionCount : group.id === 'mods' && modCount > 0 ? modCount : undefined;
                             return (
                                 <section key={group.id}>
                                     <button
@@ -182,7 +187,7 @@ export function ContextNavigationDrawer() {
                                         <span className="flex-1 text-left">{group.label}</span>
                                         {groupBadge !== undefined && <span className="text-terminal font-mono">{groupBadge}</span>}
                                     </button>
-                                    {isExpanded && <div className="pb-1">{legacyLeaves[group.id].map((leaf) => <NavRow key={leaf.id} leaf={leaf} />)}</div>}
+                                    {isExpanded && (group.id === 'injections' ? <InjectionQuickControls /> : <div className="pb-1">{legacyLeaves[group.id].map((leaf) => <NavRow key={leaf.id} leaf={leaf} />)}</div>)}
                                 </section>
                             );
                         })}

@@ -23,9 +23,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadMods } from '../../../server/lib/modLoader.js';
+import { loadMods as loadModsJs } from '../../../server/lib/modLoader.js';
+import type { ValidatedMod } from '../mods/modTypes';
 import { modPanelToDescriptor } from '../../services/mods/modPanels';
 import type { PanelDescriptor } from '@narrative/engine';
+
+// The server loader is plain JS whose JSDoc says `object[]`; its records are ValidatedMods.
+const loadMods = loadModsJs as (...args: Parameters<typeof loadModsJs>) => { mods: ValidatedMod[]; faults: { file: string; reason: string }[] };
 
 const REPO_MODS_DIR = path.join(process.cwd(), 'test-fixtures', 'mods');
 const GATE_FOLDER = 'panels-gate';

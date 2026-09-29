@@ -33,7 +33,7 @@ const makeMod = (id: string, deps: Record<string, string> = {}): ValidatedMod =>
     tables: [],
     screens: [],
     screenSources: [],
-});
+} as unknown as ValidatedMod);
 
 describe('validateProposedLoadOrder', () => {
     it('returns null for an order with no dependencies', () => {

@@ -69,7 +69,7 @@ export function SettingsModal() {
       <div data-ui="settings" className="flex flex-col flex-1 min-h-0">
 
         {/* Tabs */}
-        <div data-ui="settings-tabs" className="flex border-b border-border sticky top-0 bg-void z-10">
+        <div data-ui="settings-tabs" className="flex overflow-x-auto border-b border-border sticky top-0 bg-void z-10">
           {TABS.map(({ key, labelKey }) => (
             <button
               key={key}

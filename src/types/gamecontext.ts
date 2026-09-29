@@ -1,3 +1,4 @@
+import type { PromptInjection } from './llm';
 // ─── Game Context / Pipeline / Session Types ─────────────────────────────
 
 import type { InventoryItem, CharacterProfile, CharacterProfileState, InventoryItemCategory, SceneStakes, NPCEntry, NPCVisualProfile } from './character';
@@ -198,6 +199,8 @@ export type TravelState = {
 };
 
 export type GameContext = {
+    /** Campaign-local story prompt modifiers; omitted in older saves. */
+    promptInjections?: PromptInjection[];
     loreRaw: string;
     rulesRaw: string;
     canonState: string;

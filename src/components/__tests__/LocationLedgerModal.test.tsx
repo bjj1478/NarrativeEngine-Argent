@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LocationLedgerModal } from '../LocationLedgerModal';
 import { normalizeLocationIds } from '../../utils/locationIds';
 import { useAppStore } from '../../store/useAppStore';
-import type { LocationEntry } from '../../types';
+import type { GameContext, LocationEntry } from '../../types';
 
 vi.mock('../../services/infrastructure/assetService', () => ({
     uploadImageToLocal: vi.fn(),
@@ -196,7 +196,7 @@ describe('LocationLedgerModal', () => {
         const b = makeLocation('b', 'Point B');
         useAppStore.setState({
             locationLedger: [a, b],
-            context: { currentPlaceId: 'a' },
+            context: { currentPlaceId: 'a' } as GameContext,
         });
         render(<LocationLedgerModal />);
 
@@ -217,7 +217,7 @@ describe('LocationLedgerModal', () => {
         const b = makeLocation('b', 'Point B');
         useAppStore.setState({
             locationLedger: [a, b],
-            context: { currentPlaceId: 'a', travelMode: 'foot' },
+            context: { currentPlaceId: 'a', travelMode: 'foot' } as GameContext,
             messages: [],
         });
 
@@ -246,7 +246,7 @@ it('keeps travel records accessible without filling the default sidebar', () => 
     const road = { ...makeLocation('road','Road between A and B'), kind:'transit' as const, recordKind:'route' as const };
     const point = { ...makeLocation('point','Exploration point (5, 7)'), recordKind:'position' as const, coordinates:{x:5,y:7} };
     const inn = { ...makeLocation('inn','Road between C and D'), kind:'transit' as const, features:['An old inn'] };
-    useAppStore.setState({locationLedgerOpen:true, locationLedger:[road,point,inn,makeLocation('town','Town')],context:{}});
+    useAppStore.setState({locationLedgerOpen:true, locationLedger:[road,point,inn,makeLocation('town','Town')],context:{} as GameContext});
     render(<LocationLedgerModal />);
     expect(screen.queryByText(road.name)).not.toBeInTheDocument();
     expect(screen.queryByText(point.name)).not.toBeInTheDocument();
@@ -254,9 +254,9 @@ it('keeps travel records accessible without filling the default sidebar', () => 
     fireEvent.click(screen.getByLabelText('Show travel records'));
     fireEvent.click(screen.getByText(point.name));
     expect(screen.getByText('Map coordinates: 5, 7')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button',{name:'Edit world',exact:true}));
+    fireEvent.click(screen.getByRole('button',{name:'Edit world'}));
     fireEvent.click(screen.getByLabelText('Pin in locations'));
-    fireEvent.click(screen.getByRole('button',{name:'Save',exact:true}));
+    fireEvent.click(screen.getByRole('button',{name:'Save'}));
     fireEvent.click(screen.getByLabelText('Show travel records'));
     expect(screen.getByText(point.name)).toBeInTheDocument();
     expect(useAppStore.getState().locationLedger).toHaveLength(4);
@@ -266,7 +266,7 @@ it('keeps travel records accessible without filling the default sidebar', () => 
 
 it('requires world editing for position correction without spending time', () => {
     useAppStore.setState({ locationLedgerOpen: true, locationLedger: [makeLocation('a', 'Alder'), makeLocation('b', 'Birch')],
-        context: { currentPlaceId: 'a', worldDay: 8, travel: null } });
+        context: { currentPlaceId: 'a', worldDay: 8, travel: null } as GameContext });
     render(<LocationLedgerModal />);
     fireEvent.click(screen.getByText('Birch'));
     expect(screen.queryByRole('button', { name: 'Correct player position here' })).not.toBeInTheDocument();
@@ -279,7 +279,7 @@ it('requires world editing for position correction without spending time', () =>
 it('saves outbound tunnel and portal authoring without moving the player', () => {
     const a = makeLocation('a', 'Entrance'); const b = makeLocation('b', 'Exit');
     a.connections = [{ toId: 'b', band: 'remote' }];
-    useAppStore.setState({ locationLedgerOpen: true, locationLedger: [a,b], context: { currentPlaceId: 'a', worldDay: 8 } });
+    useAppStore.setState({ locationLedgerOpen: true, locationLedger: [a,b], context: { currentPlaceId: 'a', worldDay: 8 } as GameContext });
     render(<LocationLedgerModal />);
     fireEvent.click(screen.getByText('Entrance', { selector: 'p' }));
     expect(screen.queryByLabelText('Outbound passage to Exit')).not.toBeInTheDocument();

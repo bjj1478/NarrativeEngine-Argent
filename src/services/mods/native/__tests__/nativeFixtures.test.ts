@@ -18,8 +18,12 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { loadMods } from '../../../../../server/lib/modLoader.js';
+import { loadMods as loadModsJs } from '../../../../../server/lib/modLoader.js';
+import type { ValidatedMod } from '../../modTypes';
 import { serveModFile } from '../../../../../server/routes/mods.js';
+
+// The server loader is plain JS whose JSDoc says `object[]`; its records are ValidatedMods.
+const loadMods = loadModsJs as (...args: Parameters<typeof loadModsJs>) => { mods: ValidatedMod[]; faults: { file: string; reason: string }[] };
 
 const modsDir = path.resolve(process.cwd(), 'mods');
 

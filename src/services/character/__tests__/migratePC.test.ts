@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { migratePCIntoContext } from '../migratePC';
-import type { NPCEntry, GameContext } from '../../types';
+import type { NPCEntry, GameContext } from '../../../types';
 
 function makeNpc(name: string, extra: Partial<NPCEntry> = {}): NPCEntry {
     return {

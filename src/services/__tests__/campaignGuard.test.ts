@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { ChatMessage, GameContext } from '../../types';
+import type { ArchiveIndexEntry, CharacterTrait, ChatMessage, GameContext, InventoryItem } from '../../types';
 import type { TurnState, TurnCallbacks } from '../turn/turnOrchestrator';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -154,9 +154,9 @@ describe('Campaign-id guard: race condition regression tests', () => {
     });
 
     it('drops updateContext when campaign switches during Profile-Scan', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([{ sceneId: '001', events: [] } as unknown as ArchiveIndexEntry]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         // Block Profile-Scan on a deferred so we can switch campaigns mid-flight
         const profileDeferred = deferred<typeof EMPTY_PROFILE>();
@@ -165,7 +165,7 @@ describe('Campaign-id guard: race condition regression tests', () => {
         const traitDeferred = deferred<typeof EMPTY_TRAITS>();
         mockScanCharacterTraits.mockReturnValueOnce(traitDeferred.promise);
         const invDeferred = deferred<[]>();
-        mockScanInventory.mockReturnValueOnce(invDeferred.promise);
+        mockScanInventory.mockReturnValueOnce(invDeferred.promise as unknown as Promise<InventoryItem[]>);
 
         const callbacks = makeCallbacks();
         await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
@@ -179,16 +179,16 @@ describe('Campaign-id guard: race condition regression tests', () => {
         await waitForBackgroundDrain();
 
         // No background-task updateContext should have fired
-        const bgContextCalls = callbacks.updateContext.mock.calls.filter(
+        const bgContextCalls = vi.mocked(callbacks.updateContext).mock.calls.filter(
             ([p]: [any]) => p?.characterProfileData !== undefined || p?.characterProfile !== undefined || p?.inventoryItems !== undefined,
         );
         expect(bgContextCalls).toHaveLength(0);
     });
 
     it('passes updateContext through when campaign stays the same (Profile-Scan)', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([{ sceneId: '001', events: [] } as unknown as ArchiveIndexEntry]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
         const newProfile = { ...EMPTY_PROFILE, name: 'Hero', level: 2 };
         mockScanCharacterProfile.mockResolvedValueOnce(newProfile);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
@@ -198,21 +198,21 @@ describe('Campaign-id guard: race condition regression tests', () => {
         await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
         await waitForBackgroundDrain();
 
-        const profilePatch = callbacks.updateContext.mock.calls.find(
+        const profilePatch = vi.mocked(callbacks.updateContext).mock.calls.find(
             ([p]: [any]) => p?.characterProfileData !== undefined,
         );
         expect(profilePatch).toBeDefined();
     });
 
     it('drops updateContext when campaign switches during Inventory-Scan', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([{ sceneId: '001', events: [] } as unknown as ArchiveIndexEntry]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
         mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
 
         const invDeferred = deferred<{ name: string; qty: number }[]>();
-        mockScanInventory.mockReturnValueOnce(invDeferred.promise);
+        mockScanInventory.mockReturnValueOnce(invDeferred.promise as unknown as Promise<InventoryItem[]>);
 
         const callbacks = makeCallbacks();
         await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
@@ -222,16 +222,16 @@ describe('Campaign-id guard: race condition regression tests', () => {
         invDeferred.resolve([{ name: 'Sword', qty: 1 }]);
         await waitForBackgroundDrain();
 
-        const inventoryCalls = callbacks.updateContext.mock.calls.filter(
+        const inventoryCalls = vi.mocked(callbacks.updateContext).mock.calls.filter(
             ([p]: [any]) => p?.inventoryItems !== undefined,
         );
         expect(inventoryCalls).toHaveLength(0);
     });
 
     it('drops updateContext when campaign switches during Trait-Scan', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [] }]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([{ sceneId: '001', events: [] } as unknown as ArchiveIndexEntry]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
         mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanInventory.mockResolvedValueOnce([]);
 
@@ -245,7 +245,7 @@ describe('Campaign-id guard: race condition regression tests', () => {
         traitDeferred.resolve(EMPTY_TRAITS);
         await waitForBackgroundDrain();
 
-        const traitsCalls = callbacks.updateContext.mock.calls.filter(
+        const traitsCalls = vi.mocked(callbacks.updateContext).mock.calls.filter(
             ([p]: [any]) => p?.characterProfile !== undefined,
         );
         expect(traitsCalls).toHaveLength(0);
@@ -253,9 +253,9 @@ describe('Campaign-id guard: race condition regression tests', () => {
 
     it('drops setArchiveIndex when campaign switches during Event-Extraction', async () => {
         const indexEntry = { sceneId: '001', events: undefined, witnesses: [], npcsMentioned: [], keywords: [], userSnippet: '', timestamp: 1, npcStrengths: {}, importance: 3, keywordStrengths: {} };
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([indexEntry]).mockResolvedValueOnce([]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([indexEntry]).mockResolvedValueOnce([]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
         mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
         mockScanInventory.mockResolvedValueOnce([]);
@@ -278,9 +278,9 @@ describe('Campaign-id guard: race condition regression tests', () => {
 
     it('drops setArchiveIndex when campaign switches during Event-Extraction (null activeCampaignId edge)', async () => {
         const indexEntry = { sceneId: '001', events: undefined, witnesses: [], npcsMentioned: [], keywords: [], userSnippet: '', timestamp: 1, npcStrengths: {}, importance: 3, keywordStrengths: {} };
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([indexEntry]).mockResolvedValueOnce([]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([indexEntry]).mockResolvedValueOnce([]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
         mockScanCharacterProfile.mockResolvedValueOnce(EMPTY_PROFILE);
         mockScanCharacterTraits.mockResolvedValueOnce(EMPTY_TRAITS);
         mockScanInventory.mockResolvedValueOnce([]);
@@ -299,12 +299,12 @@ describe('Campaign-id guard: race condition regression tests', () => {
     });
 
     it('does not break same-campaign flow: all scans fire updateContext on match', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce([{ sceneId: '001', events: [], witnesses: [], npcsMentioned: [], keywords: [], userSnippet: '', timestamp: 1, npcStrengths: {}, importance: 3, keywordStrengths: {} }]);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([{ sceneId: '001', events: [], witnesses: [], npcsMentioned: [], keywords: [], userSnippet: '', timestamp: 1, npcStrengths: {}, importance: 3, keywordStrengths: {} }]);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
         mockScanCharacterProfile.mockResolvedValueOnce({ ...EMPTY_PROFILE, name: 'Updated' });
-        mockScanCharacterTraits.mockResolvedValueOnce({ identity: { name: 'Hero' }, activeTraits: [{ id: 't1', text: 'brave', superseded: false }] });
-        mockScanInventory.mockResolvedValueOnce([{ name: 'Potion', qty: 2 }]);
+        mockScanCharacterTraits.mockResolvedValueOnce({ identity: { name: 'Hero' }, activeTraits: [{ id: 't1', text: 'brave', superseded: false } as unknown as CharacterTrait] });
+        mockScanInventory.mockResolvedValueOnce([{ name: 'Potion', qty: 2 } as unknown as InventoryItem]);
 
         const ctx = { ...baseContext(), characterProfileActive: true };
         const state = makeState({ getFreshContext: vi.fn().mockReturnValue(ctx) });
@@ -312,7 +312,7 @@ describe('Campaign-id guard: race condition regression tests', () => {
         await runPostTurnPipeline(state, callbacks, ASSISTANT_CONTENT, ALL_MSGS);
         await waitForBackgroundDrain();
 
-        const calls = callbacks.updateContext.mock.calls;
+        const calls = vi.mocked(callbacks.updateContext).mock.calls;
         const profilePatch = calls.find(([p]: [any]) => p?.characterProfileData !== undefined);
         const traitsPatch = calls.find(([p]: [any]) => p?.characterProfile !== undefined);
         const inventoryPatch = calls.find(([p]: [any]) => p?.inventoryItems !== undefined);

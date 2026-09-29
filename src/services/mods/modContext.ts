@@ -237,7 +237,8 @@ export interface ModWrites {
     archiveNPC(id: string, turn: number, reason: string): void;
     restoreNPC(id: string): void;
     addNpcSuggestions(names: string[], context?: string): void;
-    addMessage(msg: ChatMessage): void;
+    /** Tool messages are the engine's alone; see `modMayAddMessage`. */
+    addMessage(msg: ChatMessage & { role: Exclude<ChatMessage['role'], 'tool'> }): void;
     updatePlayerCharacter(patch: Partial<PlayerCharacter>): void;
     setCharacterSheet(profile: CharacterProfile): void;
     setInventory(items: InventoryItem[]): void;
@@ -622,7 +623,7 @@ export function buildModContext(options: ModContextBuildOptions): ModContext {
         buildModData(facade, options.getLocationState?.() ?? options.locationState),
     );
     const config: ModConfig = Object.freeze({ aiTier: facade.config.aiTier });
-    const write: ModWrites = Object.freeze(buildModWrites(facade));
+    const write: ModWrites = Object.freeze(buildModWrites(facade, mod.id));
     const model: ModModel = Object.freeze({
         call: (role: ModelRole, req: ModelRequest) => facade.model.call(role, req),
         callJson: (role: ModelRole, req: ModelRequest, opts?: { retries?: number }) => facade.model.callJson(role, req, opts),
@@ -906,6 +907,17 @@ function buildModData(
 }
 
 /**
+ * Whether a mod may add this message. Mods read tool messages (`role: 'tool'`)
+ * but never write them: the engine pairs every tool result with the call it
+ * answers, and one without its call is dropped from the prompt as an orphan
+ * while still showing in the chat and being saved. Shared by the native write
+ * below and the sandbox journal check, so both tiers refuse the same thing.
+ */
+export function modMayAddMessage(msg: unknown): boolean {
+    return !(typeof msg === 'object' && msg !== null && (msg as { role?: unknown }).role === 'tool');
+}
+
+/**
  * Build the `ModWrites` view from the facade's `FacadeWrites`. Eleven of the
  * facade's twelve writes — `onDirectorBriefPhase` is deliberately absent
  * (`API.md` §5.1). The two renamed writes (`setCharacterProfileData` →
@@ -916,14 +928,19 @@ function buildModData(
  * `addEnemySuggestions` from the facade (deleted with the enemy suggestion
  * track); it was never on `ModWrites`, and the count above reflects that.
  */
-function buildModWrites(facade: HostFacade): ModWrites {
+function buildModWrites(facade: HostFacade, modId: string): ModWrites {
     return {
         updateContext: (patch) => facade.write.updateContext(patch),
         updateNPC: (id, patch) => facade.write.updateNPC(id, patch),
         archiveNPC: (id, turn, reason) => facade.write.archiveNPC(id, turn, reason),
         restoreNPC: (id) => facade.write.restoreNPC(id),
         addNpcSuggestions: (names, context) => facade.write.addNpcSuggestions(names, context),
-        addMessage: (msg) => facade.write.addMessage(msg),
+        addMessage: (msg) => {
+            if (!modMayAddMessage(msg)) {
+                throw new Error(`[mod:${modId}] ctx.write.addMessage cannot add a tool message; only the engine records those`);
+            }
+            facade.write.addMessage(msg);
+        },
         updatePlayerCharacter: (patch) => facade.write.updatePlayerCharacter(patch),
         setCharacterSheet: (profile) => facade.write.setCharacterProfileData(profile),
         setInventory: (items) => facade.write.setInventoryItems(items),

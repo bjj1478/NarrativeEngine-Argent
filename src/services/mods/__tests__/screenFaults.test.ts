@@ -108,7 +108,7 @@ describe('ScreenFaultStore — observable fault collector', () => {
     it('getRecords returns defensive copies (mutating the returned array does not mutate the store)', () => {
         store.add(baseRecord());
         const records = store.getRecords();
-        records.length = 0;
+        (records as unknown[]).length = 0;
         expect(store.getRecords()).toHaveLength(1);
     });
 });

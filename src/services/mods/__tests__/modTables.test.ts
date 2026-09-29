@@ -11,7 +11,7 @@ const mod = (overrides: Partial<ValidatedMod> = {}): ValidatedMod => ({
     contributions: [{ id: 'tone', order: 250, text: 'Tone.' }],
     tables: [],
     ...overrides,
-});
+} as unknown as ValidatedMod);
 
 describe('modTableName', () => {
     it('produces mod.<modId>.<name>', () => {

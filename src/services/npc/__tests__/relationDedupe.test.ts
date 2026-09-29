@@ -4,8 +4,8 @@ import type { NPCEntry } from '../../../types';
 
 describe('relationDedupe — normalizeRelations', () => {
     const mockLedger: NPCEntry[] = [
-        { id: 'npc-vorin', name: 'Captain Vorin', aliases: 'Vorin, Old Captain', status: 'Alive', tier: 'recurring' },
-        { id: 'npc-kael', name: 'Kael', status: 'Alive', tier: 'recurring' },
+        { id: 'npc-vorin', name: 'Captain Vorin', aliases: 'Vorin, Old Captain', status: 'Alive', tier: 'recurring' } as unknown as NPCEntry,
+        { id: 'npc-kael', name: 'Kael', status: 'Alive', tier: 'recurring' } as unknown as NPCEntry,
     ];
 
     const pcId = 'pc-hero';

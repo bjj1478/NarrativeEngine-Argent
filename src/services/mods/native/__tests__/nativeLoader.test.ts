@@ -58,7 +58,7 @@ describe('nativeCssUrl', () => {
 describe('createNativeLoader — load', () => {
     it('returns undefined for a mod with no native block', async () => {
         const loader = createNativeLoader({ apiBase, importModule: vi.fn() });
-        const hooks = await loader.load({ id: 'plain', name: 'Plain', version: '1.0.0' });
+        const hooks = await loader.load({ id: 'plain', name: 'Plain' });
         expect(hooks).toBeUndefined();
     });
 
@@ -131,7 +131,7 @@ describe('createNativeLoader — mountCss / unmountCss', () => {
         const link = document.head.querySelector('link[data-mod-css="arc"]');
         expect(link).not.toBeNull();
         expect(link?.getAttribute('href')).toBe(href);
-        expect(link?.rel).toBe('stylesheet');
+        expect((link as HTMLLinkElement | null)?.rel).toBe('stylesheet');
     });
 
     it('returns null for a mod with no css', () => {

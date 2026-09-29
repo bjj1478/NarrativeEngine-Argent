@@ -12,7 +12,7 @@ function makeLoreChunk(overrides: Partial<LoreChunk> & { id: string }): LoreChun
         tokens: 50,
         triggerKeywords: [],
         ...overrides,
-    };
+    } as LoreChunk;
 }
 
 // ─── Lore Retriever: IDF + RRF ────────────────────────────────────────────
@@ -219,7 +219,7 @@ describe('Rules Retriever — IDF+RRF algorithm', () => {
             tokens: 50,
             priority: 5,
             triggerKeywords: [],
-        },
+        } as unknown as LoreChunk,
         {
             id: 'rule-2',
             header: '## Always Rule',
@@ -227,7 +227,7 @@ describe('Rules Retriever — IDF+RRF algorithm', () => {
             tokens: 20,
             priority: 9,
             triggerKeywords: [],
-        },
+        } as unknown as LoreChunk,
         {
             id: 'rule-3',
             header: '## Stealth Movement',
@@ -235,7 +235,7 @@ describe('Rules Retriever — IDF+RRF algorithm', () => {
             tokens: 30,
             priority: 4,
             triggerKeywords: [],
-        },
+        } as unknown as LoreChunk,
     ];
 
     const mockMeta: Record<string, RuleChunkMeta> = {

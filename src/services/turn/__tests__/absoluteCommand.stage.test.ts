@@ -18,15 +18,15 @@ import type { TurnState, TurnCallbacks } from '../turnOrchestrator';
 
 // ── Mocks (hoisted by vitest) ────────────────────────────────────────────────
 
-const runDirectorBriefMock = vi.fn(async () => null as string | null);
-const lastAssistantContentMock = vi.fn(() => 'LAST_GM_TEXT');
+const runDirectorBriefMock = vi.fn(async (..._args: unknown[]) => null as string | null);
+const lastAssistantContentMock = vi.fn((..._args: unknown[]) => 'LAST_GM_TEXT');
 vi.mock('../directorBrief', () => ({
     runDirectorBrief: (...args: unknown[]) => runDirectorBriefMock(...args),
     lastAssistantContent: (...args: unknown[]) => lastAssistantContentMock(...args),
     clearDirectorBriefCache: vi.fn(),
 }));
 
-const buildWatchdogDossierMock = vi.fn(() => ({ signals: [], dossierText: '', nudgeText: null }));
+const buildWatchdogDossierMock = vi.fn((..._args: unknown[]) => ({ signals: [], dossierText: '', nudgeText: null }));
 vi.mock('../directorWatchdog', () => ({
     buildWatchdogDossier: (...args: unknown[]) => buildWatchdogDossierMock(...args),
 }));
@@ -50,7 +50,7 @@ vi.mock('../contextGatherer', () => ({
     })),
 }));
 
-const buildPayloadMock = vi.fn(() => ({
+const buildPayloadMock = vi.fn((..._args: unknown[]) => ({
     messages: [{ role: 'user', content: 'hello' }],
     trace: [],
     debugSections: [],

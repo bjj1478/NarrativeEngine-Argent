@@ -406,7 +406,7 @@ describe('buildKnowledgeBoundary — both layers combined', () => {
         const archive: ArchiveIndexEntry[] = [{
             sceneId: '1', keywords: [], npcsMentioned: [], witnesses: ['Bob'],
             userSnippet: 'the heist', importance: 7,
-        } as ArchiveIndexEntry];
+        } as unknown as ArchiveIndexEntry];
         const facts: DivergenceEntry[] = [{
             id: 'f1', chapterId: 'CH01', category: 'misc', text: 'vault code',
             sceneRef: '001', npcIds: [], pinned: false, source: 'auto', knownBy: [],

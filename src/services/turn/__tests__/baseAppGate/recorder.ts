@@ -13,7 +13,7 @@
 import type { ChatMessage, NPCEntry, PipelinePhase, GameContext, ArchiveIndexEntry, TimelineEvent, DivergenceRegister, CharacterProfile, InventoryItem, LocationEntry, LocationSuggestion } from '../../../../types';
 import type { TurnCallbacks } from '../../turnOrchestrator';
 import type { PayloadTrace } from '../../../../types';
-import type { OpenAIMessage } from '../../llm/llmService';
+import type { OpenAIMessage } from '../../../llm/llmService';
 
 export type EffectKind =
     | 'callback'

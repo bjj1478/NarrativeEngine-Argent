@@ -19,7 +19,7 @@
  * `native.generateInterceptor`) against the real registries, using the same
  * fixtures the in-tree tests used before the extraction.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { buildPayload } from '../../payload/payloadBuilder';
 import { oocSections } from '../sections';
 import { buildOocContext } from '../context';
@@ -34,7 +34,6 @@ import {
     clearAllModInterceptors,
 } from '../../mods/interceptors';
 import { registerModFact, clearAllModFacts, runFactPublishers } from '../../mods/facts';
-import { budgetClaims } from '../../payload/budgetClaims';
 import type { OocCampaignSnapshot } from '../types';
 import type { GameContext, AppSettings } from '../../../types';
 
@@ -67,7 +66,7 @@ const baseContext = (): GameContext => ({
     diceFairnessActive: true, sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     worldVibe: '', notebook: [], notebookActive: false,
     worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-} as GameContext);
+} as unknown as GameContext);
 
 const baseSettings = (): AppSettings => ({ debugMode: true, contextLimit: 32_768 } as unknown as AppSettings);
 
@@ -170,7 +169,7 @@ describe('Phase 8.3 — Scene Continue still carries the block (interception cac
             specs: [{
                 id: 'mod.enemies.enemyBlock', slot: 'final-user' as const, order: 150,
                 text: enemyBlockText, source: 'mod' as const, budget: 300,
-                trace: { source: 'Enemy Compendium', classification: 'world_context', reason: 'continue' },
+                trace: { source: 'Enemy Compendium', classification: 'world_context' as const, reason: 'continue' },
             }],
             suppress: [],
         };
@@ -194,7 +193,7 @@ describe('Phase 8.3 — Ask-GM returns enemy sections through the mod OOC sectio
     const snapshot = (): OocCampaignSnapshot => ({
         campaignId: 'c1', provider: undefined, messages: [], semanticFacts: [], loreChunks: [],
         archiveIndex: [], npcLedger: [], locationLedger: [],
-        context: { notebookActive: false, notebook: [], inventoryItems: [] } as GameContext,
+        context: { notebookActive: false, notebook: [], inventoryItems: [] } as unknown as GameContext,
     } as OocCampaignSnapshot);
 
     it('a mod-registered enemy section lands in the brief', () => {
@@ -253,9 +252,15 @@ describe('Phase 8.3 — Ask-GM returns enemy sections through the mod OOC sectio
 
 // ── Test 4: inCombat is published by the mod ──
 
+/** The slice of the enemies mod's state the `inCombat` publisher reads. */
+type EnemyModState = {
+    encounters: { id: string; name: string; status: string; activeWaveId: string; waves: { id: string; name: string; instanceIds: string[]; activeInstanceIds: string[] }[] }[];
+    instances: { id: string; defeated: boolean; displayName: string }[];
+};
+
 describe('Phase 8.3 — the mod publishes inCombat identical to the host-computed value', () => {
     it('inCombat is false when no active encounter exists', async () => {
-        const modState = { encounters: [], instances: [] };
+        const modState: EnemyModState = { encounters: [], instances: [] };
         registerModFact(MOD, 'inCombat', () => {
             const encounter = modState.encounters.find(e => e.status === 'active');
             if (!encounter) return false;
@@ -268,16 +273,12 @@ describe('Phase 8.3 — the mod publishes inCombat identical to the host-compute
             });
         }, { claims: 'inCombat' });
 
-        const result = await runFactPublishers({
-            turnId: 't1', campaignId: 'c1', tier: 'pro',
-            playerInput: 'explore', hasDirectorBrief: false,
-            hasWatchdogNudge: false, hasAbsoluteCommand: false,
-        });
-        expect(result.facts.inCombat).toBe(false);
+        const result = runFactPublishers();
+        expect(result?.facts.inCombat).toBe(false);
     });
 
     it('inCombat is true for a live encounter with active undefeated instances', async () => {
-        const modState = {
+        const modState: EnemyModState = {
             encounters: [{
                 id: 'enc-1', name: 'Bridge Ambush', status: 'active', activeWaveId: 'wave-1',
                 waves: [{ id: 'wave-1', name: 'Wave 1', instanceIds: ['inst-1'], activeInstanceIds: ['inst-1'] }],
@@ -296,19 +297,15 @@ describe('Phase 8.3 — the mod publishes inCombat identical to the host-compute
             });
         }, { claims: 'inCombat' });
 
-        const result = await runFactPublishers({
-            turnId: 't2', campaignId: 'c1', tier: 'pro',
-            playerInput: 'fight', hasDirectorBrief: false,
-            hasWatchdogNudge: false, hasAbsoluteCommand: false,
-        });
-        expect(result.facts.inCombat).toBe(true);
+        const result = runFactPublishers();
+        expect(result?.facts.inCombat).toBe(true);
     });
 
     it('inCombat is false for a compendium-only match (no active encounter)', async () => {
         // The pre-8.3 distinction: `inCombat: activeEncounterBlock !== ''`.
         // A compendium match renders a block but is NOT combat. The mod's
         // fact reads the encounter state directly, not the rendered text.
-        const modState = {
+        const modState: EnemyModState = {
             encounters: [], // no active encounter
             instances: [],
         };
@@ -317,11 +314,7 @@ describe('Phase 8.3 — the mod publishes inCombat identical to the host-compute
             return Boolean(encounter);
         }, { claims: 'inCombat' });
 
-        const result = await runFactPublishers({
-            turnId: 't3', campaignId: 'c1', tier: 'pro',
-            playerInput: 'Tell me about the Goblin.', hasDirectorBrief: false,
-            hasWatchdogNudge: false, hasAbsoluteCommand: false,
-        });
-        expect(result.facts.inCombat).toBe(false);
+        const result = runFactPublishers();
+        expect(result?.facts.inCombat).toBe(false);
     });
 });

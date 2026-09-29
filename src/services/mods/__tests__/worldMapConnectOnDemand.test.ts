@@ -5,6 +5,8 @@ import {
     createConnectionAndRoute,
 } from '../../../../public/bundled-mods/worldmap/index.js';
 import { ensureConnection } from '../../../services/turn/departureComposer';
+import type { DistanceBand } from '../../location/distance';
+import type { LocationEntry } from '../../../types';
 
 /**
  * WO 6.3 — Connect on Demand. Tests the map mod's offer path and the
@@ -18,7 +20,7 @@ import { ensureConnection } from '../../../services/turn/departureComposer';
  * each endpoint are identical between the two surfaces.
  */
 
-function makePlace(id, name, overrides = {}) {
+function makePlace(id: string, name: string, overrides: Partial<LocationEntry> = {}): LocationEntry {
     return {
         id,
         name,
@@ -85,8 +87,8 @@ describe('applySymmetricConnection (WO 6.3 §1) — the offer writes a symmetric
         const ledger = [makePlace('a', 'A'), makePlace('b', 'B')];
         const next = applySymmetricConnection(ledger, 'a', 'b', 'regional');
         expect(next).not.toBeNull();
-        const a = next.find(l => l.id === 'a');
-        const b = next.find(l => l.id === 'b');
+        const a = next.find((l: LocationEntry) => l.id === 'a');
+        const b = next.find((l: LocationEntry) => l.id === 'b');
         expect(a.connections).toEqual([{ toId: 'b', band: 'regional' }]);
         expect(b.connections).toEqual([{ toId: 'a', band: 'regional' }]);
     });
@@ -98,7 +100,7 @@ describe('applySymmetricConnection (WO 6.3 §1) — the offer writes a symmetric
         ];
         const next = applySymmetricConnection(ledger, 'a', 'b', 'regional');
         // No change — the existing band wins, exactly like ensureConnection.
-        const a = next.find(l => l.id === 'a');
+        const a = next.find((l: LocationEntry) => l.id === 'a');
         expect(a.connections).toEqual([{ toId: 'b', band: 'far' }]);
         expect(next).toBe(ledger); // same reference — no change
     });
@@ -114,8 +116,8 @@ describe('applySymmetricConnection (WO 6.3 §1) — the offer writes a symmetric
             makePlace('b', 'B', { connections: [{ toId: 'a', band: 'local' }] }),
         ];
         const next = applySymmetricConnection(ledger, 'a', 'b', 'regional');
-        const a = next.find(l => l.id === 'a');
-        const b = next.find(l => l.id === 'b');
+        const a = next.find((l: LocationEntry) => l.id === 'a');
+        const b = next.find((l: LocationEntry) => l.id === 'b');
         // The existing local band is preserved — not overwritten.
         expect(a.connections).toEqual([{ toId: 'b', band: 'local' }]);
         expect(b.connections).toEqual([{ toId: 'a', band: 'local' }]);
@@ -125,8 +127,8 @@ describe('applySymmetricConnection (WO 6.3 §1) — the offer writes a symmetric
     it('normalises adjacent to local (a connection always covers ground)', () => {
         const ledger = [makePlace('a', 'A'), makePlace('b', 'B')];
         const next = applySymmetricConnection(ledger, 'a', 'b', 'adjacent');
-        const a = next.find(l => l.id === 'a');
-        const b = next.find(l => l.id === 'b');
+        const a = next.find((l: LocationEntry) => l.id === 'a');
+        const b = next.find((l: LocationEntry) => l.id === 'b');
         expect(a.connections).toEqual([{ toId: 'b', band: 'local' }]);
         expect(b.connections).toEqual([{ toId: 'a', band: 'local' }]);
     });
@@ -151,7 +153,7 @@ describe('applySymmetricConnection (WO 6.3 §1) — the offer writes a symmetric
             makePlace('c', 'C', { connections: [{ toId: 'a', band: 'far' }] }),
         ];
         const next = applySymmetricConnection(ledger, 'a', 'b', 'regional');
-        const a = next.find(l => l.id === 'a');
+        const a = next.find((l: LocationEntry) => l.id === 'a');
         expect(a.connections).toEqual([
             { toId: 'c', band: 'far' },
             { toId: 'b', band: 'regional' },
@@ -174,8 +176,8 @@ describe('WO 6.3 §5 — contract test: the offer path and the Places panel prod
         // Map mod path
         const modNext = applySymmetricConnection(ledgerForMod, 'a', 'b', 'regional');
         expect(modNext).not.toBeNull();
-        const modA = modNext.find(l => l.id === 'a');
-        const modB = modNext.find(l => l.id === 'b');
+        const modA = modNext.find((l: LocationEntry) => l.id === 'a');
+        const modB = modNext.find((l: LocationEntry) => l.id === 'b');
 
         // Places panel path (host)
         const hostUpdateLocation = vi.fn();
@@ -200,13 +202,13 @@ describe('WO 6.3 §5 — contract test: the offer path and the Places panel prod
     });
 
     it('produces identical connections across all non-adjacent bands', () => {
-        for (const band of ['nearby', 'local', 'regional', 'far', 'distant', 'remote', 'farthest']) {
+        for (const band of ['nearby', 'local', 'regional', 'far', 'distant', 'remote', 'farthest'] as DistanceBand[]) {
             const ledgerForMod = [makePlace('a', 'A'), makePlace('b', 'B')];
             const ledgerForHost = [makePlace('a', 'A'), makePlace('b', 'B')];
 
             const modNext = applySymmetricConnection(ledgerForMod, 'a', 'b', band);
-            const modA = modNext.find(l => l.id === 'a');
-            const modB = modNext.find(l => l.id === 'b');
+            const modA = modNext.find((l: LocationEntry) => l.id === 'a');
+            const modB = modNext.find((l: LocationEntry) => l.id === 'b');
 
             const hostUpdateLocation = vi.fn();
             ensureConnection('a', 'b', band, ledgerForHost, hostUpdateLocation);
@@ -226,12 +228,12 @@ describe('WO 6.3 §5 — contract test: the offer path and the Places panel prod
  * drive it through the same `buildCtx` pattern as `worldMapRouting.test.js`.
  */
 
-async function buildCtxForConnect(overrides = {}) {
+async function buildCtxForConnect(overrides: { ledger?: unknown[]; campaignId?: string; currentPlaceId?: string } = {}) {
     const { onInstall, onActivate } = await import('../../../../public/bundled-mods/worldmap/index.js');
-    let settings = null;
-    let anchors = [];
-    let visited = [];
-    let liveLedger = overrides.ledger ?? [
+    let settings: unknown = null;
+    let anchors: unknown = [];
+    let visited: unknown = [];
+    let liveLedger: unknown[] = overrides.ledger ?? [
         { id: 'a', name: 'A', aliases: '', connections: [] },
         { id: 'c', name: 'C', aliases: '', connections: [] },
     ];
@@ -248,8 +250,8 @@ async function buildCtxForConnect(overrides = {}) {
             context: { travelMode: 'foot' },
         },
         table: {
-            read: vi.fn(async name => name === 'settings' ? settings : name === 'visited' ? visited : anchors),
-            write: vi.fn(async (name, value) => {
+            read: vi.fn(async (name: string) => name === 'settings' ? settings : name === 'visited' ? visited : anchors),
+            write: vi.fn(async (name: string, value: unknown) => {
                 if (name === 'settings') settings = value;
                 if (name === 'anchors') anchors = value;
                 if (name === 'visited') visited = value;
@@ -268,7 +270,7 @@ async function buildCtxForConnect(overrides = {}) {
         refresh: vi.fn(async () => ctx),
         log: vi.fn(),
         write: {
-            setLocationLedger: vi.fn((next) => { liveLedger = next; }),
+            setLocationLedger: vi.fn((next: unknown[]) => { liveLedger = next; }),
             updateContext: vi.fn(),
         },
     };
@@ -295,11 +297,11 @@ describe('createConnectionAndRoute (WO 6.3 §1) — the offer-accept flow', () =
         // any anchor), but the connection write is unconditional.
         await createConnectionAndRoute(ctx, 'campaign-connect', 'a', 'c', 'regional', 'foot', clickCell);
         expect(setLocationLedgerSpy).toHaveBeenCalledTimes(1);
-        const written = setLocationLedgerSpy.mock.calls[0][0];
-        const a = written.find(l => l.id === 'a');
-        const c = written.find(l => l.id === 'c');
-        expect(a.connections).toEqual([{ toId: 'c', band: 'regional' }]);
-        expect(c.connections).toEqual([{ toId: 'a', band: 'regional' }]);
+        const written = setLocationLedgerSpy.mock.calls[0][0] as LocationEntry[];
+        const a = written.find((l: LocationEntry) => l.id === 'a');
+        const c = written.find((l: LocationEntry) => l.id === 'c');
+        expect(a!.connections).toEqual([{ toId: 'c', band: 'regional' }]);
+        expect(c!.connections).toEqual([{ toId: 'a', band: 'regional' }]);
     });
 
     it('emits travelRequest when the re-route succeeds', async () => {

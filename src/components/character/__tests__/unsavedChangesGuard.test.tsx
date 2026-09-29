@@ -25,7 +25,7 @@ const mockPC: PlayerCharacter = {
     isPC: true,
     status: 'Alive',
     tier: 'recurring',
-};
+} as unknown as PlayerCharacter;
 
 describe('CharacterLedgerModal — unsaved-changes close guard', () => {
     beforeEach(() => {
@@ -45,7 +45,7 @@ describe('CharacterLedgerModal — unsaved-changes close guard', () => {
             npcLedger: [],
             divergenceRegister: { entries: [], chapterToggles: {}, categoryToggles: {}, lastUpdatedSceneId: '', lastUpdatedAt: 0, version: 2 },
             chapters: [],
-        } as Partial<ReturnType<typeof useAppStore.getState>>);
+        } as unknown as Partial<ReturnType<typeof useAppStore.getState>>);
     });
 
     it('closes immediately via the X button when the sheet has no edits', async () => {

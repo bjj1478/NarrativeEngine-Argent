@@ -5,9 +5,9 @@ describe('factDeduper', () => {
     describe('sort comparator stability', () => {
         it('uses Map for stable O(1) lookup in sort', () => {
             const entries: DivergenceEntry[] = [
-                { id: 'f1', text: 'Alpha fact', chapterId: 'CH01', sceneRef: '005', category: 'npc', enabled: true },
-                { id: 'f2', text: 'Beta fact', chapterId: 'CH02', sceneRef: '010', category: 'npc', enabled: true },
-                { id: 'f3', text: 'Gamma fact', chapterId: 'CH01', sceneRef: '015', category: 'npc', enabled: true },
+                { id: 'f1', text: 'Alpha fact', chapterId: 'CH01', sceneRef: '005', category: 'npc_events', enabled: true } as DivergenceEntry,
+                { id: 'f2', text: 'Beta fact', chapterId: 'CH02', sceneRef: '010', category: 'npc_events', enabled: true } as DivergenceEntry,
+                { id: 'f3', text: 'Gamma fact', chapterId: 'CH01', sceneRef: '015', category: 'npc_events', enabled: true } as DivergenceEntry,
             ];
 
             const entryById = new Map<string, DivergenceEntry>();

@@ -10,7 +10,7 @@ function chip(overrides: Partial<ChatAttachment> = {}) {
         caption: 'A hand-drawn map of a coastal town.',
         status: 'ready',
         ...overrides,
-    };
+    } as unknown as ChatAttachment;
     const onCaptionChange = vi.fn();
     const onRemove = vi.fn();
     render(
@@ -33,7 +33,7 @@ describe('ChatAttachmentChip', () => {
     it('reports progress while uploading and while captioning', () => {
         const { unmount } = render(
             <ChatAttachmentChip
-                attachment={{ previewUrl: 'blob:x', localPath: '', caption: '', status: 'uploading' }}
+                attachment={{ previewUrl: 'blob:x', localPath: '', caption: '', status: 'uploading' } as ChatAttachment}
                 onCaptionChange={vi.fn()}
                 onRemove={vi.fn()}
             />,
@@ -43,7 +43,7 @@ describe('ChatAttachmentChip', () => {
 
         render(
             <ChatAttachmentChip
-                attachment={{ previewUrl: 'blob:x', localPath: '/a.png', caption: '', status: 'captioning' }}
+                attachment={{ previewUrl: 'blob:x', localPath: '/a.png', caption: '', status: 'captioning' } as ChatAttachment}
                 onCaptionChange={vi.fn()}
                 onRemove={vi.fn()}
             />,

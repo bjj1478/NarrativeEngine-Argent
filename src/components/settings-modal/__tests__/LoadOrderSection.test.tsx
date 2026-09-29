@@ -55,7 +55,7 @@ const makeMod = (id: string, deps: Record<string, string> = {}, loadOrder = 0): 
     tables: [],
     screens: [],
     screenSources: [],
-});
+} as unknown as ValidatedMod);
 
 function seedStore(modLoadOrder?: string[]) {
     useAppStore.setState({

@@ -26,7 +26,7 @@ const computeMod = (): ValidatedMod => ({
         capabilities: ['write:updateContext'],
     },
     computeSource: 'export default async function () { return null; }',
-});
+} as unknown as ValidatedMod);
 
 const dataMod = (): ValidatedMod => ({
     id: 'data-only',
@@ -35,7 +35,7 @@ const dataMod = (): ValidatedMod => ({
     description: '',
     file: 'data-only.mod.json',
     contributions: [{ id: 'fixture', order: 100, text: 'fixture' }],
-});
+} as unknown as ValidatedMod);
 
 beforeEach(() => {
     vi.clearAllMocks();

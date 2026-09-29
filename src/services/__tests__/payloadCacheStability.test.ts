@@ -49,7 +49,7 @@ const baseContext = (): GameContext => ({
     notebook: [],
     notebookActive: false,
     worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-} as GameContext);
+} as unknown as GameContext);
 
 // Large context limit so nothing gets trimmed — we want the full split visible.
 const baseSettings = (): AppSettings => ({ debugMode: false, contextLimit: 8192 } as unknown as AppSettings);

@@ -197,6 +197,67 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
     // Cache of resolved hooks per mod id, so `enable` does not re-import.
     // `runLoadCycle` populates this; `disable` and `remove` read from it.
     const resolved = new Map<string, ResolvedHooks>();
+    // Mods whose activation completed this session, with the load index they
+    // registered under. The load cycle runs again on every refresh (Rescan,
+    // opening Extensions, a load-order change), and `activate` must not run a
+    // second time for a mod that is already running: every registry rejects
+    // the second registration as a duplicate, the mod keeps the no-op handle
+    // it gets back, and its event listeners double. MODDING.md's contract is
+    // one `activate` per app load, plus one after each `enable`.
+    const active = new Map<string, number>();
+    // Mods whose hooks have fired since they were last torn down, so a retry
+    // or a replay can first release whatever the earlier run registered.
+    const attempted = new Set<string>();
+
+    /**
+     * Remove everything a mod registered through its context, without firing
+     * any of its hooks. Teardown is host-owned: the mod is never trusted to
+     * call `off`, `remove()` or `unregister()` itself. Each registry also
+     * revokes the mod's lease, so a call from a stale closure afterwards is a
+     * no-op plus a fault; `restoreModLeases` undoes that before the mod runs
+     * again.
+     */
+    function releaseModRegistrations(modId: string): void {
+        // Phase 2.4 reactive subscriptions, and Phase 3.2 / `EVENTS.md` §5.4
+        // event listeners. Phase 4.9.4 tries deliberately to leak one.
+        disposeModSubscriptions(modId);
+        modEventBus.disposeModListeners(modId);
+        // `MOUNTS.md` §8.5: no ghost entries, and disabling a mod closes and
+        // destroys its windows.
+        disableModMounts(modId);
+        disableModMacros(modId);
+        // The lease matters most here: a mod switched off mid-turn must not
+        // contribute to the prompt of the turn it was removed during, so an
+        // in-flight interceptor result is discarded rather than folded in.
+        disableModInterceptors(modId);
+        // A publisher or claim in flight when the mod was removed has its
+        // result discarded rather than merged.
+        disableModFacts(modId);
+        disableModBudgets(modId);
+        disableModRoles(modId);
+        // Ask-GM is unaffected by a mod that has been removed.
+        disableModOocSections(modId);
+        if (nativeLoader) {
+            // The stylesheet leaves even if the mod's own cleanup misbehaved,
+            // otherwise a broken `disable` would leak it for the session.
+            nativeLoader.unmountCss(modId);
+            // Forget the cached module and its resolved hooks, so the next
+            // activation re-resolves rather than reusing a torn-down namespace.
+            nativeLoader.forget(modId);
+            resolved.delete(modId);
+        }
+    }
+
+    /** Clear the leases `releaseModRegistrations` revoked, so the mod can register again. */
+    function restoreModLeases(modId: string): void {
+        enableModRoles(modId);
+        enableModMounts(modId);
+        enableModMacros(modId);
+        enableModInterceptors(modId);
+        enableModFacts(modId);
+        enableModBudgets(modId);
+        enableModOocSections(modId);
+    }
 
     function recordFault(input: {
         readonly mod: LifecycleMod;
@@ -431,16 +492,38 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
         for (const mod of input.mods) byId.set(mod.id, mod);
         const runs: HookRunResult[] = [];
         const faultedModIds: string[] = [];
-        // A refresh is a new resolved mod set. Remove providers belonging to
-        // mods that disappeared or became disabled before replaying activation.
-        clearAllModRoleLeases();
-        // Phase 8.3 — same discipline for OOC sections: a refresh is a new
-        // mod set, so any section a disappeared mod registered is dropped
-        // before activation replays. The open `oocSections` registry holds
-        // the section objects; this clears the mod-facing lease map and
-        // the fault store so a re-enabled mod starts clean.
-        clearAllModOocSections();
-        serviceRoles.clear();
+
+        // The mods that should be running once this cycle ends, at the load
+        // index each will register under.
+        const runnable = new Map<string, number>();
+        for (const mod of input.mods) {
+            if (!isModEnabled(mod, input.enablement)) continue;
+            if (dependenciesEnabled(mod, input.enablement, byId).length > 0) continue;
+            runnable.set(mod.id, loadIndexMap.get(mod.id) ?? 0);
+        }
+        // A running mod keeps its registrations unless the resolved set moved
+        // under it: it went away, or its load index changed (a load-order
+        // change, or a mod added or removed ahead of it). Registries order
+        // entries and settle conflicts by load index, so any such change
+        // replays every mod in the new order from a clean slate — which is how
+        // a load-order change takes effect with no restart. An unchanged set
+        // replays nothing.
+        const replay = [...active].some(([id, index]) => runnable.get(id) !== index);
+        if (replay) {
+            for (const id of attempted) {
+                if (latched.has(id)) continue;
+                releaseModRegistrations(id);
+                attempted.delete(id);
+            }
+            active.clear();
+            // Providers and sections of mods that disappeared or became
+            // disabled go too. The open `oocSections` registry holds the
+            // section objects; this clears the mod-facing lease map and the
+            // fault store so a re-enabled mod starts clean.
+            clearAllModRoleLeases();
+            clearAllModOocSections();
+            serviceRoles.clear();
+        }
 
         // Mods arrive in the loader's resolved order (Phase 1.3 §6.3). The
         // host fires hooks in that order, so a dependency activates before
@@ -468,7 +551,13 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
                 continue;
             }
 
-            enableModRoles(mod.id);
+            // Already running at this index: nothing to do. See `active`.
+            if (active.has(mod.id)) continue;
+            // A retry after a faulted activation starts from a clean slate, so
+            // whatever the failed run registered is not registered twice.
+            if (attempted.has(mod.id) && !latched.has(mod.id)) releaseModRegistrations(mod.id);
+            restoreModLeases(mod.id);
+            attempted.add(mod.id);
 
             const resolvedHooks = await resolveHooks(mod);
             if (!resolvedHooks) {
@@ -544,7 +633,7 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
             // Phase 5.2 — register the pre-prompt interceptor. See
             // `attachInterceptor` for why the gate is not bare `activateRan`.
             if (!hooks.activate || activateRan) {
-                enableModInterceptors(mod.id);
+                active.set(mod.id, loadIndexMap.get(mod.id) ?? 0);
                 await attachInterceptor(mod, loadIndexMap.get(mod.id) ?? 0);
             }
 
@@ -614,27 +703,10 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
         readonly ctx?: ModContext;
         readonly ctxForMod?: ModContextFactory;
     }): Promise<HookRunResult> {
-        enableModRoles(input.mod.id);
-        // Phase 4.2 / `MOUNTS.md` §8.5 — clear the revoked lease before
-        // `activate` runs, so the mod's new `activate` can register its
-        // mounts again. `disable` revoked the lease; `enable` restores it.
-        enableModMounts(input.mod.id);
-        // Phase 5.1 — same discipline for macros: clear the revoked lease
-        // before `activate` runs, so the mod's new `activate` can register
-        // its macros again.
-        enableModMacros(input.mod.id);
-        // Phase 5.2 — same discipline for the prompt interceptor: `disable`
-        // revoked the lease, `enable` restores it before `activate` runs.
-        enableModInterceptors(input.mod.id);
-        // Phase 5.4 — same discipline for fact publishers: `disable`
-        // revoked the lease, `enable` restores it before `activate` runs.
-        enableModFacts(input.mod.id);
-        // Phase 7.4 — same discipline for budget claims: `disable`
-        // revoked the lease, `enable` restores it before `activate` runs.
-        enableModBudgets(input.mod.id);
-        // Phase 8.3 — same discipline for OOC sections: `disable` revoked
-        // the lease, `enable` restores it before `activate` runs.
-        enableModOocSections(input.mod.id);
+        // `disable` revoked every lease; restore them before `activate` runs so
+        // the mod's new `activate` can register again.
+        restoreModLeases(input.mod.id);
+        attempted.add(input.mod.id);
         const enableResult = await fireUserHook({
             mod: input.mod,
             hookName: 'enable',
@@ -668,6 +740,7 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
         // same gate the load cycle uses. `loadIndex` rides on the mod here
         // because this call carries one mod, not the resolved list.
         if (activateResult.ok) {
+            active.set(input.mod.id, input.mod.loadIndex ?? 0);
             await attachInterceptor(input.mod, input.mod.loadIndex ?? 0);
         }
         checkModRoles({
@@ -689,70 +762,11 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
             ctx: input.ctx,
             ctxForMod: input.ctxForMod,
         });
-        // Phase 2.4: teardown is host-owned, even if the mod forgot to unsubscribe.
-        disposeModSubscriptions(input.mod.id);
-        // Phase 3.2 / `EVENTS.md` §5.4: the same discipline for event listeners.
-        // Every subscription is attributed to the mod whose context created it
-        // and **the host removes them here — the mod is never trusted to call
-        // `off`.** Phase 4.9.4 will try deliberately to leak one.
-        modEventBus.disposeModListeners(input.mod.id);
-        // Phase 4.2 / `MOUNTS.md` §8.5: the same discipline for mount points.
-        // Every mount the mod registered is removed here — the mod is never
-        // trusted to call `remove()`. This is how 4.2's "no ghost entries" rule
-        // and 4.5's "disabling a mod closes and destroys its windows" both fall
-        // out of the existing teardown site rather than needing their own. The
-        // mod's lease is revoked so a registration call from a stale closure
-        // after disable is a no-op plus a fault.
-        disableModMounts(input.mod.id);
-        // Phase 5.1: the same discipline for macros. Every macro the mod
-        // registered is removed here — the mod is never trusted to call
-        // `unregister()`. The mod's lease is revoked so a registration call
-        // from a stale closure after disable is a no-op plus a fault.
-        disableModMacros(input.mod.id);
-        // Phase 5.2: the same discipline for the prompt interceptor, and it is
-        // the one where the lease matters most — a mod switched off mid-turn
-        // must not contribute to the prompt of the turn it was removed during.
-        // `disableModInterceptors` revokes the lease so an in-flight result is
-        // discarded rather than folded in.
-        disableModInterceptors(input.mod.id);
-        // Phase 5.4: the same discipline for fact publishers. Every
-        // publisher the mod registered is removed here — the mod is never
-        // trusted to call `unregister()`. The mod's lease is revoked so a
-        // register call from a stale closure after disable is a no-op plus
-        // a fault, and a publisher in flight when the mod was toggled off
-        // has its result discarded rather than merged.
-        disableModFacts(input.mod.id);
-        // Phase 7.4: the same discipline for budget claims. Every claim
-        // the mod registered is removed here — the mod is never trusted
-        // to call `unregister()`. The mod's lease is revoked so a claim
-        // call from a stale closure after disable is a no-op plus a
-        // fault, and the budget map stops including the mod's allocation
-        // from the next `buildPayload`.
-        disableModBudgets(input.mod.id);
-        // Phase 7.1.1: roles are revoked at this same host-owned teardown
-        // boundary so stale closures cannot answer later asks.
-        disableModRoles(input.mod.id);
-        // Phase 8.3: the same discipline for OOC sections. Every section the
-        // mod registered is removed here — the mod is never trusted to call
-        // `unregister()`. The mod's lease is revoked so a registration call
-        // from a stale closure after disable is a no-op plus a fault, and
-        // Ask-GM is unaffected by a mod that has been switched off.
-        disableModOocSections(input.mod.id);
-        // Phase 1.5 — unmount CSS after disable, regardless of whether the
-        // disable hook itself threw. The mod is being switched off; its CSS
-        // must leave the page even if its cleanup hook misbehaved, otherwise
-        // a broken disable would leak the stylesheet for the rest of the
-        // session. Idempotent.
-        if (nativeLoader) {
-            nativeLoader.unmountCss(input.mod.id);
-            // Forget the cached module so a re-enable re-imports. A mod whose
-            // `disable` ran has been torn down; its module namespace should
-            // not survive into a fresh enable (mirrors the sandbox's per-run
-            // isolation — a re-enabled mod should not see stale module state).
-            nativeLoader.forget(input.mod.id);
-            // Drop the resolved-hooks cache too, so the next enable re-resolves.
-            resolved.delete(input.mod.id);
-        }
+        // Teardown is host-owned, even if the mod forgot to unsubscribe, and
+        // it runs whether or not the `disable` hook itself threw.
+        releaseModRegistrations(input.mod.id);
+        active.delete(input.mod.id);
+        attempted.delete(input.mod.id);
         return result;
     }
 
@@ -795,6 +809,8 @@ export function createLifecycleHost(options: LifecycleHostOptions): LifecycleHos
             strikes.clear();
             latched.clear();
             resolved.clear();
+            active.clear();
+            attempted.clear();
             disposeAllModSubscriptions();
             // Phase 3.2 / `EVENTS.md` §5.4 — `reset()` is the same teardown call
             // site for the bus. Retained sticky payloads go too: a reset host is

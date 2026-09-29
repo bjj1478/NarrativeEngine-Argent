@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { TurnState, TurnCallbacks } from '../turn/turnOrchestrator';
-import type { GameContext, ChatMessage } from '../../types';
+import type { ArchiveChapter, GameContext, ChatMessage } from '../../types';
 import type { ValidatedMod } from '../../services/mods/modTypes';
 import type { SandboxHostMessage, SandboxWorkerLike, SandboxWorkerMessage } from '../../services/mods/sandbox/sandboxTypes';
 import { modToComputeTrack } from '../../services/mods/computeTrack';
@@ -46,7 +46,7 @@ import { runPostTurnPipeline } from '../turn/postTurnPipeline';
 import { api } from '../llm/apiClient';
 import { backgroundQueue } from '../infrastructure/backgroundQueue';
 import { extractNPCNames, validateNPCCandidates, classifyNPCNames } from '../npc/npcDetector';
-import { useAppStore } from '../../store/useAppStore';
+import '../../store/useAppStore';
 
 const mockApi = vi.mocked(api);
 const mockBQ = vi.mocked(backgroundQueue);
@@ -111,7 +111,7 @@ const makeCallbacks = (): TurnCallbacks => ({
     setStreaming: vi.fn(),
     setLoadingStatus: vi.fn(),
     addNpcSuggestions: vi.fn(),
-});
+} as unknown as TurnCallbacks);
 
 const ASSISTANT_CONTENT = 'The goblin falls to the ground.';
 const ALL_MSGS: ChatMessage[] = [{ id: 'm1', role: 'assistant', content: ASSISTANT_CONTENT, timestamp: 1000 }];
@@ -120,8 +120,8 @@ describe('runPostTurnPipeline', () => {
     beforeEach(() => vi.clearAllMocks());
 
     it('calls api.archive.append with displayInput and lastAssistantContent', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const state = makeState();
         await runPostTurnPipeline(state, makeCallbacks(), ASSISTANT_CONTENT, ALL_MSGS);
@@ -147,8 +147,8 @@ describe('runPostTurnPipeline', () => {
     // can mean "written, response lost" — and the verdict is reported to the caller,
     // which keeps the turn armed instead of retiring an unarchived scene.
     it('reports archived:false and refreshes nothing when append fails and no scene is on disk', async () => {
-        mockApi.archive.append.mockResolvedValueOnce(null);
-        mockApi.archive.getIndex.mockResolvedValueOnce([]); // verification: nothing there
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce(null as unknown as { sceneId: string });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce([]); // verification: nothing there
 
         const callbacks = makeCallbacks();
         const result = await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
@@ -159,9 +159,9 @@ describe('runPostTurnPipeline', () => {
 
     it('recovers the scene id from the index when the append response was lost', async () => {
         const written = [{ sceneId: '001', timestamp: 1, keywords: [], npcsMentioned: [], witnesses: [], userSnippet: 'attack the goblin' }];
-        mockApi.archive.append.mockResolvedValueOnce(null);
-        mockApi.archive.getIndex.mockResolvedValue(written);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce(null as unknown as { sceneId: string });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValue(written);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const callbacks = makeCallbacks();
         const result = await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
@@ -172,8 +172,8 @@ describe('runPostTurnPipeline', () => {
 
     it('re-links instead of re-appending when a retry finds the turn already archived', async () => {
         const written = [{ sceneId: '001', timestamp: 1, keywords: [], npcsMentioned: [], witnesses: [], userSnippet: 'attack the goblin' }];
-        mockApi.archive.getIndex.mockResolvedValue(written);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValue(written);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const callbacks = makeCallbacks();
         const result = await runPostTurnPipeline(
@@ -187,9 +187,9 @@ describe('runPostTurnPipeline', () => {
 
     it('calls callbacks.setArchiveIndex with fresh index after successful append', async () => {
         const freshIndex = [{ sceneId: '001', timestamp: 1, keywords: [], npcsMentioned: [], witnesses: [], userSnippet: '' }];
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.archive.getIndex.mockResolvedValueOnce(freshIndex);
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.archive.getIndex).mockResolvedValueOnce(freshIndex);
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const callbacks = makeCallbacks();
         await runPostTurnPipeline(makeState(), callbacks, ASSISTANT_CONTENT, ALL_MSGS);
@@ -198,9 +198,9 @@ describe('runPostTurnPipeline', () => {
     });
 
     it('calls state.setChapters after listing chapters', async () => {
-        const freshChapters = [{ chapterId: 'ch1', title: 'Ch1', sceneRange: ['001', '005'], sceneCount: 3, sealedAt: null }];
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.chapters.list.mockResolvedValueOnce(freshChapters);
+        const freshChapters = [{ chapterId: 'ch1', title: 'Ch1', sceneRange: ['001', '005'], sceneCount: 3, sealedAt: null }] as unknown as ArchiveChapter[];
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce(freshChapters);
 
         const state = makeState();
         await runPostTurnPipeline(state, makeCallbacks(), ASSISTANT_CONTENT, ALL_MSGS);
@@ -210,9 +210,9 @@ describe('runPostTurnPipeline', () => {
 
     it('pushes Chapter-AutoSeal to backgroundQueue when sceneCount >= CHAPTER_SCENE_SOFT_CAP', async () => {
         // CHAPTER_SCENE_SOFT_CAP = 25
-        const openChapter = { chapterId: 'ch1', title: 'Chapter 1', sceneRange: ['001', '025'], sceneCount: 25, sealedAt: null };
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '025' });
-        mockApi.chapters.list.mockResolvedValueOnce([openChapter]);
+        const openChapter = { chapterId: 'ch1', title: 'Chapter 1', sceneRange: ['001', '025'], sceneCount: 25, sealedAt: null } as unknown as ArchiveChapter;
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '025' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([openChapter]);
 
         await runPostTurnPipeline(makeState(), makeCallbacks(), ASSISTANT_CONTENT, ALL_MSGS);
 
@@ -220,9 +220,9 @@ describe('runPostTurnPipeline', () => {
     });
 
     it('does NOT push Chapter-AutoSeal when sceneCount < CHAPTER_SCENE_SOFT_CAP', async () => {
-        const openChapter = { chapterId: 'ch1', title: 'Chapter 1', sceneRange: ['001', '003'], sceneCount: 3, sealedAt: null };
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '003' });
-        mockApi.chapters.list.mockResolvedValueOnce([openChapter]);
+        const openChapter = { chapterId: 'ch1', title: 'Chapter 1', sceneRange: ['001', '003'], sceneCount: 3, sealedAt: null } as unknown as ArchiveChapter;
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '003' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([openChapter]);
 
         await runPostTurnPipeline(makeState(), makeCallbacks(), ASSISTANT_CONTENT, ALL_MSGS);
 
@@ -231,8 +231,8 @@ describe('runPostTurnPipeline', () => {
     });
 
     it('populates NPC suggestions for new NPC names detected in assistant content', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         mockExtractNPCNames.mockReturnValueOnce(['Kaelen']);
         mockValidateNPCCandidates.mockResolvedValueOnce(['Kaelen']);
@@ -247,8 +247,8 @@ describe('runPostTurnPipeline', () => {
     });
 
     it('calls incrementBookkeepingTurnCounter and resetBookkeepingTurnCounter when turnCount >= interval', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '005' });
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '005' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const state = makeState({
             incrementBookkeepingTurnCounter: vi.fn().mockReturnValue(5),
@@ -265,8 +265,8 @@ describe('runPostTurnPipeline', () => {
     });
 
     it('does NOT call resetBookkeepingTurnCounter when turnCount < interval', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const state = makeState({
             incrementBookkeepingTurnCounter: vi.fn().mockReturnValue(2),
@@ -282,8 +282,8 @@ describe('runPostTurnPipeline', () => {
 
 describe('compute mod integration', () => {
     it('runs a fixture compute mod in the real post-turn pipeline and applies its declared write', async () => {
-        mockApi.archive.append.mockResolvedValueOnce({ sceneId: '001' });
-        mockApi.chapters.list.mockResolvedValueOnce([]);
+        vi.mocked(mockApi.archive.append).mockResolvedValueOnce({ sceneId: '001' });
+        vi.mocked(mockApi.chapters.list).mockResolvedValueOnce([]);
 
         const worker: SandboxWorkerLike = {
             onmessage: null,
@@ -318,7 +318,7 @@ describe('compute mod integration', () => {
                 capabilities: ['write:updateContext'],
             },
             computeSource: 'export default async function () { return { computed: true }; }',
-        } as ValidatedMod;
+        } as unknown as ValidatedMod;
         const track = modToComputeTrack(mod, { sandboxOptions: { createWorker: () => worker } });
         postTurnTracks.register(track);
 

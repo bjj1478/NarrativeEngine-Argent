@@ -105,11 +105,12 @@ describe('plurals (Locked Decision 7)', () => {
         try {
             LOCALES.ru = {
                 ...original,
+                // Plural-form keys are not in the English key set, so the map is widened.
                 strings: {
                     'settings.language.untranslated.one': '{{count}} строка',
                     'settings.language.untranslated.few': '{{count}} строки',
                     'settings.language.untranslated.many': '{{count}} строк',
-                },
+                } as typeof original.strings,
             };
             // Russian: 1 → one, 2-4 → few, 5+ → many. Naive interpolation would
             // produce visibly broken Russian for two of these three.
@@ -130,7 +131,7 @@ describe('plurals (Locked Decision 7)', () => {
                     'settings.language.untranslated.one': '{{count}} pozycja',
                     'settings.language.untranslated.few': '{{count}} pozycje',
                     'settings.language.untranslated.many': '{{count}} pozycji',
-                },
+                } as typeof original.strings,
             };
             // Polish: 1 → one, 2-4 → few, 5+ → many.
             expect(translateIn('pl', 'settings.language.untranslated', { count: 1 })).toBe('1 pozycja');

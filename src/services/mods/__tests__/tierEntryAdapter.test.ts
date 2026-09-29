@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { modToTierEntries, modTierEntryId } from '../tierEntryAdapter';
-import type { ValidatedMod } from '../modTypes';
+import type { ValidatedMod, ValidatedModTierEntry } from '../modTypes';
 
 /**
  * Phase 7.3 — the mod → tier entry adapter.
@@ -45,7 +45,7 @@ function makeMod(overrides: Partial<ValidatedMod> = {}): ValidatedMod {
         screenSources: [],
         provenance: 'installed',
         ...overrides,
-    };
+    } as ValidatedMod;
 }
 
 describe('modTierEntryId', () => {
@@ -97,7 +97,7 @@ describe('modToTierEntries', () => {
                 trigger: 'automatic',
                 defaultEnabled: true,
                 matrix: { lite: false, pro: true, max: true },
-            }],
+            } as unknown as ValidatedModTierEntry],
         });
         const entries = modToTierEntries(mod);
         expect(entries[0].description).toBe('');

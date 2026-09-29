@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TravelButton } from '../TravelButton';
 import { useAppStore } from '../../store/useAppStore';
-import type { LocationEntry } from '../../types';
+import type { GameContext, LocationEntry } from '../../types';
 
 function makePlace(id: string, name: string, overrides: Partial<LocationEntry> = {}): LocationEntry {
     return {
@@ -25,7 +25,7 @@ describe('TravelButton', () => {
         useAppStore.setState({
             pipelinePhase: 'idle',
             locationLedger: [],
-            context: { currentPlaceId: undefined, travelMode: undefined },
+            context: { currentPlaceId: undefined, travelMode: undefined } as GameContext,
         });
     });
 
@@ -33,7 +33,7 @@ describe('TravelButton', () => {
         cleanup();
         useAppStore.setState({
             locationLedger: [],
-            context: { currentPlaceId: undefined, travelMode: undefined, travel: null, worldDay: undefined },
+            context: { currentPlaceId: undefined, travelMode: undefined, travel: null, worldDay: undefined } as GameContext,
         });
     });
 
@@ -45,7 +45,7 @@ describe('TravelButton', () => {
     });
 
     it('is disabled while the pipeline is streaming', () => {
-        useAppStore.setState({ pipelinePhase: 'streaming' });
+        useAppStore.setState({ pipelinePhase: 'generating' });
         render(<TravelButton />);
         expect(screen.getByRole('button', { name: /travel/i })).toBeDisabled();
     });
@@ -56,7 +56,7 @@ describe('TravelButton', () => {
         const aWithConn: LocationEntry = { ...a, connections: [{ toId: 'b', band: 'far' }] };
         useAppStore.setState({
             locationLedger: [aWithConn, b],
-            context: { currentPlaceId: 'a', travelMode: 'foot' },
+            context: { currentPlaceId: 'a', travelMode: 'foot' } as GameContext,
         });
 
         render(<TravelButton />);
@@ -75,7 +75,7 @@ describe('TravelButton', () => {
     it('shows an explanatory message when no current place is set', () => {
         useAppStore.setState({
             locationLedger: [makePlace('a', 'Aubergine')],
-            context: { currentPlaceId: undefined },
+            context: { currentPlaceId: undefined } as GameContext,
         });
 
         render(<TravelButton />);
@@ -89,7 +89,7 @@ describe('TravelButton', () => {
     it('shows an explanatory message when there are no connected destinations', () => {
         useAppStore.setState({
             locationLedger: [makePlace('a', 'Aubergine')],
-            context: { currentPlaceId: 'a' },
+            context: { currentPlaceId: 'a' } as GameContext,
         });
 
         render(<TravelButton />);
@@ -105,7 +105,7 @@ describe('TravelButton', () => {
         const b = makePlace('b', 'Beacon');
         useAppStore.setState({
             locationLedger: [a, transit, b],
-            context: { currentPlaceId: 'a' },
+            context: { currentPlaceId: 'a' } as GameContext,
         });
 
         render(<TravelButton />);
@@ -124,7 +124,7 @@ describe('TravelButton', () => {
         const b = makePlace('b', 'Beacon', { connections: [{ toId: 'a', band: 'far' }] });
         useAppStore.setState({
             locationLedger: [a, b],
-            context: { currentPlaceId: 'a', travelMode: 'foot' },
+            context: { currentPlaceId: 'a', travelMode: 'foot' } as GameContext,
         });
 
         render(<TravelButton />);
@@ -157,7 +157,7 @@ describe('TravelButton', () => {
                     leg: 1, totalLegs: 3, agency: 'free',
                 },
                 worldDay: 5,
-            },
+            } as GameContext,
         });
 
         render(<TravelButton />);
@@ -187,7 +187,7 @@ describe('TravelButton', () => {
                     leg: 3, totalLegs: 3, agency: 'free',
                 },
                 worldDay: 7,
-            },
+            } as GameContext,
         });
 
         render(<TravelButton />);

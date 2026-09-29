@@ -6,7 +6,8 @@ import { applyLocale, registerModTranslations, t, translateIn } from '../../../i
 import { mountEnemyCompendium, repaintEnemyWindows } from '../../../../public/bundled-mods/enemies/ui.js';
 
 const stopSubscriptions = () => () => {};
-const repair = value => value;
+const repair = (value: unknown) => value;
+const globals = globalThis as typeof globalThis & { __narrativeTranslate?: unknown };
 
 const makeApi = () => ({
     state: {
@@ -38,7 +39,7 @@ describe('enemy mod UI mount', () => {
             id: 'enemies',
             i18nStrings: { en: enStrings, pl: plStrings, ko: koStrings },
         }]);
-        globalThis.__narrativeTranslate = translateIn;
+        globals.__narrativeTranslate = translateIn;
         const root = document.createElement('div');
         document.body.append(root);
         const ctx = {
@@ -77,7 +78,7 @@ describe('enemy mod UI mount', () => {
             id: 'enemies',
             i18nStrings: { en: enStrings, pl: plStrings, ko: koStrings },
         }]);
-        globalThis.__narrativeTranslate = translateIn;
+        globals.__narrativeTranslate = translateIn;
         applyLocale('en');
         const root = document.createElement('div');
         document.body.append(root);
@@ -119,7 +120,7 @@ describe('enemy mod UI mount', () => {
     // 4-record compendium became 5.
     it('repaints a mounted window when hydrate fills the state behind it', () => {
         registerModTranslations([{ id: 'enemies', i18nStrings: { en: enStrings, pl: plStrings, ko: koStrings } }]);
-        globalThis.__narrativeTranslate = translateIn;
+        globals.__narrativeTranslate = translateIn;
         applyLocale('en');
         const root = document.createElement('div');
         document.body.append(root);
@@ -131,8 +132,8 @@ describe('enemy mod UI mount', () => {
 
         // What `hydrate` does: assign into the shared state object, no repaint.
         api.state.compendium = [
-            { id: 'a', name: 'Ashen Warden', classification: 'Construct', stats: [], actions: [], tags: [] },
-            { id: 'b', name: 'Marrow Hound', classification: 'Beast', stats: [], actions: [], tags: [] },
+            { id: 'a', name: 'Ashen Warden', classification: 'Construct', stats: [], actions: [], tags: [] } as unknown as never,
+            { id: 'b', name: 'Marrow Hound', classification: 'Beast', stats: [], actions: [], tags: [] } as unknown as never,
         ];
         expect(root.querySelectorAll('.enemy-list-row')).toHaveLength(0);
 

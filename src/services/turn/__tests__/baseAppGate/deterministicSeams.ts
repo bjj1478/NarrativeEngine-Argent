@@ -168,7 +168,6 @@ export function installMockFetch(routes: FetchRoute[], log: FetchLog[]): Restore
         }
         // Unmatched fetch — return a 404 so a missing seam surfaces as a
         // traceable failure rather than a hang.
-        // @ts-expect-error — synthetic Response
         return { ok: false, status: 404, json: async () => ({ error: `unmatched fetch: ${urlStr}` }), text: async () => `unmatched fetch: ${urlStr}` } as Response;
     };
     return () => { globalThis.fetch = realFetch; };

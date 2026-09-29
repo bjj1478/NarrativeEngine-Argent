@@ -10,7 +10,7 @@ import { modEventBus } from '../mods/events';
 const owner = { modId: 'worldmap', modName: 'World Map', file: 'worldmap/manifest.json' };
 const place = (id: string): LocationEntry => ({ id, name: id, aliases: '', features: [], connections: [], description: '', broadLocation: '', source: 'manual', firstSeenScene: '', lastSeenScene: '' });
 let ledger: LocationEntry[];
-let update: ReturnType<typeof vi.fn>;
+let update: (id: string, patch: Partial<LocationEntry>) => void;
 beforeEach(() => {
     modEventBus.reset(); llm.mockReset();
     ledger = [{ ...place('camp'), coordinates: { x: 100, y: 200 } }, { ...place('castle'), placementPendingUntil: Date.now() + 300000 }];

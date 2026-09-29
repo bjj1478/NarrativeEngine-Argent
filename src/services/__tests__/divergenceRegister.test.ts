@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { DivergenceEntry, DivergenceRegister, ArchiveChapter } from '../../types';
+import type { DivergenceEntry, DivergenceRegister, ArchiveChapter, DivergenceCategory } from '../../types';
 
 vi.mock('../../components/Toast', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock('../infrastructure/tokenizer', () => ({ countTokens: vi.fn(() => 100) }));
@@ -130,7 +130,7 @@ describe('divergenceRegister v2', () => {
         });
 
         it('preserves chapterToggles and categoryToggles', () => {
-            const reg = makeRegister({ chapterToggles: { CH01: false }, categoryToggles: { CH01: { locations: false } } });
+            const reg = makeRegister({ chapterToggles: { CH01: false }, categoryToggles: { CH01: { locations: false } as Record<DivergenceCategory, boolean> } });
             const merged = mergeSealEntries(reg, [makeEntry()], '025');
             expect(merged.chapterToggles).toEqual({ CH01: false });
             expect(merged.categoryToggles).toEqual({ CH01: { locations: false } });
@@ -225,7 +225,7 @@ describe('divergenceRegister v2', () => {
                     makeEntry({ id: 'div_1', category: 'locations', text: 'loc fact' }),
                     makeEntry({ id: 'div_2', category: 'npc_events', text: 'npc fact' }),
                 ],
-                categoryToggles: { CH01: { locations: false } },
+                categoryToggles: { CH01: { locations: false } as Record<DivergenceCategory, boolean> },
             });
             const text = renderRegisterForPayload(reg);
             expect(text).not.toContain('loc fact');
@@ -267,7 +267,7 @@ describe('divergenceRegister v2', () => {
         });
 
         it('preserves other category toggles', () => {
-            const reg = makeRegister({ categoryToggles: { CH01: { npc_events: false } } });
+            const reg = makeRegister({ categoryToggles: { CH01: { npc_events: false } as Record<DivergenceCategory, boolean> } });
             const toggled = toggleCategory(reg, 'CH01', 'locations', false);
             expect(toggled.categoryToggles['CH01']?.npc_events).toBe(false);
             expect(toggled.categoryToggles['CH01']?.locations).toBe(false);

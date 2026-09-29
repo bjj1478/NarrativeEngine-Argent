@@ -40,11 +40,12 @@ import { runSandbox } from '../sandbox/sandboxHost';
 import { buildComputeBinding } from '../sandbox/workerPrelude';
 import type {
     SandboxHostMessage,
+    SandboxJournalEntry,
     SandboxWorkerLike,
     SandboxWorkerMessage,
 } from '../sandbox/sandboxTypes';
 import type { TurnCallbacks, TurnState } from '../../turn/turnOrchestrator';
-import type { AppSettings, EndpointConfig } from '../../../types';
+import type { AppSettings, ArchiveIndexEntry, ChatMessage, EndpointConfig } from '../../../types';
 
 // The real arc manifest, the real arc compute source, the real declared
 // capabilities. The test exercises the actual shipped binding, not a
@@ -70,7 +71,11 @@ class FakeWorker implements SandboxWorkerLike {
     terminated = false;
     readonly sent: SandboxHostMessage[] = [];
 
-    constructor(private readonly handle: WorkerHandler = () => undefined) {}
+    private readonly handle: WorkerHandler;
+
+    constructor(handle: WorkerHandler = () => undefined) {
+        this.handle = handle;
+    }
 
     postMessage(message: SandboxHostMessage): void {
         this.sent.push(message);
@@ -96,7 +101,6 @@ class FakeWorker implements SandboxWorkerLike {
 function runArcSourceInWorker(
     worker: FakeWorker,
     snapshot: unknown,
-    onRpc: (id: number, channel: string, method: string | undefined, args: unknown[]) => void,
 ): void {
     // The REAL strip + default-export resolution from `workerPrelude.ts`. This
     // used to be a hand-copied mirror of that logic, which defeated the point
@@ -104,7 +108,7 @@ function runArcSourceInWorker(
     // drift out from under it unobserved.
     const defaultSource = buildComputeBinding(arcComputeSource);
 
-    const journal: Array<{ kind: 'store' | 'table'; name: string; args?: unknown[]; rows?: unknown }> = [];
+    const journal: SandboxJournalEntry[] = [];
     let rpcId = 0;
     const pendingRpc = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
 
@@ -125,7 +129,7 @@ function runArcSourceInWorker(
         originalPostMessage(message);
     }) as never;
 
-    const rpc = (channel: string, method: string | undefined, args: unknown[]): Promise<unknown> => {
+    const rpc = (channel: 'model' | 'table' | 'refresh', method: 'read' | 'callJson' | 'call' | undefined, args: unknown[]): Promise<unknown> => {
         const id = ++rpcId;
         return new Promise((resolveFn, reject) => {
             pendingRpc.set(id, { resolve: resolveFn, reject });
@@ -242,13 +246,13 @@ function makeState(): TurnState {
             inventoryItems: [],
         } as unknown as TurnState['context'],
         messages: [
-            { id: 'm1', role: 'user', content: 'I oppose the Grain Cartel.' },
-            { id: 'm2', role: 'assistant', content: 'The syndicate eyes you warily.' },
+            { id: 'm1', role: 'user', content: 'I oppose the Grain Cartel.' } as unknown as ChatMessage,
+            { id: 'm2', role: 'assistant', content: 'The syndicate eyes you warily.' } as unknown as ChatMessage,
         ],
         condenser: { condensedUpToIndex: 0 } as TurnState['condenser'],
         loreChunks: [],
         npcLedger: [],
-        archiveIndex: [{ sceneId: '001' }, { sceneId: '002' }],
+        archiveIndex: [{ sceneId: '001' } as unknown as ArchiveIndexEntry, { sceneId: '002' } as unknown as ArchiveIndexEntry],
         activeCampaignId: 'campaign-a',
         provider: endpoint('story'),
         getMessages: () => [],
@@ -328,7 +332,7 @@ describe('Phase 4.0 — mods/arc/compute.js runs through the real binding', () =
 
         const worker = new FakeWorker((_w, message) => {
             if (message.type === 'run') {
-                queueMicrotask(() => runArcSourceInWorker(worker, message.snapshot, () => undefined));
+                queueMicrotask(() => runArcSourceInWorker(worker, message.snapshot));
             }
         });
 
@@ -368,7 +372,7 @@ describe('Phase 4.0 — mods/arc/compute.js runs through the real binding', () =
 
         const worker = new FakeWorker((_w, message) => {
             if (message.type === 'run') {
-                queueMicrotask(() => runArcSourceInWorker(worker, message.snapshot, () => undefined));
+                queueMicrotask(() => runArcSourceInWorker(worker, message.snapshot));
             }
         });
 

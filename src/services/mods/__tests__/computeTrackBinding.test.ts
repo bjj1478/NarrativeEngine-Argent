@@ -35,7 +35,7 @@ import type {
     SandboxWorkerMessage,
 } from '../sandbox/sandboxTypes';
 import type { TurnCallbacks, TurnState } from '../../turn/turnOrchestrator';
-import type { AppSettings, EndpointConfig } from '../../../types';
+import type { AppSettings, ArchiveChapter, ArchiveIndexEntry, ChatMessage, EndpointConfig, LocationEntry, NPCEntry } from '../../../types';
 
 class FakeWorker implements SandboxWorkerLike {
     onmessage: SandboxWorkerLike['onmessage'] = null;
@@ -81,13 +81,13 @@ function makeState(overrides: Partial<TurnState> = {}): TurnState {
             inventoryItems: [{ id: 'i-1', name: 'Sword', category: 'weapon', quantity: 1 }],
         } as unknown as TurnState['context'],
         messages: [
-            { id: 'm1', role: 'user', content: 'hello' },
-            { id: 'm2', role: 'assistant', content: 'The guard eyes you warily.' },
+            { id: 'm1', role: 'user', content: 'hello' } as unknown as ChatMessage,
+            { id: 'm2', role: 'assistant', content: 'The guard eyes you warily.' } as unknown as ChatMessage,
         ],
         condenser: { condensedUpToIndex: 0 } as TurnState['condenser'],
         loreChunks: [],
-        npcLedger: [{ id: 'n1', name: 'Nadia' }],
-        archiveIndex: [{ sceneId: '001' }],
+        npcLedger: [{ id: 'n1', name: 'Nadia' } as unknown as NPCEntry],
+        archiveIndex: [{ sceneId: '001' } as unknown as ArchiveIndexEntry],
         activeCampaignId: 'campaign-a',
         provider: endpoint('story'),
         getMessages: () => [],
@@ -99,7 +99,7 @@ function makeState(overrides: Partial<TurnState> = {}): TurnState {
         onStageNpcIds: ['n1'],
         timeline: [],
         chapters: [
-            { chapterId: 'CH01', title: 'Arrival', sceneIds: ['001'], summary: 'The hero arrives.', sealedAt: undefined as unknown as number },
+            { chapterId: 'CH01', title: 'Arrival', sceneIds: ['001'], summary: 'The hero arrives.', sealedAt: undefined as unknown as number } as unknown as ArchiveChapter,
         ],
         pinnedChapterIds: [],
         clearPinnedChapters: vi.fn(),
@@ -124,7 +124,7 @@ function makeCallbacks(): TurnCallbacks {
         getFreshLocationState: vi.fn(() => ({
             activeCampaignId: 'campaign-a',
             locationLedger: [
-                { id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['training-yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' as const },
+                { id: 'place-a', name: 'Academy', broadLocation: 'Konoha', features: ['training-yard'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' as const } as LocationEntry,
             ],
             context: { currentPlaceId: 'place-a', currentFeature: 'training-yard' } as TurnState['context'],
         })),
@@ -215,7 +215,7 @@ describe('Phase 4.0 — compute track binds the sandbox to ModContext', () => {
         const createWorker = vi.fn(() => new FakeWorker((worker, message) => {
             if (message.type === 'run') {
                 // The snapshot is the ModContext-shape: mod/api/data/config.
-                const snapshot = message.snapshot as {
+                const snapshot = message.snapshot as unknown as {
                     mod: { id: string; name: string; version: string };
                     api: { version: string; commitPoint: string };
                     data: { playerInput: string; location: { ledger: unknown[] }; chapters: unknown[] };
@@ -280,7 +280,7 @@ describe('Phase 4.0 — compute track binds the sandbox to ModContext', () => {
 
         const createWorker = vi.fn(() => new FakeWorker((worker, message) => {
             if (message.type === 'run') {
-                const snapshot = message.snapshot as { data: { location: { ledger: unknown[] } } };
+                const snapshot = message.snapshot as unknown as { data: { location: { ledger: unknown[] } } };
                 // Without locationState, the ledger is empty.
                 expect(snapshot.data.location.ledger).toEqual([]);
                 queueMicrotask(() => worker.emit({ type: 'rpc', id: 1, channel: 'table', method: 'read', args: ['arcs'] }));

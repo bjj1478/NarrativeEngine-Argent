@@ -91,7 +91,7 @@ export function fixtureContext(): GameContext {
         worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
         agencyDigest: '',
         arcDigest: '',
-    } as GameContext;
+    } as unknown as GameContext;
 }
 
 export function fixtureHistory(): ChatMessage[] {

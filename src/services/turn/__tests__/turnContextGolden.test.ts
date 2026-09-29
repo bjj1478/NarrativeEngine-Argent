@@ -77,7 +77,7 @@ function baseContext(): GameContext {
         worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
         agencyDigest: ['Aldric edges closer to his goal.'],
         arcDigest: ['Pressure on the Crimson Guild mounts.'],
-    } as GameContext;
+    } as unknown as GameContext;
 }
 
 function baseSettings(): AppSettings {
@@ -156,7 +156,7 @@ const ARCHIVE_INDEX: ArchiveIndexEntry[] = [
 ];
 
 const TIMELINE: TimelineEvent[] = [
-    { sceneId: '001', turn: 1, importance: 7, text: 'Aldric arrives in town.', eventType: 'travel' } as TimelineEvent,
+    { sceneId: '001', turn: 1, importance: 7, text: 'Aldric arrives in town.', eventType: 'travel' } as unknown as TimelineEvent,
 ];
 
 const CHAPTERS: ArchiveChapter[] = [
@@ -168,13 +168,13 @@ const CHAPTERS: ArchiveChapter[] = [
 ];
 
 const PINNED: PinnedExcerpt[] = [
-    { id: 'p1', messageId: 'h2', excerpt: 'eyes you warily', pinnedAt: 1, note: 'tone' } as PinnedExcerpt,
+    { id: 'p1', messageId: 'h2', excerpt: 'eyes you warily', pinnedAt: 1, note: 'tone' } as unknown as PinnedExcerpt,
 ];
 
 const PLANNER_EVENT_TYPES: SceneEventType[] = ['combat'];
 
 const ELEVATED: ElevatedScene[] = [
-    { scene: ARCHIVE_RECALL[0], chapterId: 'CH01' } as ElevatedScene,
+    { scene: ARCHIVE_RECALL[0], chapterId: 'CH01' } as unknown as ElevatedScene,
 ];
 
 const SLOTTED: SlottedRagSnippet[] = [
@@ -184,7 +184,7 @@ const SLOTTED: SlottedRagSnippet[] = [
 const INVENTORY_CATEGORIES: (InventoryItemCategory | 'equipped')[] = ['weapon'];
 const PROFILE_FIELDS: string[] = ['appearance', 'personality'];
 const LOCATION_LEDGER: LocationEntry[] = [
-    { id: 'loc1', name: 'The Crossed Swords Tavern', aliases: '', description: '', connections: [] } as LocationEntry,
+    { id: 'loc1', name: 'The Crossed Swords Tavern', aliases: '', description: '', connections: [] } as unknown as LocationEntry,
 ];
 
 const RULES_MANIFEST = 'RULES_MANIFEST_HASH_abc';
@@ -368,13 +368,13 @@ describe('WO-P1-01 — buildPayload golden snapshot (byte-identical pre/post ref
 // produce the same payload + same snapshot.
 
 const sendMessageMock = vi.fn();
-const buildPayloadMock = vi.fn(() => ({
+const buildPayloadMock = vi.fn((..._args: unknown[]) => ({
     messages: [{ role: 'user', content: 'FIXED_PAYLOAD_MESSAGE' }] as OpenAIMessage[],
     trace: [],
     debugSections: [],
 }));
 const capturePendingTurnSnapshotMock = vi.fn();
-const gatherContextMock = vi.fn(async () => ({
+const gatherContextMock = vi.fn(async (..._args: unknown[]) => ({
     archiveRecall: ARCHIVE_RECALL,
     recommendedNPCNames: ['Aldric'],
     timelineEvents: TIMELINE,

@@ -23,7 +23,7 @@ const mod = (overrides: Partial<ValidatedMod> = {}): ValidatedMod => ({
     file: 'grimdark.mod.json',
     contributions: [{ id: 'tone', order: 250, budget: 120, text: 'Tone: unforgiving.' }],
     ...overrides,
-});
+} as unknown as ValidatedMod);
 
 /** Only `facts` is read by the adapter; the rest of the input is irrelevant to it. */
 const input = (facts?: ModFacts): FinalUserModuleInput =>

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { offerConnectionFromPreviousPlace } from '../useSelectionActions';
 import { useAppStore } from '../../../store/useAppStore';
 import type { LocationEntry } from '../../../types';
@@ -20,12 +20,12 @@ function makePlace(id: string, name: string, overrides: Partial<LocationEntry> =
 }
 
 describe('offerConnectionFromPreviousPlace (WO 6.3 §2)', () => {
-    let updateLocation: ReturnType<typeof vi.fn>;
-    let showToast: ReturnType<typeof vi.fn>;
+    let updateLocation: Mock<(id: string, patch: Partial<LocationEntry>) => void>;
+    let showToast: Mock<(message: string, action: { label: string; onClick: () => void }) => void>;
 
     beforeEach(() => {
-        updateLocation = vi.fn();
-        showToast = vi.fn();
+        updateLocation = vi.fn<(id: string, patch: Partial<LocationEntry>) => void>();
+        showToast = vi.fn<(message: string, action: { label: string; onClick: () => void }) => void>();
     });
 
     afterEach(() => {

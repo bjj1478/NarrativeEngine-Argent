@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HostFacade } from '../../turn/hostFacade';
 import { modToComputeTrack } from '../computeTrack';
+import type { ValidatedMod } from '../modTypes';
 import { createSandboxFaultPolicy } from '../sandbox/sandboxFaults';
 import type { SandboxHostMessage, SandboxWorkerLike, SandboxWorkerMessage } from '../sandbox/sandboxTypes';
 
@@ -25,7 +26,7 @@ class ErrorWorker implements SandboxWorkerLike {
 function makeFacade(): HostFacade {
     const controller = new AbortController();
     return {
-        data: { context: {}, messages: [] } as HostFacade['data'],
+        data: { context: {}, messages: [] } as unknown as HostFacade['data'],
         config: { contextLimit: 4096 } as HostFacade['config'],
         write: {} as HostFacade['write'],
         model: { call: vi.fn(), callJson: vi.fn(), available: vi.fn(() => true) },
@@ -60,7 +61,7 @@ const mod = {
     screenSources: [],
     compute: { file: 'compute.js', hook: 'postTurn' as const, capabilities: [] },
     computeSource: 'export default async function () { throw new Error("failed"); }',
-};
+} as unknown as ValidatedMod;
 
 describe('compute fault policy wiring', () => {
     it('does not rerun a faulted mod across swipes, but permits it on a new turn', async () => {
@@ -70,7 +71,7 @@ describe('compute fault policy wiring', () => {
             sandboxPolicy: policy,
             sandboxOptions: { createWorker },
         });
-        const firstTurn = [];
+        const firstTurn: Parameters<typeof makeContext>[0] = [];
         const swipeContext = makeContext(firstTurn);
         const newTurnContext = makeContext([]);
 

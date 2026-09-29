@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildHostFacade } from '../../turn/hostFacade';
-import type { TurnCallbacks, TurnState } from '../../../types';
+import type { LocationEntry } from '../../../types';
+import type { TurnCallbacks, TurnState } from '../../turn/turnOrchestrator';
 import { buildModContext } from '../modContext';
 import {
     disposeAllModSubscriptions,
@@ -238,7 +239,7 @@ describe('Phase 2.4 reactive reads', () => {
         // The injected state wins over context. The two must agree.
         const getFreshLocationState = () => ({
             activeCampaignId: 'campaign-a',
-            locationLedger: [{ id: 'injected-place', name: 'Injected Place', broadLocation: 'Region', features: ['feature'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' as const }],
+            locationLedger: [{ id: 'injected-place', name: 'Injected Place', broadLocation: 'Region', features: ['feature'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' as const } as LocationEntry],
             context: { currentPlaceId: 'injected-place', currentFeature: 'injected-feature' } as TurnState['context'],
         });
         const callbacks = { ...makeCallbacks(), getFreshLocationState };
@@ -263,7 +264,7 @@ describe('Phase 2.4 reactive reads', () => {
             locationState: {
                 currentPlaceId: 'injected-place',
                 currentFeature: 'injected-feature',
-                ledger: [{ id: 'injected-place', name: 'Injected Place', broadLocation: 'Region', features: ['feature'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' }],
+                ledger: [{ id: 'injected-place', name: 'Injected Place', broadLocation: 'Region', features: ['feature'], firstSeenScene: '001', lastSeenScene: '001', source: 'llm' } as unknown as LocationEntry],
             },
         });
 

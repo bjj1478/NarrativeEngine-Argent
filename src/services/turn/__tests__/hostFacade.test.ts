@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppSettings, EndpointConfig, TurnCallbacks, TurnState } from '../../../types';
+import type { AppSettings, ArchiveIndexEntry, ChatMessage, EndpointConfig, LoreChunk, NPCEntry, SemanticFact, TimelineEvent } from '../../../types';
+import type { TurnCallbacks, TurnState } from '../turnOrchestrator';
 import { buildHostFacade, type HostFacade } from '../hostFacade';
 
 const endpoint = (modelName: string): EndpointConfig => ({
@@ -26,13 +27,11 @@ const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
         providers: [{ apiKey: 'provider-secret' }],
     } as unknown as AppSettings,
     context: { currentPlaceId: 'place-a' } as TurnState['context'],
-    messages: [{ id: 'm1', role: 'user', content: 'hello' }],
+    messages: [{ id: 'm1', role: 'user', content: 'hello' } as unknown as ChatMessage],
     condenser: { condensedUpToIndex: 0 } as TurnState['condenser'],
-    loreChunks: [{ id: 'l1', header: 'Lore', content: 'text' }],
-    npcLedger: [{ id: 'n1', name: 'Nadia' }],
-    enemyCompendium: [{ id: 'e1', name: 'Goblin' }],
-    enemyCombatConfig: { enemyDiscoveryEnabled: true } as TurnState['enemyCombatConfig'],
-    archiveIndex: [{ sceneId: '001', summary: 'scene' }],
+    loreChunks: [{ id: 'l1', header: 'Lore', content: 'text' } as unknown as LoreChunk],
+    npcLedger: [{ id: 'n1', name: 'Nadia' } as unknown as NPCEntry],
+    archiveIndex: [{ sceneId: '001', summary: 'scene' } as unknown as ArchiveIndexEntry],
     activeCampaignId,
     provider: endpoint('story'),
     getMessages: () => [],
@@ -42,7 +41,7 @@ const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
     getRawAuxiliaryProvider: () => endpoint('raw-auxiliary'),
     getRawSummariserProvider: () => endpoint('raw-summariser'),
     onStageNpcIds: ['n1'],
-    timeline: [{ sceneId: '001', summary: 'event' }],
+    timeline: [{ sceneId: '001', summary: 'event' } as unknown as TimelineEvent],
     chapters: [],
     pinnedChapterIds: [],
     clearPinnedChapters: vi.fn(),
@@ -52,7 +51,7 @@ const makeState = (activeCampaignId = 'campaign-a'): TurnState => ({
     autoBookkeepingInterval: 5,
     getFreshContext: () => ({ currentPlaceId: 'place-a' } as TurnState['context']),
     divergenceRegister: { entries: [], chapterToggles: {}, categoryToggles: {}, lastUpdatedSceneId: '', lastUpdatedAt: 0, version: 2 },
-    semanticFacts: [{ id: 'f1', fact: 'fact' }],
+    semanticFacts: [{ id: 'f1', fact: 'fact' } as unknown as SemanticFact],
 });
 
 const makeCallbacks = (): TurnCallbacks => ({

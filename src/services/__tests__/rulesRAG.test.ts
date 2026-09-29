@@ -29,7 +29,7 @@ describe('Rules Indexer Helpers', () => {
             priority: 8,
             triggerKeywords: ['attack'],
             secondaryKeywords: ['sword'],
-        };
+        } as unknown as LoreChunk;
         
         const meta = deriveDefaultMeta(chunk);
         expect(meta.id).toBe('rule-combat');
@@ -51,7 +51,7 @@ describe('Rules Retriever Scoring & Matching', () => {
             tokens: 50,
             priority: 5,
             triggerKeywords: [],
-        },
+        } as unknown as LoreChunk,
         {
             id: 'rule-2',
             header: '## Always Rule',
@@ -59,7 +59,7 @@ describe('Rules Retriever Scoring & Matching', () => {
             tokens: 20,
             priority: 9,
             triggerKeywords: [],
-        },
+        } as unknown as LoreChunk,
         {
             id: 'rule-3',
             header: '## Stealth Movement',
@@ -67,7 +67,7 @@ describe('Rules Retriever Scoring & Matching', () => {
             tokens: 30,
             priority: 4,
             triggerKeywords: [],
-        }
+        } as unknown as LoreChunk
     ];
 
     const mockMeta: Record<string, RuleChunkMeta> = {
@@ -194,8 +194,8 @@ describe('Payload Builder Integration', () => {
         // 10% of 1000 limit = 100 tokens rules budget
         // rule-rag-1 (30 tokens) and rule-rag-2 (40 tokens) fit (30 + 40 = 70 tokens <= 100)
         const relevantRules: LoreChunk[] = [
-            { id: 'rule-rag-1', header: '[CHUNK: RULE] Attack Actions', content: 'Roll a d20 for attack actions.', tokens: 30, triggerKeywords: [] },
-            { id: 'rule-rag-2', header: '[CHUNK: RULE] Difficulty Check', content: 'Standard DC is 15.', tokens: 40, triggerKeywords: [] }
+            { id: 'rule-rag-1', header: '[CHUNK: RULE] Attack Actions', content: 'Roll a d20 for attack actions.', tokens: 30, triggerKeywords: [] } as unknown as LoreChunk,
+            { id: 'rule-rag-2', header: '[CHUNK: RULE] Difficulty Check', content: 'Standard DC is 15.', tokens: 40, triggerKeywords: [] } as unknown as LoreChunk
         ];
         
         const payload = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'Hello', condensedUpToIndex: undefined, relevantLore: [], npcLedger: [], archiveRecall: [], recommendedNPCNames: [], semanticFactText: undefined, archiveIndex: [], timelineEvents: [], inventoryCategories: [], profileFields: [], deepContextSummary: undefined, divergenceRegister: undefined, chapters: [], onStageNpcIds: [], relevantRules: relevantRules, rulesManifest: '[Available rule sections not loaded this turn]\n## Stealth\n[End section list]' });
@@ -222,8 +222,8 @@ describe('Payload Builder Integration', () => {
         // Both rules combined are 30 + 40 = 70 tokens, which exceeds the 50 token budget
         // Only rule-rag-1 (30 tokens) should fit; rule-rag-2 (40 tokens) is dropped
         const relevantRules: LoreChunk[] = [
-            { id: 'rule-rag-1', header: '[CHUNK: RULE] Attack Actions', content: 'Roll a d20.', tokens: 30, triggerKeywords: [] },
-            { id: 'rule-rag-2', header: '[CHUNK: RULE] Difficulty Check', content: 'Standard DC is 15.', tokens: 40, triggerKeywords: [] }
+            { id: 'rule-rag-1', header: '[CHUNK: RULE] Attack Actions', content: 'Roll a d20.', tokens: 30, triggerKeywords: [] } as unknown as LoreChunk,
+            { id: 'rule-rag-2', header: '[CHUNK: RULE] Difficulty Check', content: 'Standard DC is 15.', tokens: 40, triggerKeywords: [] } as unknown as LoreChunk
         ];
         
         const payload = buildPayload({ settings: settings, context: ctx, history: [], userMessage: 'Hello', condensedUpToIndex: undefined, relevantLore: [], npcLedger: [], archiveRecall: [], recommendedNPCNames: [], semanticFactText: undefined, archiveIndex: [], timelineEvents: [], inventoryCategories: [], profileFields: [], deepContextSummary: undefined, divergenceRegister: undefined, chapters: [], onStageNpcIds: [], relevantRules: relevantRules, rulesManifest: '' });

@@ -504,6 +504,7 @@ The final user message is a **contribution registry** (Project 2): 10 built-in m
 `history.ts` (255 lines): LOD chapter rendering + importance bonus, newest-first fit, ephemeral tool cleanup, orphan protection.
 `stable.ts` (117 lines): rules/canon/header/starter/reasoning framework.
 
+**Prompt injections:** Chat sidebar → Injection Modifier (`src/components/injections/{InjectionQuickControls,InjectionModifierPanel,InjectionEditor}.tsx`) edits `GameContext.promptInjections` through `updateContext`. Each campaign owns its list; legacy preset cards are available only for explicit copying. `src/services/payload/promptInjections.ts` provides normalized depth/role/trigger placement and assistant/reasoning prefills. `payloadBuilder.ts` reserves their token budget; `llmService.ts` applies them only for explicit story/swipe/continue labels at the wire boundary, keeping cached payloads and saved chat clean. Native Claude/Gemini in-chat system injections use labeled user messages to preserve depth. See `docs/PROMPT_INJECTIONS.md`.
 ### 9.5 Archive Memory (`src/services/archive-memory/`)
 
 **17 production files (+6 test files).**

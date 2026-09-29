@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MessageBubble } from '../MessageBubble';
-import type { ChatMessage } from '../../types';
+import type { ChatMessage, SwipeVariant } from '../../types';
 import {
     registerModChrome,
     registerModMessageBelow,
@@ -288,7 +288,7 @@ describe('MessageBubble', () => {
                 label: 'Tag',
                 tooltip: 'Tag this message',
                 onSelect: () => undefined,
-            }, 0);
+            }, 0, undefined);
             renderBubble(makeMessage({ content: 'Hello' }));
             // The mod's button is present. The aria-label is the mod's own
             // tooltip: the i18n lookup in the mod's namespace misses (no
@@ -314,7 +314,7 @@ describe('MessageBubble', () => {
                 label: 'Tag',
                 tooltip: 'Tag',
                 onSelect: () => undefined,
-            }, 0);
+            }, 0, undefined);
             renderBubble(makeMessage(), {
                 isEditing: true,
                 inlineDraft: 'draft',
@@ -340,7 +340,7 @@ describe('MessageBubble', () => {
             const swipeMsg = makeMessage({
                 content: 'Swipe me',
                 pendingCommit: true,
-                swipeSet: [{ content: 'variant 1', streaming: false }],
+                swipeSet: [{ id: 'v1', text: 'variant 1', tagPresent: false, streaming: false } as SwipeVariant],
                 swipeActiveIndex: 0,
             });
             renderBubble(swipeMsg);

@@ -37,7 +37,7 @@ const getToolDefinitionsMock = vi.fn(() => [
     { type: 'function', function: { name: 'update_scene_notebook' } },
 ]);
 vi.mock('../toolHandlers', () => ({
-    getToolDefinitions: (opts: unknown) => getToolDefinitionsMock(opts),
+    getToolDefinitions: () => getToolDefinitionsMock(),
 }));
 
 beforeEach(() => {
@@ -330,7 +330,7 @@ describe('generateSceneContinuation — tool loop (§5)', () => {
         }));
         // Override the LAST call to return plain text (no tool call) so the loop can terminate.
         let calls = 0;
-        sendMessageMock.mockImplementation((_p, _m, onChunk, onDone) => {
+        sendMessageMock.mockImplementation((_p, _m, _onChunk, onDone) => {
             calls++;
             if (calls > MAX_CONTINUE_TOOL_CALLS) {
                 onDone('final narrative.', undefined);

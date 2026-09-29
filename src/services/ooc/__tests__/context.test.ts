@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildOocContext } from '../context';
 import type { OocCampaignSnapshot } from '../types';
+import type { ChatMessage, LocationEntry } from '../../../types';
 
 /**
  * Phase 8.3 — the enemy OOC section left core with the rest of the enemy
@@ -31,9 +32,9 @@ const npc = (id: string, name: string, extra: Record<string, unknown> = {}) => (
 const place = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
     id, name, aliases: '', broadLocation: '', features: [], connections: [], description: '',
     firstSeenScene: '1', lastSeenScene: '1', source: 'manual', ...extra,
-});
+}) as LocationEntry;
 
-const withLedgers = (patch: Partial<OocCampaignSnapshot>, contextPatch: Record<string, unknown> = {}) => ({
+const withLedgers = (patch: Record<string, unknown>, contextPatch: Record<string, unknown> = {}) => ({
     ...snapshot, ...patch, context: { ...snapshot.context, ...contextPatch },
 } as unknown as OocCampaignSnapshot);
 
@@ -89,7 +90,7 @@ describe('buildOocContext', () => {
                 npc('npc-3', 'Ghost', { archived: true }),
                 npc('npc-4', 'Unrelated', {}),
             ],
-            messages: [{ id: 'm1', role: 'assistant', content: 'Mira waves from the gate.' }],
+            messages: [{ id: 'm1', role: 'assistant', content: 'Mira waves from the gate.' } as unknown as ChatMessage],
         }), 'Is the Grey Fox still hostile?');
         expect(result.text).toContain('Kaelen - aka The Grey Fox');
         expect(result.text).toContain('toward PC: Hostile');

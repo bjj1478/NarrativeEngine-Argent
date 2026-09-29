@@ -81,7 +81,7 @@ describe('genericSave', () => {
         await genericSave(descriptor as never, 'c1', [{ id: 'a' }]);
         expect(onBeforeWrite).toHaveBeenCalledWith('c1', [{ id: 'a' }]);
         const call = fetchMock.mock.calls[0];
-        expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual([{ id: 'a', stripped: true }]);
+        expect(JSON.parse(((call as unknown[])[1] as RequestInit).body as string)).toEqual([{ id: 'a', stripped: true }]);
     });
 });
 
@@ -110,7 +110,7 @@ describe('createDebouncedSave', () => {
         await vi.advanceTimersByTimeAsync(1000);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const call = fetchMock.mock.calls[0];
-        expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual([{ id: 'b' }]);
+        expect(JSON.parse(((call as unknown[])[1] as RequestInit).body as string)).toEqual([{ id: 'b' }]);
     });
 
     it('skips when activeCampaignId is null', async () => {

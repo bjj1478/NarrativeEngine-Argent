@@ -11,7 +11,7 @@ import type { GalleryEntry } from '../../types';
 
 const uploadImageToLocal = vi.fn();
 const captionImage = vi.fn();
-const loadImageForVision = vi.fn(async () => ({ base64: 'AAA', mediaType: 'image/png' }));
+const loadImageForVision = vi.fn(async (..._args: unknown[]) => ({ base64: 'AAA', mediaType: 'image/png' }));
 
 vi.mock('../../services/infrastructure/assetService', () => ({
     uploadImageToLocal: (...a: unknown[]) => uploadImageToLocal(...a),

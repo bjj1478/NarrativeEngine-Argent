@@ -3,7 +3,7 @@ import type { PostCommitTrackContext } from '../types';
 import type { TurnCallbacks, TurnState } from '../../turnOrchestrator';
 
 const mocks = vi.hoisted(() => ({
-    startPostCommitTracks: vi.fn(() => [] as Promise<void>[]),
+    startPostCommitTracks: vi.fn((..._args: unknown[]) => [] as Promise<void>[]),
     append: vi.fn(),
     getIndex: vi.fn(),
     getTimeline: vi.fn(),
@@ -89,8 +89,6 @@ function makeGateContext(tier: 'lite' | 'pro' | 'max'): PostCommitTrackContext {
         callbacks: {} as PostCommitTrackContext['callbacks'],
         displayInput: '',
         lastAssistantContent: '',
-        allMsgs: [],
-        npcLedger: [],
         activeCampaignId: 'campaign-1',
         sceneId: '001',
         freshIndex: [],
@@ -190,7 +188,7 @@ describe('Stage C bookkeeping tracks', () => {
         // once per scan.
         expect(state.getFreshContext).toHaveBeenCalledTimes(2);
         expect(mocks.startPostCommitTracks).toHaveBeenCalledTimes(1);
-        expect(mocks.startPostCommitTracks.mock.calls[0][0].scanMessages).toBe(state.messages);
+        expect((mocks.startPostCommitTracks.mock.calls[0][0] as { scanMessages: unknown }).scanMessages).toBe(state.messages);
     });
 
     it.each([

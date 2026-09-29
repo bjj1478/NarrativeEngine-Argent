@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LocationEntry, TravelState } from '../../types';
+import type { LocationEntry, TravelState } from '../../../types';
 import {
     depart,
     advance,

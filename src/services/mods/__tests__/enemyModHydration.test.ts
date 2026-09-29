@@ -109,7 +109,7 @@ describe('the enemy mod picks up its tables however the cold start goes', () => 
         host.publish('compendium', MONSTERS);
 
         expect(enemyData.getCompendium()).toHaveLength(2);
-        expect(enemyData.getCompendium()[0].name).toBe('Goblin');
+        expect((enemyData.getCompendium() as { name: string }[])[0].name).toBe('Goblin');
     });
 
     it('shows the migrated combat config rather than the defaults', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatArea } from '../ChatArea';
 import type { ChatMessage, AppSettings, GameContext, CondenserState } from '../../types';
@@ -345,7 +345,7 @@ describe('ChatArea', () => {
         const storyInput = screen.getByPlaceholderText('What do you do?');
         await user.type(storyInput, 'I approach the gate.');
         await user.click(storyInput.closest('.flex')?.querySelector('button:last-child') as HTMLButtonElement);
-        const [turnState] = (runTurn as ReturnType<typeof vi.fn>).mock.calls.at(-1);
+        const [turnState] = (runTurn as ReturnType<typeof vi.fn>).mock.calls.at(-1)!;
         expect(turnState.nextTurnOocBrief).toBe('Final player guidance.');
         expect(state.messages).toBe(canonical);
         expect(screen.queryByText('Story AI note armed')).not.toBeInTheDocument();

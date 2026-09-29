@@ -38,5 +38,14 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    // A leading underscore marks a deliberately unused binding, as in the
+    // mobile app's config and as the code here already assumes.
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
+    },
   },
 ])

@@ -140,7 +140,7 @@ describe('runFactPublishers — publication and containment', () => {
         registerModFact(modA, 'mood', () => 'tense');
         const result = runFactPublishers();
         // Namespaced facts are not in the core facts overlay.
-        expect(result?.facts.mood).toBeUndefined();
+        expect((result?.facts as Record<string, unknown> | undefined)?.mood).toBeUndefined();
         expect((result?.facts as Record<string, unknown>).mood).toBeUndefined();
     });
 

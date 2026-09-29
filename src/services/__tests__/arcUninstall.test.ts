@@ -122,7 +122,7 @@ const makeCallbacks = (): TurnCallbacks => ({
     setStreaming: vi.fn(),
     setLoadingStatus: vi.fn(),
     addNpcSuggestions: vi.fn(),
-});
+} as unknown as TurnCallbacks);
 
 const ASSISTANT_CONTENT = 'The tavern keeper eyes you warily.';
 const ALL_MSGS: ChatMessage[] = [{ id: 'm1', role: 'assistant', content: ASSISTANT_CONTENT, timestamp: 1000 }];

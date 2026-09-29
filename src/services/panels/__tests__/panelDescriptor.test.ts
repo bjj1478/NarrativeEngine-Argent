@@ -58,7 +58,7 @@ describe('PanelDescriptor contract', () => {
             'select', 'checkbox', 'array', 'image', 'computed',
         ]);
         expect(panel.bindsTo).toBe('context.playerCharacter');
-        expect(panel.crud.reorder).toBeUndefined();
+        expect((panel.crud as Record<string, boolean | undefined>).reorder).toBeUndefined();
     });
 });
 

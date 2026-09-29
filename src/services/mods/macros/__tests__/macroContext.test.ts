@@ -23,7 +23,8 @@ import {
 } from '../macroRegistry';
 import { macroFaultStore } from '../macroFaults';
 import { renderTemplate } from '../../modAdapter';
-import type { AppSettings, TurnCallbacks, TurnState } from '../../../../types';
+import type { AppSettings } from '../../../../types';
+import type { TurnCallbacks, TurnState } from '../../../turn/turnOrchestrator';
 
 const makeState = (): TurnState => ({
     input: 'hello',
@@ -132,7 +133,8 @@ describe('Phase 5.1 — ctx.macros: host-owned teardown on disable', () => {
     it('lifecycle host disable removes the mod macros and revokes the lease', async () => {
         const faultStore = createLifecycleFaultStore();
         const host = createLifecycleHost({
-            loadHooks: () => ({ activate: async (ctx: ModContext) => {
+            loadHooks: () => ({ activate: async (ctx?: ModContext) => {
+                if (!ctx) return;
                 // The mod registers two macros in its activate hook.
                 ctx.macros.register('one', () => '1');
                 ctx.macros.register('two', () => '2');
@@ -182,7 +184,8 @@ describe('Phase 5.1 — ctx.macros: host-owned teardown on disable', () => {
     it('enable clears the revoked lease so the mod can register again', async () => {
         const faultStore = createLifecycleFaultStore();
         const host = createLifecycleHost({
-            loadHooks: () => ({ activate: async (ctx: ModContext) => {
+            loadHooks: () => ({ activate: async (ctx?: ModContext) => {
+                if (!ctx) return;
                 ctx.macros.register('one', () => '1');
             } }),
             stateStore: {

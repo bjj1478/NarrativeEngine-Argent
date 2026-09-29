@@ -84,7 +84,7 @@ describe('Phase 4.2 — mount registry: built-in ordering & trailing group', () 
 describe('Phase 4.2 — mount registry: mod entry ordering (loadIndex, withinModIndex)', () => {
     it('mod entries insert between leading built-ins and the trailing group (§3.3)', () => {
         registerHeaderBuiltins();
-        registerModChrome('header.actions', MOD_A, noopEntry('alpha'), 5);
+        registerModChrome('header.actions', MOD_A, noopEntry('alpha'), 5, undefined);
         const ids = readRegion('header.actions').map((e) => e.qualifiedId);
         // alpha sits after the leading built-ins (backup..pinned) and before settings/exit.
         const alphaIdx = ids.indexOf('mod.mod-a.alpha');
@@ -96,16 +96,16 @@ describe('Phase 4.2 — mount registry: mod entry ordering (loadIndex, withinMod
     it('orders mod entries by loadIndex ascending', () => {
         registerComposerBuiltins();
         // MOD_B has a lower loadIndex than MOD_A, so it sorts first.
-        registerModChrome('composer.actions', MOD_A, noopEntry('a'), 10);
-        registerModChrome('composer.actions', MOD_B, noopEntry('b'), 5);
+        registerModChrome('composer.actions', MOD_A, noopEntry('a'), 10, undefined);
+        registerModChrome('composer.actions', MOD_B, noopEntry('b'), 5, undefined);
         const modEntries = readRegion('composer.actions').filter((e) => e.mod !== undefined);
         expect(modEntries.map((e) => e.qualifiedId)).toEqual(['mod.mod-b.b', 'mod.mod-a.a']);
     });
 
     it('orders entries within one mod by registration order (withinModIndex)', () => {
         registerComposerBuiltins();
-        registerModChrome('composer.actions', MOD_A, noopEntry('first'), 0);
-        registerModChrome('composer.actions', MOD_A, noopEntry('second'), 0);
+        registerModChrome('composer.actions', MOD_A, noopEntry('first'), 0, undefined);
+        registerModChrome('composer.actions', MOD_A, noopEntry('second'), 0, undefined);
         const modEntries = readRegion('composer.actions').filter((e) => e.mod?.id === 'mod-a');
         expect(modEntries.map((e) => e.entryId)).toEqual(['first', 'second']);
     });
@@ -113,10 +113,10 @@ describe('Phase 4.2 — mount registry: mod entry ordering (loadIndex, withinMod
     it('a mid-session enable INSERTS at its proper place, not appends (§3.2)', () => {
         registerComposerBuiltins();
         // MOD_A registers first (loadIndex 5).
-        registerModChrome('composer.actions', MOD_A, noopEntry('a'), 5);
+        registerModChrome('composer.actions', MOD_A, noopEntry('a'), 5, undefined);
         // MOD_B registers second but has a LOWER loadIndex (it loaded earlier;
         // it was just enabled mid-session). It must insert BEFORE MOD_A.
-        registerModChrome('composer.actions', MOD_B, noopEntry('b'), 2);
+        registerModChrome('composer.actions', MOD_B, noopEntry('b'), 2, undefined);
         const modEntries = readRegion('composer.actions').filter((e) => e.mod !== undefined);
         expect(modEntries.map((e) => e.qualifiedId)).toEqual(['mod.mod-b.b', 'mod.mod-a.a']);
     });
@@ -125,9 +125,9 @@ describe('Phase 4.2 — mount registry: mod entry ordering (loadIndex, withinMod
 describe('Phase 4.2 — mount registry: budget (§5)', () => {
     it('allows up to 2 entries per mod in header.actions', () => {
         registerHeaderBuiltins();
-        const h1 = registerModChrome('header.actions', MOD_A, noopEntry('h1'), 0);
-        const h2 = registerModChrome('header.actions', MOD_A, noopEntry('h2'), 0);
-        const h3 = registerModChrome('header.actions', MOD_A, noopEntry('h3'), 0);
+        const h1 = registerModChrome('header.actions', MOD_A, noopEntry('h1'), 0, undefined);
+        const h2 = registerModChrome('header.actions', MOD_A, noopEntry('h2'), 0, undefined);
+        const h3 = registerModChrome('header.actions', MOD_A, noopEntry('h3'), 0, undefined);
         expect(getModEntryCount('header.actions', 'mod-a')).toBe(2);
         expect(h3.update).toBeInstanceOf(Function);
         // The third entry is a no-op handle: removing it does nothing.
@@ -141,10 +141,10 @@ describe('Phase 4.2 — mount registry: budget (§5)', () => {
 
     it('over-budget registration records a budget fault naming the mod and region', () => {
         registerHeaderBuiltins();
-        registerModChrome('header.actions', MOD_A, noopEntry('h1'), 0);
-        registerModChrome('header.actions', MOD_A, noopEntry('h2'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('h1'), 0, undefined);
+        registerModChrome('header.actions', MOD_A, noopEntry('h2'), 0, undefined);
         mountFaultStore.clear();
-        registerModChrome('header.actions', MOD_A, noopEntry('h3'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('h3'), 0, undefined);
         const faults = mountFaultStore.getRecords();
         expect(faults.length).toBe(1);
         expect(faults[0].kind).toBe('budget');
@@ -166,9 +166,9 @@ describe('Phase 4.2 — mount registry: budget (§5)', () => {
 describe('Phase 4.2 — mount registry: duplicate id (§4.1)', () => {
     it('a second registration of the same entry id in one region faults', () => {
         registerHeaderBuiltins();
-        registerModChrome('header.actions', MOD_A, noopEntry('dup'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('dup'), 0, undefined);
         mountFaultStore.clear();
-        registerModChrome('header.actions', MOD_A, noopEntry('dup'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('dup'), 0, undefined);
         const faults = mountFaultStore.getRecords();
         expect(faults.length).toBe(1);
         expect(faults[0].kind).toBe('duplicate');
@@ -180,8 +180,8 @@ describe('Phase 4.2 — mount registry: duplicate id (§4.1)', () => {
 
     it('two mods can register the same entry id (namespacing prevents collision)', () => {
         registerHeaderBuiltins();
-        registerModChrome('header.actions', MOD_A, noopEntry('shared'), 0);
-        registerModChrome('header.actions', MOD_B, noopEntry('shared'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('shared'), 0, undefined);
+        registerModChrome('header.actions', MOD_B, noopEntry('shared'), 0, undefined);
         const modEntries = readRegion('header.actions').filter((e) => e.mod !== undefined);
         expect(modEntries.map((e) => e.qualifiedId).sort()).toEqual(['mod.mod-a.shared', 'mod.mod-b.shared']);
     });
@@ -190,7 +190,7 @@ describe('Phase 4.2 — mount registry: duplicate id (§4.1)', () => {
         registerHeaderBuiltins();
         // A mod registering entry id 'settings' becomes 'mod.mod-a.settings',
         // which is NOT the built-in 'settings'.
-        registerModChrome('header.actions', MOD_A, noopEntry('settings'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('settings'), 0, undefined);
         const ids = readRegion('header.actions').map((e) => e.qualifiedId);
         expect(ids).toContain('settings'); // the built-in
         expect(ids).toContain('mod.mod-a.settings'); // the mod entry
@@ -204,7 +204,7 @@ describe('Phase 4.2 — mount registry: icon resolution + fault (§8.2)', () => 
         // Lucide icons are `React.forwardRef` components (objects with a
         // `$$typeof` marker), not plain functions.
         expect(icon).toBeTruthy();
-        expect(typeof icon.render === 'function' || typeof icon === 'function' || '$$typeof' in (icon as object)).toBe(true);
+        expect(typeof (icon as { render?: unknown }).render === 'function' || typeof icon === 'function' || '$$typeof' in (icon as object)).toBe(true);
     });
 
     it('an unknown icon name returns the fallback glyph and known=false', () => {
@@ -221,7 +221,7 @@ describe('Phase 4.2 — mount registry: icon resolution + fault (§8.2)', () => 
             icon: 'NotARealIcon',
             label: 'Bad',
             onSelect: () => undefined,
-        }, 0);
+        }, 0, undefined);
         const faults = mountFaultStore.getRecords();
         expect(faults.length).toBe(1);
         expect(faults[0].kind).toBe('icon');
@@ -235,8 +235,8 @@ describe('Phase 4.2 — mount registry: host-owned teardown (§8.5)', () => {
     it('disableModMounts removes every entry the mod registered', () => {
         registerHeaderBuiltins();
         registerComposerBuiltins();
-        registerModChrome('header.actions', MOD_A, noopEntry('h1'), 0);
-        registerModChrome('composer.actions', MOD_A, noopEntry('c1'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('h1'), 0, undefined);
+        registerModChrome('composer.actions', MOD_A, noopEntry('c1'), 0, undefined);
         expect(getModEntryCount('header.actions', 'mod-a')).toBe(1);
         expect(getModEntryCount('composer.actions', 'mod-a')).toBe(1);
         const removed = disableModMounts('mod-a');
@@ -250,7 +250,7 @@ describe('Phase 4.2 — mount registry: host-owned teardown (§8.5)', () => {
         disableModMounts('mod-a');
         expect(isModMountsRevoked('mod-a')).toBe(true);
         mountFaultStore.clear();
-        const handle = registerModChrome('header.actions', MOD_A, noopEntry('after'), 0);
+        const handle = registerModChrome('header.actions', MOD_A, noopEntry('after'), 0, undefined);
         const faults = mountFaultStore.getRecords();
         expect(faults.length).toBe(1);
         expect(faults[0].kind).toBe('revoked');
@@ -265,14 +265,14 @@ describe('Phase 4.2 — mount registry: host-owned teardown (§8.5)', () => {
         disableModMounts('mod-a');
         enableModMounts('mod-a');
         expect(isModMountsRevoked('mod-a')).toBe(false);
-        const handle = registerModChrome('header.actions', MOD_A, noopEntry('after-enable'), 0);
+        const handle = registerModChrome('header.actions', MOD_A, noopEntry('after-enable'), 0, undefined);
         expect(getModEntryCount('header.actions', 'mod-a')).toBe(1);
         handle.remove();
     });
 
     it('MountHandle.remove unregisters a single entry', () => {
         registerHeaderBuiltins();
-        const handle = registerModChrome('header.actions', MOD_A, noopEntry('removable'), 0);
+        const handle = registerModChrome('header.actions', MOD_A, noopEntry('removable'), 0, undefined);
         expect(getModEntryCount('header.actions', 'mod-a')).toBe(1);
         handle.remove();
         expect(getModEntryCount('header.actions', 'mod-a')).toBe(0);
@@ -280,7 +280,7 @@ describe('Phase 4.2 — mount registry: host-owned teardown (§8.5)', () => {
 
     it('clearAllModEntries removes only mod entries, keeping built-ins', () => {
         registerHeaderBuiltins();
-        registerModChrome('header.actions', MOD_A, noopEntry('a1'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('a1'), 0, undefined);
         clearAllModEntries();
         const ids = readRegion('header.actions').map((e) => e.entryId);
         expect(ids).toEqual([...HEADER_BUILTIN_IDS]);
@@ -292,14 +292,14 @@ describe('Phase 4.2 — mount registry: subscribe (React row re-renders)', () =>
         registerHeaderBuiltins();
         let notifications = 0;
         const unsubscribe = subscribeToRegion('header.actions', () => { notifications++; });
-        registerModChrome('header.actions', MOD_A, noopEntry('sub1'), 0);
+        registerModChrome('header.actions', MOD_A, noopEntry('sub1'), 0, undefined);
         expect(notifications).toBe(1);
-        const handle = registerModChrome('header.actions', MOD_A, noopEntry('sub2'), 1);
+        const handle = registerModChrome('header.actions', MOD_A, noopEntry('sub2'), 1, undefined);
         expect(notifications).toBe(2);
         handle.remove();
         expect(notifications).toBe(3);
         unsubscribe();
-        registerModChrome('header.actions', MOD_A, noopEntry('sub3'), 2);
+        registerModChrome('header.actions', MOD_A, noopEntry('sub3'), 2, undefined);
         expect(notifications).toBe(3);
     });
 });
@@ -322,7 +322,7 @@ describe('Phase 4.2 — mount registry: qualified id', () => {
 
 describe('Phase 4.4 — message.actions chrome registry', () => {
     it('registers a mod entry through registerModChrome on message.actions', () => {
-        const handle = registerModChrome('message.actions', MOD_A, noopEntry('tag'), 0);
+        const handle = registerModChrome('message.actions', MOD_A, noopEntry('tag'), 0, undefined);
         expect(getModEntryCount('message.actions', 'mod-a')).toBe(1);
         const ids = readRegion('message.actions').map((e) => e.qualifiedId);
         expect(ids).toContain('mod.mod-a.tag');
@@ -331,19 +331,19 @@ describe('Phase 4.4 — message.actions chrome registry', () => {
     });
 
     it('enforces the per-mod budget of 3 on message.actions (MOUNTS.md §5)', () => {
-        registerModChrome('message.actions', MOD_A, noopEntry('a1'), 0);
-        registerModChrome('message.actions', MOD_A, noopEntry('a2'), 0);
-        registerModChrome('message.actions', MOD_A, noopEntry('a3'), 0);
+        registerModChrome('message.actions', MOD_A, noopEntry('a1'), 0, undefined);
+        registerModChrome('message.actions', MOD_A, noopEntry('a2'), 0, undefined);
+        registerModChrome('message.actions', MOD_A, noopEntry('a3'), 0, undefined);
         mountFaultStore.clear();
-        registerModChrome('message.actions', MOD_A, noopEntry('a4'), 0);
+        registerModChrome('message.actions', MOD_A, noopEntry('a4'), 0, undefined);
         expect(getModEntryCount('message.actions', 'mod-a')).toBe(3);
         const faults = mountFaultStore.getRecords();
         expect(faults.some((f) => f.kind === 'budget' && f.region === 'message.actions')).toBe(true);
     });
 
     it('two mods can each register up to the budget (no cross-mod budget)', () => {
-        registerModChrome('message.actions', MOD_A, noopEntry('a1'), 0);
-        registerModChrome('message.actions', MOD_B, noopEntry('b1'), 0);
+        registerModChrome('message.actions', MOD_A, noopEntry('a1'), 0, undefined);
+        registerModChrome('message.actions', MOD_B, noopEntry('b1'), 0, undefined);
         expect(getModEntryCount('message.actions', 'mod-a')).toBe(1);
         expect(getModEntryCount('message.actions', 'mod-b')).toBe(1);
         const ids = readRegion('message.actions').filter((e) => e.mod !== undefined).map((e) => e.qualifiedId);

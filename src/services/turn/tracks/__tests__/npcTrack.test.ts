@@ -132,7 +132,7 @@ describe('track.npc — detection', () => {
         await npcTrack.run(ctx);
 
         expect(mockValidate).not.toHaveBeenCalled();
-        expect(ctx.callbacks.addNpcSuggestions).not.toHaveBeenCalled();
+        expect(ctx.callbacks!.addNpcSuggestions).not.toHaveBeenCalled();
     });
 
     it('surfaces new names as suggestions and never auto-adds an NPC', async () => {
@@ -143,7 +143,7 @@ describe('track.npc — detection', () => {
         const ctx = makeCtx();
         await npcTrack.run(ctx);
 
-        expect(ctx.callbacks.addNpcSuggestions).toHaveBeenCalledWith(['Kaelen'], ASSISTANT);
+        expect(ctx.callbacks!.addNpcSuggestions).toHaveBeenCalledWith(['Kaelen'], ASSISTANT);
         expect((ctx.callbacks as any).addNPC).toBeUndefined();
         expect(mockBQ.push).not.toHaveBeenCalled();
     });
@@ -157,7 +157,7 @@ describe('track.npc — detection', () => {
 
         expect(mockValidate).not.toHaveBeenCalled();
         expect(mockClassify).toHaveBeenCalledWith(['Kaelen'], [], []);
-        expect(ctx.callbacks.addNpcSuggestions).toHaveBeenCalledWith(['Kaelen'], ASSISTANT);
+        expect(ctx.callbacks!.addNpcSuggestions).toHaveBeenCalledWith(['Kaelen'], ASSISTANT);
     });
 
     it('stops when validation rejects every candidate', async () => {
@@ -168,7 +168,7 @@ describe('track.npc — detection', () => {
         await npcTrack.run(ctx);
 
         expect(mockClassify).not.toHaveBeenCalled();
-        expect(ctx.callbacks.addNpcSuggestions).not.toHaveBeenCalled();
+        expect(ctx.callbacks!.addNpcSuggestions).not.toHaveBeenCalled();
     });
 });
 
@@ -198,7 +198,7 @@ describe('track.npc — existing NPC updates', () => {
             [existing],
             expect.any(Function),
         );
-        expect(ctx.callbacks.updateNPC).toHaveBeenCalledWith('n1', { lastUpdateScene: 7 });
+        expect(ctx.callbacks!.updateNPC).toHaveBeenCalledWith('n1', { lastUpdateScene: 7 });
     });
 
     it('RACE GUARD: drops the lastUpdateScene write when the campaign switched mid-flight', async () => {
@@ -214,7 +214,7 @@ describe('track.npc — existing NPC updates', () => {
         await npcTrack.run(ctx);
 
         expect(mockUpdateExisting).toHaveBeenCalled();
-        expect(ctx.callbacks.updateNPC).not.toHaveBeenCalled();
+        expect(ctx.callbacks!.updateNPC).not.toHaveBeenCalled();
     });
 
     it('RACE GUARD: the guard handed to updateExistingNPCs drops writes after a switch', async () => {
@@ -229,14 +229,14 @@ describe('track.npc — existing NPC updates', () => {
         await npcTrack.run(ctx);
 
         expect(guard).toBeTypeOf('function');
-        (ctx.callbacks.updateNPC as any).mockClear();
+        (ctx.callbacks!.updateNPC as any).mockClear();
         guard!('n1', { name: 'Mira the Bold' });
-        expect(ctx.callbacks.updateNPC).toHaveBeenCalledWith('n1', { name: 'Mira the Bold' });
+        expect(ctx.callbacks!.updateNPC).toHaveBeenCalledWith('n1', { name: 'Mira the Bold' });
 
         mockActiveCampaignId = 'campaign-2';
-        (ctx.callbacks.updateNPC as any).mockClear();
+        (ctx.callbacks!.updateNPC as any).mockClear();
         guard!('n1', { name: 'Mira the Dropped' });
-        expect(ctx.callbacks.updateNPC).not.toHaveBeenCalled();
+        expect(ctx.callbacks!.updateNPC).not.toHaveBeenCalled();
     });
 
     it('Pro tier honours the 5-scene cooldown', async () => {

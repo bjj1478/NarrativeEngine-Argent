@@ -15,7 +15,7 @@ import {
     SandboxFaultError,
     type SandboxWorkerMessage,
 } from './sandboxTypes';
-import { buildModContext, type ModContextMod, type ModLocationStateInput } from '../modContext';
+import { buildModContext, modMayAddMessage, type ModContextMod, type ModLocationStateInput } from '../modContext';
 
 /**
  * Phase 4.0 — the per-mod identity the sandbox needs to resolve bare table
@@ -169,6 +169,9 @@ export function validateJournal(
             }
             if (!hasCapability(capabilities, writeCapability(storeEntry.name))) {
                 throw new SandboxFaultError('journal-rejected', `[sandbox] journal rejected: undeclared write "${storeEntry.name}"`);
+            }
+            if (storeEntry.name === 'addMessage' && !modMayAddMessage(storeEntry.args[0])) {
+                throw new SandboxFaultError('journal-rejected', '[sandbox] journal rejected: addMessage cannot add a tool message');
             }
         } else if (entry.kind === 'table') {
             const tableEntry = entry as { kind: 'table'; name: string; rows: unknown };

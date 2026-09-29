@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { queryTraits, formatTraitsForContext, type SelectedTraits } from '../retrieval/semanticMemory';
-import type { CharacterProfileState, CharacterTrait } from '../types';
+import type { CharacterProfileState, CharacterTrait } from '../../types';
 
 function makeTrait(partial: Partial<CharacterTrait>): CharacterTrait {
     return {
@@ -49,7 +49,7 @@ describe('WO-G: queryTraits', () => {
         // Planner says scene is 'combat'. e1 (combat tag ∩ planner) keeps its score;
         // e2 (travel tag, no intersect) is demoted to 0 and dropped.
         const { core, extended } = queryTraits(
-            traits, 'I swing my Sword at the dragon', [{ content: 'Sword', role: 'user' }], [],
+            traits, 'I swing my Sword at the dragon', [{ content: 'Sword' }], [],
             ['combat'], 400, 5,
         );
         expect(core).toHaveLength(5);
@@ -68,7 +68,7 @@ describe('WO-G: queryTraits', () => {
             // Untagged, importance 5, but text mentions a capitalized entity for score.
             makeTrait({ id: 'e1', importance: 5, eventTags: [], text: 'knows the Dragonlord' }),
         ];
-        const { extended } = queryTraits(traits, 'The Dragonlord attacks', [{ content: 'Dragonlord', role: 'user' }], [], ['combat'], 400, 5);
+        const { extended } = queryTraits(traits, 'The Dragonlord attacks', [{ content: 'Dragonlord' }], [], ['combat'], 400, 5);
         expect(extended.map(t => t.id)).toContain('e1');
     });
 
@@ -82,7 +82,7 @@ describe('WO-G: queryTraits', () => {
             // Capitalized 'Sword' → entity match on the trait text 'wields a Sword'.
             makeTrait({ id: 'e1', importance: 5, eventTags: ['combat'], text: 'wields a Sword' }),
         ];
-        const { extended } = queryTraits(traits, 'I swing at the dragon', [{ content: 'Sword', role: 'user' }], [], undefined, 400, 5);
+        const { extended } = queryTraits(traits, 'I swing at the dragon', [{ content: 'Sword' }], [], undefined, 400, 5);
         // No planner tags → e1 is scored by entity match (contains 'sword')
         expect(extended.map(t => t.id)).toContain('e1');
     });

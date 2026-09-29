@@ -82,7 +82,26 @@ describe('loadCampaignState', () => {
         const reloaded = await loadCampaignState('c1');
 
         expect(persisted).not.toBeNull();
-        expect((persisted as { pinnedExcerpts?: unknown }).pinnedExcerpts).toEqual(PINS);
+        expect((persisted as unknown as { pinnedExcerpts?: unknown }).pinnedExcerpts).toEqual(PINS);
         expect(reloaded?.pinnedExcerpts).toEqual(PINS);
     });
+});
+
+it('round-trips campaign injections independently for two campaigns', async () => {
+    const { loadCampaignState, saveCampaignState } = await import('../campaignStore');
+    const { migrateLegacyContext } = await import('../../types');
+    const records = new Map<string, unknown>();
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') records.set(url, JSON.parse(String(init.body)));
+        return { ok: records.has(url), json: async () => records.get(url) };
+    });
+    const card = {
+        id: 'a', name: 'A only', content: 'Rain', enabled: true, role: 'system' as const,
+        depth: 2, mode: 'message' as const, triggers: ['reply' as const],
+    };
+    await saveCampaignState('a', { context: migrateLegacyContext({ promptInjections: [card] }), messages: [], condenser: { condensedUpToIndex: -1 } });
+    await saveCampaignState('b', { context: migrateLegacyContext({ promptInjections: [] }), messages: [], condenser: { condensedUpToIndex: -1 } });
+    expect(migrateLegacyContext((await loadCampaignState('a'))!.context).promptInjections).toEqual([card]);
+    expect(migrateLegacyContext((await loadCampaignState('b'))!.context).promptInjections).toEqual([]);
+    expect(migrateLegacyContext({}).promptInjections).toBeUndefined();
 });

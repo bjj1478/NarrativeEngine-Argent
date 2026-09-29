@@ -4,8 +4,6 @@ import { buildPayload } from '../../services/payload/payloadBuilder';
 import type { EndpointConfig, GameContext, AppSettings, ChatMessage, ArchiveChapter, ArchiveIndexEntry } from '../../types';
 
 const claudeProvider: EndpointConfig = {
-    id: 'test-claude',
-    name: 'Claude',
     endpoint: 'https://api.anthropic.com',
     modelName: 'claude-sonnet-4-20250514',
     apiKey: 'test-key',
@@ -13,8 +11,6 @@ const claudeProvider: EndpointConfig = {
 };
 
 const openAIProvider: EndpointConfig = {
-    id: 'test-openai',
-    name: 'OpenAI',
     endpoint: 'https://api.openai.com/v1',
     modelName: 'gpt-4o',
     apiKey: 'test-key',
@@ -22,12 +18,10 @@ const openAIProvider: EndpointConfig = {
 };
 
 const ollamaProvider: EndpointConfig = {
-    id: 'test-ollama',
-    name: 'Ollama',
     endpoint: 'http://localhost:11434',
     modelName: 'llama3',
     apiFormat: 'ollama',
-};
+} as EndpointConfig;
 
 const cacheControlEphemeral = { type: 'ephemeral' as const };
 
@@ -96,8 +90,6 @@ describe('buildChatBody — cache_control handling', () => {
 
     it('Gemini: system messages are collected into systemInstruction (cache_control irrelevant for Gemini)', () => {
         const geminiProvider: EndpointConfig = {
-            id: 'test-gemini',
-            name: 'Gemini',
             endpoint: 'https://generativelanguage.googleapis.com',
             modelName: 'gemini-2.0-flash',
             apiKey: 'test-key',
@@ -272,7 +264,7 @@ describe('WO-09c — Claude wire preserves history breakpoints', () => {
                 sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
                 worldVibe: '', notebook: [], notebookActive: false,
                 worldEventConfig: { initialDC: 498, dcReduction: 2, who: [], where: [], why: [], what: [] },
-            } as GameContext;
+            } as unknown as GameContext;
         }
 
         function baseSettings(): AppSettings {

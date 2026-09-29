@@ -45,7 +45,7 @@ const nativeMod = (): ValidatedMod => ({
         js: 'index.js',
         hooks: { activate: 'onActivate', disable: 'onDisable' },
     },
-});
+} as unknown as ValidatedMod);
 
 beforeEach(() => {
     vi.clearAllMocks();

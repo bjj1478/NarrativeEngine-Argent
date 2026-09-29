@@ -9,7 +9,7 @@ vi.mock('../../services/infrastructure/assetService', () => ({ downloadImageToLo
 describe('location picture context', () => {
     afterEach(() => { cleanup(); vi.restoreAllMocks(); });
     it('sends the actual description, region, features, and condition to Image AI', async () => {
-        const config = { endpoint: 'https://images.test', apiKey: '', modelName: 'image' };
+        const config = { endpoint: 'https://images.test', apiKey: '', modelName: 'image' } as ReturnType<ReturnType<typeof useAppStore.getState>['getActiveImageEndpoint']>;
         vi.spyOn(useAppStore.getState(), 'getActiveImageEndpoint').mockReturnValue(config);
         vi.mocked(generateNPCPortrait).mockResolvedValue('https://images.test/harbor.png');
         vi.mocked(downloadImageToLocal).mockResolvedValue('/assets/harbor.png');

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildPayload } from '../payloadBuilder';
-import type { AppSettings, GameContext } from '../../types';
+import type { AppSettings, GameContext } from '../../../types';
 import type { OpenAIMessage } from '../../llm/llmService';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ const baseContext = (): GameContext => ({
     sceneNote: '', sceneNoteActive: false, sceneNoteDepth: 3,
     worldVibe: '',
     notebook: [], notebookActive: true,
-} as GameContext);
+} as unknown as GameContext);
 
 const baseSettings = (): AppSettings => ({
     debugMode: true,

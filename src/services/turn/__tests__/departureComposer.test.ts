@@ -31,8 +31,8 @@ function makeDeps(): DepartureDeps & {
     updateContext: ReturnType<typeof vi.fn>;
 } {
     return {
-        updateLocation: vi.fn(),
-        updateContext: vi.fn(),
+        updateLocation: vi.fn(() => undefined),
+        updateContext: vi.fn(() => undefined),
     };
 }
 

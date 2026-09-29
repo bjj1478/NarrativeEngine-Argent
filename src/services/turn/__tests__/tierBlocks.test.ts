@@ -64,7 +64,7 @@ describe('WORKORDER-P5-01 — listTierBlocks declaration table', () => {
 
     it('defaultEnabled matches the pro preset (the default tier — ?? pro fallback)', () => {
         for (const block of blocks) {
-            expect(block.defaultEnabled, `defaultEnabled for ${block.id}`).toBe(MATRIX.pro[block.id]);
+            expect(block.defaultEnabled, `defaultEnabled for ${block.id}`).toBe(MATRIX.pro[block.id as TierFeature]);
         }
     });
 
