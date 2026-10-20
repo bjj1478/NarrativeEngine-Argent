@@ -72,7 +72,7 @@ beforeEach(async () => {
     vi.resetModules();
     vi.stubEnv('DATA_DIR', tmpDir);
     vi.doMock('../lib/embedder.js', () => ({
-        embedText: vi.fn(), buildArchiveText: vi.fn(), buildLoreText: vi.fn(), resolveIndexingSpeed: vi.fn(),
+        embedText: vi.fn(), buildScenePassages: vi.fn(() => []), buildLoreText: vi.fn(), resolveIndexingSpeed: vi.fn(),
     }));
     vi.doMock('../lib/vectorStore.js', () => ({
         storeArchiveEmbedding: vi.fn(), storeLoreEmbedding: vi.fn(), deleteCampaignEmbeddings: vi.fn(),

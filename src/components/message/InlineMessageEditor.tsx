@@ -49,7 +49,7 @@ export function InlineMessageEditor({
     };
 
     return (
-        <div className="w-full">
+        <div data-motion="reveal" className="w-full">
             <div className="sticky top-2 flex justify-end gap-1 z-20 mb-1">
                 <button title="Save edit (Enter)" onClick={() => onSubmit?.()} className="text-terminal hover:text-terminal p-1.5 bg-void-darker rounded border border-border">
                     <Check size={14} />

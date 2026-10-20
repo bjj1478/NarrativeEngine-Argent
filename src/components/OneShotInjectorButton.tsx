@@ -123,7 +123,7 @@ function OneShotModal({
 
     return (
         <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60"
+            data-motion="overlay" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60"
             onClick={handleBackdropClick}
         >
             <div

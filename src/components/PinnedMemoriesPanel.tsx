@@ -113,7 +113,7 @@ export function PinnedMemoriesPanel({ open, onClose }: Props) {
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        <div data-motion="overlay" className="fixed inset-0 z-[100] flex items-center justify-center">
             <div
                 className="absolute inset-0 bg-ember/40 backdrop-blur-sm"
                 onClick={handleClose}

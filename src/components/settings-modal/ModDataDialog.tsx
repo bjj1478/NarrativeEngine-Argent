@@ -45,7 +45,7 @@ export function ModDataDialog({ variant, modName, onConfirm, onCancel }: ModData
 
     return (
         <div
-            className="fixed inset-0 z-[200] flex items-center justify-center"
+            data-motion="overlay" className="fixed inset-0 z-[200] flex items-center justify-center"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby={titleId}

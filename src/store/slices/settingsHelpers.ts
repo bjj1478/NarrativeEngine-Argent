@@ -7,6 +7,9 @@ import { DEFAULT_STORY_TIMEOUT_SECONDS, normalizeStoryTimeoutSeconds } from '../
 import { toast } from '../../components/Toast';
 import { applyLocale, detectLocale, isLocaleCode } from '../../i18n';
 import { getBuiltinTokenCap } from '../../services/payload/contributions/builtins';
+import { migratePresetSlotThinking } from './slotThinking';
+import { normalizeLoreDepth } from '../../services/lore/loreBudget';
+import { READING_DEFAULTS, clampReadingSize, normalizeReadingFont, normalizeReadingLeading, normalizeReadingWidth, normalizeReadingAlign } from '../../components/chat/readingPrefs';
 
 import { API_BASE as API } from '../../lib/apiBase';
 
@@ -105,9 +108,11 @@ export const defaultSettings: AppSettings = {
     storyTimeoutSeconds: DEFAULT_STORY_TIMEOUT_SECONDS,
     enableArchivePlanner: false,
     retrievalAlgorithm: 'idf-rrf',
+    loreDepth: 'balanced',
     archiveRecallDepth: 'standard',
     responseLength: 'flexible',
     uiScale: 1.0,
+    ...READING_DEFAULTS,
     betaUi: false,
     imageStylePrompt: '',
     imageNegativePrompt: '',
@@ -412,6 +417,9 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
         }
     }
 
+    // Thinking moved from the provider to the preset slot; seed slots that predate it.
+    presets = presets.map(preset => migratePresetSlotThinking(preset, providers));
+
     return {
         presets,
         activePresetId: (raw.activePresetId as string) || presets[0].id,
@@ -437,6 +445,7 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
         verboseUtilityLogging: raw.verboseUtilityLogging as boolean,
         enableArchivePlanner: (raw.enableArchivePlanner as boolean) ?? false,
         retrievalAlgorithm: (raw.retrievalAlgorithm as 'classic' | 'idf-rrf') ?? 'idf-rrf',
+        loreDepth: normalizeLoreDepth(raw.loreDepth),
         archiveRecallDepth: (raw.archiveRecallDepth as 'lean' | 'standard' | 'deep') ?? 'standard',
         // Validated, not cast: an unknown value would otherwise reach the prompt builder.
         responseLength: (RESPONSE_LENGTHS as readonly string[]).includes(raw.responseLength as string)
@@ -445,6 +454,11 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
         matureMode: (raw.matureMode as boolean) ?? false,
         aiTier: raw.aiTier as AiTier | undefined,
         uiScale: (raw.uiScale as number) ?? 1.0,
+        readingFont: normalizeReadingFont(raw.readingFont),
+        readingSize: clampReadingSize(raw.readingSize),
+        readingLeading: normalizeReadingLeading(raw.readingLeading),
+        readingWidth: normalizeReadingWidth(raw.readingWidth),
+        readingAlign: normalizeReadingAlign(raw.readingAlign),
         betaUi: (raw.betaUi as boolean) ?? false,
         embeddingModel: raw.embeddingModel as ('standard' | 'high') | undefined,
         imageStylePrompt: (raw.imageStylePrompt as string) ?? '',

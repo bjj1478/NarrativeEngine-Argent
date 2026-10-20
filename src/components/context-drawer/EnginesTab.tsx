@@ -12,7 +12,9 @@ import {
     minifySelectedInventory,
     minifySelectedProfile,
 } from '../../services/turn/contextMinifier';
-import type { DieType, OutcomeBand, DiceCategory, CharacterProfile } from '../../types';
+import type { DieType, OutcomeBand, DiceCategory, CharacterProfile, CharacterIntroEntry, NpcIntroConfig } from '../../types';
+import { NPC_INTRO_DEFAULTS } from '../../services/npc-generation/charIntroEngine';
+import { isBlockEnabled } from '../../services/turn/blockEnablement';
 
 function uid(prefix: string) { return `${prefix}_${Math.random().toString(36).slice(2, 9)}`; }
 
@@ -314,6 +316,12 @@ export function EnginesTab() {
                     </div>
                 </div>
 
+                {/* Relationship Memory (NPC Ledger v3) */}
+                <RelationshipMemorySection context={context} updateContext={updateContext} />
+
+                {/* NPC Appearance Engine (character intro engine) */}
+                <NpcAppearanceSection context={context} updateContext={updateContext} />
+
                 {/* Dice Fairness Engine (generalized) */}
                 <DiceFairnessSection context={context} updateContext={updateContext} />
 
@@ -329,6 +337,211 @@ export function EnginesTab() {
             >
                 <Plus size={12} /> Add Campaign Fact
             </button>
+        </div>
+    );
+}
+
+// ─── Relationship Memory Section (NPC Ledger v3) ───────────────────────
+// The per-campaign switch for relationship memory. The feature (records, stance, the
+// payload/reaction/updater switch from scalar affinity to stance) shipped 2026-08-14 with
+// readers for `context.relationshipMemory` but nothing that could set it, so it never ran.
+
+type RelationshipMemorySectionProps = {
+    context: ReturnType<typeof useAppStore.getState>['context'];
+    updateContext: ReturnType<typeof useAppStore.getState>['updateContext'];
+};
+
+export function RelationshipMemorySection({ context, updateContext }: RelationshipMemorySectionProps) {
+    const active = context.relationshipMemory === true;
+    return (
+        <div className="space-y-2">
+            <div className="text-[12px] text-terminal uppercase tracking-wider font-bold border-b border-terminal/20 pb-1 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-terminal" />
+                    Relationship Memory
+                </div>
+                <Toggle active={active} onChange={() => updateContext({ relationshipMemory: !active })} />
+            </div>
+            <div className="bg-void border border-border p-3 space-y-2">
+                <p className="text-[12px] text-text-dim leading-relaxed">
+                    NPCs remember specific moments with you and with each other, rated by how much each one mattered, instead of a single like/dislike score.
+                    Before each reply, NPCs in the scene with a shared history get a short note on how they stand toward the others present.
+                </p>
+                <p className="text-[12px] text-text-dim leading-relaxed">
+                    Cost when on: one background AI call per scene to record memories, plus a short step before writing when someone in the scene has history. Off by default; memories start from the scene you turn it on.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+// ─── NPC Appearance Section (character intro engine) ───────────────────
+// Ported from mobile (`mobileApp/src/components/context-drawer/EnginesTab.tsx`
+// NpcAppearanceSection). The engine (`charIntroEngine.ts`) came over on 2026-05-25
+// without this panel, so nothing on desktop could fill `npcIntroConfig` and the
+// engine never ran.
+
+type NpcAppearanceSectionProps = {
+    context: ReturnType<typeof useAppStore.getState>['context'];
+    updateContext: ReturnType<typeof useAppStore.getState>['updateContext'];
+};
+
+export function NpcAppearanceSection({ context, updateContext }: NpcAppearanceSectionProps) {
+    const aiTier = useAppStore((s) => s.settings.aiTier);
+    const moduleEnabled = useAppStore((s) => s.settings.moduleEnabled);
+    const npcLedger = useAppStore((s) => s.npcLedger);
+    const active = context.npcIntroEngineActive ?? false;
+    const config: NpcIntroConfig = context.npcIntroConfig ?? { ...NPC_INTRO_DEFAULTS, characters: [] };
+    const characters = config.characters;
+    const blockOn = isBlockEnabled('introEngine', aiTier, moduleEnabled);
+
+    const [newName, setNewName] = useState('');
+    const [newType, setNewType] = useState<CharacterIntroEntry['type']>('wandering');
+    const [newLocation, setNewLocation] = useState('');
+    const [newBoost, setNewBoost] = useState('');
+
+    const updateConfig = (patch: Partial<NpcIntroConfig>) => {
+        updateContext({ npcIntroConfig: { ...config, ...patch } });
+    };
+
+    const pooledNames = new Set(characters.map(c => c.name.toLowerCase()));
+    const availableNpcs = [...npcLedger]
+        .filter(n => n.name && !pooledNames.has(n.name.toLowerCase()))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+
+    const handleAdd = () => {
+        const name = newName.trim();
+        if (!name || pooledNames.has(name.toLowerCase())) return;
+        const entry: CharacterIntroEntry = { name, type: newType };
+        if (newType === 'location' && newLocation.trim()) entry.location = newLocation.trim();
+        const keywords = newBoost.split(',').map(k => k.trim()).filter(Boolean);
+        if (keywords.length > 0) entry.boostKeywords = keywords;
+        updateConfig({ characters: [...characters, entry] });
+        setNewName('');
+        setNewLocation('');
+        setNewBoost('');
+    };
+
+    const inputClass = 'w-full bg-surface border border-border px-3 py-2 text-[13px] font-mono text-text-primary focus:border-terminal outline-none transition-colors';
+
+    return (
+        <div className="space-y-2">
+            <div className="text-[12px] text-terminal uppercase tracking-wider font-bold border-b border-terminal/20 pb-1 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-terminal" />
+                    NPC Appearance Engine
+                    <span className="text-text-dim normal-case font-normal tracking-normal text-[11px]">
+                        {characters.length} candidate{characters.length === 1 ? '' : 's'}
+                    </span>
+                </div>
+                <Toggle active={active} onChange={() => updateContext({ npcIntroEngineActive: !active })} />
+            </div>
+            <div className="bg-void border border-border p-3 space-y-3">
+                <p className="text-[12px] text-text-dim leading-relaxed">
+                    Brings characters from this pool into the story on a d200 roll against a DC that drops each quiet turn and resets after an introduction.
+                    {blockOn ? null : (
+                        <span className="text-amber-400 block mt-1">
+                            Off for the {(aiTier ?? 'pro').toUpperCase()} tier. Turn on "Character Intro Engine" in Block View to use it.
+                        </span>
+                    )}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col">
+                        <label className="text-[12px] text-text-dim uppercase tracking-wider mb-1">Initial DC (Default {NPC_INTRO_DEFAULTS.initialDC})</label>
+                        <input
+                            type="number"
+                            value={config.initialDC}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                updateConfig({ initialDC: isNaN(val) ? NPC_INTRO_DEFAULTS.initialDC : val });
+                            }}
+                            className={inputClass}
+                        />
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-[12px] text-text-dim uppercase tracking-wider mb-1">DC Drop per turn (Def {NPC_INTRO_DEFAULTS.dcReduction})</label>
+                        <input
+                            type="number"
+                            value={config.dcReduction}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                updateConfig({ dcReduction: isNaN(val) ? NPC_INTRO_DEFAULTS.dcReduction : val });
+                            }}
+                            className={inputClass}
+                        />
+                    </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/40 space-y-1.5">
+                    <label className="text-[12px] text-text-dim uppercase tracking-wider">Candidate Pool</label>
+                    {characters.length === 0 ? (
+                        <p className="text-[12px] text-text-dim/60 italic">No candidates yet. Add one below.</p>
+                    ) : (
+                        <div className="space-y-1">
+                            {characters.map((c) => (
+                                <div key={c.name} className="flex items-center justify-between bg-surface border border-border px-2 py-1.5 rounded text-[12px]">
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-text-primary font-mono truncate">{c.name}</span>
+                                        <span className="text-text-dim text-[11px]">
+                                            {c.type === 'location' ? 'Location-bound' : 'Wandering'}
+                                            {c.location ? ` · ${c.location}` : ''}
+                                            {c.boostKeywords && c.boostKeywords.length > 0 ? ` · boost: ${c.boostKeywords.join(', ')}` : ''}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={() => updateConfig({ characters: characters.filter(x => x.name !== c.name) })}
+                                        className="text-text-dim hover:text-danger transition-colors shrink-0 ml-2"
+                                        title="Remove from the appearance pool"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="pt-2 border-t border-border/40 space-y-2">
+                    <label className="text-[12px] text-text-dim uppercase tracking-wider">Add Candidate</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <select value={newName} onChange={(e) => setNewName(e.target.value)} className={inputClass}>
+                            <option value="">Select NPC…</option>
+                            {availableNpcs.map(n => (
+                                <option key={n.id} value={n.name}>{n.name}</option>
+                            ))}
+                        </select>
+                        <select value={newType} onChange={(e) => setNewType(e.target.value as CharacterIntroEntry['type'])} className={inputClass}>
+                            <option value="wandering">Wandering</option>
+                            <option value="location">Location-bound</option>
+                        </select>
+                    </div>
+                    {newType === 'location' && (
+                        <input
+                            type="text"
+                            value={newLocation}
+                            onChange={(e) => setNewLocation(e.target.value)}
+                            placeholder="Location (e.g. Vessenmark)"
+                            className={inputClass}
+                        />
+                    )}
+                    <input
+                        type="text"
+                        value={newBoost}
+                        onChange={(e) => setNewBoost(e.target.value)}
+                        placeholder="Boost keywords, optional (comma-separated)"
+                        className={inputClass}
+                    />
+                    <button
+                        onClick={handleAdd}
+                        disabled={!newName.trim()}
+                        className="flex items-center gap-1 text-[12px] text-terminal hover:text-text-primary transition-colors disabled:opacity-30"
+                    >
+                        <Plus size={12} />
+                        Add to pool
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

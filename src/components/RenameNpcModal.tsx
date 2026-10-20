@@ -55,7 +55,7 @@ export function RenameNpcModal() {
     };
 
     return (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={busy ? undefined : onClose}>
+        <div data-motion="overlay" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={busy ? undefined : onClose}>
             <div className="bg-surface border border-border rounded-lg w-full max-w-sm mx-4 flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b border-border">
                     <h2 className="text-terminal text-sm font-bold tracking-[0.2em] uppercase flex items-center gap-2">

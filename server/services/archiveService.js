@@ -39,12 +39,13 @@ import {
 } from './archiveRepository.js';
 import {
     storeArchiveEmbedding, storeLoreEmbedding, deleteArchiveEmbedding, deleteAllArchiveEmbeddings, getEmbeddingStatus,
-    EMBEDDING_VERSION, getDb,
-    embedText, buildArchiveText, buildLoreText, warmup, embedBatch,
+    EMBEDDING_VERSIONS, getDb,
+    embedAndStoreScene, buildScenePassages, buildLoreText, warmup, embedBatch,
     getActiveDims, getActiveModelId, isModelReady, isJobRunning,
     searchArchiveCandidates, searchLoreCandidates,
 } from './vectorService.js';
 import { archiveEvents, ARCHIVE_WRITTEN } from './archiveEvents.js';
+import { parseArchiveScenes } from '../lib/archiveScenes.js';
 import {
     CHAPTER_SCENE_TARGET, sceneNumbersFromIndex, computeRefit,
     repairChaptersAfterSceneDelete, repointChapterIds, nextChapterNumber, formatChapterId,
@@ -136,8 +137,7 @@ export async function appendScene(campaignId, payload) {
     });
 
     // Fire-and-forget embedding (NOT awaited — same as original).
-    embedText(buildArchiveText(indexEntry))
-        .then(embedding => storeArchiveEmbedding(campaignId, sceneId, embedding))
+    embedAndStoreScene(campaignId, sceneId, userContent, assistantContent, sceneCastNames(indexEntry))
         .catch(err => console.warn('[Archive] Embedding failed:', err.message));
 
     // Pre-compute the entity-name union used by the deferred timeline extraction.
@@ -300,10 +300,30 @@ export function fetchScenesByIds(campaignId, idsParam) {
         if (!match) continue;
         const sceneId = match[1].padStart(3, '0');
         if (ids.includes(sceneId)) {
-            result.push({ sceneId, content: block.trim() });
+            result.push({ sceneId, content: block.replace(/\r\n/g, '\n').trim() });
         }
     }
     return result;
+}
+
+/** The names a scene's cast card is embedded from: its witnesses and mentioned NPCs. */
+export function sceneCastNames(indexEntry) {
+    return [...(indexEntry?.witnesses ?? []), ...(indexEntry?.npcsMentioned ?? [])];
+}
+
+/**
+ * The prose of every scene in the archive, by scene id: what scene embeddings are
+ * built from.
+ *
+ * @returns {Map<string, { userContent: string, assistantContent: string }>}
+ */
+export function readSceneProse(campaignId) {
+    const prose = new Map();
+    if (!archiveMdExists(campaignId)) return prose;
+    for (const { sceneId, userContent, assistantContent } of parseArchiveScenes(readArchiveMd(campaignId))) {
+        prose.set(sceneId, { userContent, assistantContent });
+    }
+    return prose;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -722,9 +742,18 @@ export async function updateSceneAssistant(campaignId, sceneIdParam, assistantCo
             if (!match) return block;
             if (parseInt(match[1], 10) !== targetNum) return block;
             found = true;
-            const userMatch = block.match(/\*\*\[USER\]\*\*\n([\s\S]*?)\n\n\*\*\[GM\]\*\*/);
+            // Parse a LF copy: archives written on Windows or edited by hand can carry
+            // CRLF, and these patterns only match `\n`. A missed [USER] match used to
+            // rewrite the scene with the player's text gone.
+            const text = block.replace(/\r\n/g, '\n');
+            const userMatch = text.match(/\*\*\[USER\]\*\*\n([\s\S]*?)\n\n\*\*\[GM\]\*\*/);
+            if (!userMatch && text.includes('**[USER]**')) {
+                const err = new Error(`Scene ${targetId}: could not read the player's text; refusing to rewrite the scene`);
+                err.statusCode = 422;
+                throw err;
+            }
             userContent = (userMatch ? userMatch[1] : '').trim();
-            const lines = block.split('\n');
+            const lines = text.split('\n');
             const headerLines = [];
             let i = 0;
             while (i < lines.length && headerLines.length < 2) {
@@ -782,8 +811,7 @@ export async function updateSceneAssistant(campaignId, sceneIdParam, assistantCo
 
     // Re-embed — awaited here (different from appendScene's fire-and-forget).
     try {
-        const embedding = await embedText(buildArchiveText(newIndexEntry));
-        if (embedding) storeArchiveEmbedding(campaignId, targetId, embedding);
+        await embedAndStoreScene(campaignId, targetId, userContent, assistantContent, sceneCastNames(newIndexEntry));
     } catch (err) {
         console.warn('[Archive] Re-embed failed on scene edit:', err.message);
     }
@@ -887,7 +915,7 @@ export function getEmbeddingsInfo() {
     return {
         modelId: getActiveModelId(),
         dims: getActiveDims(),
-        embeddingVersion: EMBEDDING_VERSION,
+        embeddingVersions: EMBEDDING_VERSIONS,
     };
 }
 
@@ -910,30 +938,41 @@ export async function reindexEmbeddings(campaignId, type) {
 
     const status = getEmbeddingStatus(campaignId);
     const db = getDb();
-    const currentVersion = EMBEDDING_VERSION;
 
     let reindexedScenes = 0;
     let reindexedLore = 0;
+
+    // Scenes are embedded from their prose as passages, plus a cast card from the
+    // index. Read the archive and the index once and embed every text of the given
+    // scenes in one batched run.
+    let sceneProse = null;
+    let castById = null;
+    const reembedScenes = async (sceneIds) => {
+        sceneProse ??= readSceneProse(campaignId);
+        castById ??= new Map(readIndexAt(archiveIndexPath(campaignId), []).map(e => [e.sceneId, sceneCastNames(e)]));
+        const ids = sceneIds.filter(id => sceneProse.has(id));
+        const passagesById = ids.map(id => {
+            const { userContent, assistantContent } = sceneProse.get(id);
+            return buildScenePassages(userContent, assistantContent, castById.get(id) ?? []);
+        });
+        const vectors = await embedBatch(passagesById.flat(), 10, 100);
+        let at = 0;
+        for (let i = 0; i < ids.length; i++) {
+            const n = passagesById[i].length;
+            storeArchiveEmbedding(campaignId, ids[i], vectors.slice(at, at + n));
+            at += n;
+        }
+        return ids.length;
+    };
 
     // ── Re-index stale scene embeddings ──
     if ((!type || type === 'all' || type === 'scene') && status.scenes.stale > 0) {
         const staleScenes = db.prepare(
             `SELECT item_id FROM embedding_meta WHERE campaign_id = ? AND item_type = 'scene' AND version < ?`
-        ).all(campaignId, currentVersion);
+        ).all(campaignId, EMBEDDING_VERSIONS.scene);
 
         if (staleScenes.length > 0) {
-            const indexPath = archiveIndexPath(campaignId);
-            const indexEntries = readIndexAt(indexPath, []);
-            const indexMap = new Map(indexEntries.map(e => [e.sceneId, e]));
-
-            const sceneIds = staleScenes.map(r => r.item_id).filter(id => indexMap.has(id));
-            const texts = sceneIds.map(id => buildArchiveText(indexMap.get(id)));
-            const embeddings = await embedBatch(texts, 10, 100);
-
-            for (let i = 0; i < sceneIds.length; i++) {
-                storeArchiveEmbedding(campaignId, sceneIds[i], embeddings[i]);
-                reindexedScenes++;
-            }
+            reindexedScenes += await reembedScenes(staleScenes.map(r => r.item_id));
             console.log(`[Reindex] Re-indexed ${reindexedScenes} scene embeddings`);
         }
     }
@@ -942,7 +981,7 @@ export async function reindexEmbeddings(campaignId, type) {
     if ((!type || type === 'all' || type === 'lore') && status.lore.stale > 0) {
         const staleLore = db.prepare(
             `SELECT item_id FROM embedding_meta WHERE campaign_id = ? AND item_type = 'lore' AND version < ?`
-        ).all(campaignId, currentVersion);
+        ).all(campaignId, EMBEDDING_VERSIONS.lore);
 
         if (staleLore.length > 0) {
             const lorePath = path.join(CAMPAIGNS_DIR, `${campaignId}.lore.json`);
@@ -966,17 +1005,10 @@ export async function reindexEmbeddings(campaignId, type) {
         ? db.prepare(`SELECT scene_id FROM archive_vss WHERE campaign_id = ? AND scene_id NOT IN (SELECT item_id FROM embedding_meta WHERE campaign_id = ? AND item_type = 'scene')`).all(campaignId, campaignId)
         : [];
     if (scenesNoMeta.length > 0) {
-        const idxPath = archiveIndexPath(campaignId);
-        const indexEntries = readIndexAt(idxPath, []);
-        const indexMap = new Map(indexEntries.map(e => [e.sceneId, e]));
-        const ids = scenesNoMeta.map(r => r.scene_id).filter(id => indexMap.has(id));
-        const texts = ids.map(id => buildArchiveText(indexMap.get(id)));
-        const embeddings = await embedBatch(texts, 10, 100);
-        for (let i = 0; i < ids.length; i++) {
-            storeArchiveEmbedding(campaignId, ids[i], embeddings[i]);
-            reindexedScenes++;
-        }
-        console.log(`[Reindex] Backfilled ${ids.length} unversioned scene embeddings`);
+        // A scene with several passage rows appears once per row here.
+        const backfilled = await reembedScenes([...new Set(scenesNoMeta.map(r => r.scene_id))]);
+        reindexedScenes += backfilled;
+        console.log(`[Reindex] Backfilled ${backfilled} unversioned scene embeddings`);
     }
 
     const loreNoMeta = (!type || type === 'all' || type === 'lore')

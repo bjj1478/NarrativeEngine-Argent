@@ -13,8 +13,9 @@ import type { TurnState, TurnCallbacks } from '../../turnOrchestrator';
  */
 
 let mockActiveCampaignId: string | null = 'campaign-1';
+let mockLiveLedger: NPCEntry[] | undefined;
 vi.mock('../../../../store/useAppStore', () => ({
-    useAppStore: { getState: () => ({ activeCampaignId: mockActiveCampaignId }) },
+    useAppStore: { getState: () => ({ activeCampaignId: mockActiveCampaignId, npcLedger: mockLiveLedger }) },
 }));
 vi.mock('../../../infrastructure/backgroundQueue', () => ({
     backgroundQueue: { push: vi.fn().mockResolvedValue(undefined) },
@@ -25,7 +26,7 @@ vi.mock('../../../npc/npcDetector', () => ({
     validateNPCCandidates: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('../../../chatEngine', () => ({
-    updateExistingNPCs: vi.fn().mockResolvedValue(undefined),
+    updateExistingNPCs: vi.fn().mockResolvedValue(true),
     backfillNPCDrives: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -100,7 +101,9 @@ describe('track.npc — detection', () => {
         mockActiveCampaignId = 'campaign-1';
     });
 
-    it('excludes every ledger name + alias AND the PC name + aliases from detection', async () => {
+    // Only the PC is excluded. Excluding every ledger name and alias (081bc45) kept known
+    // NPCs named exactly — most turns — out of the update step; classify sorts them instead.
+    it('excludes only the PC name + aliases, so known NPCs reach the update step', async () => {
         const ledger = [npc({ id: 'n1', name: 'Mira', aliases: 'The Owl, Owly' })];
         const ctx = makeCtx({
             npcLedger: ledger,
@@ -112,18 +115,14 @@ describe('track.npc — detection', () => {
 
         await npcTrack.run(ctx);
 
-        expect(mockExtract).toHaveBeenCalledWith(
-            ASSISTANT,
-            ['Mira', 'The Owl', 'Owly', 'Aria', 'Red', 'Redhand'],
-        );
+        expect(mockExtract).toHaveBeenCalledWith(ASSISTANT, ['Aria', 'Red', 'Redhand']);
     });
 
     it('falls back to a legacy isPC ledger row when context.playerCharacter is absent', async () => {
         const ledger = [npc({ id: 'n1', name: 'Aria', aliases: '', isPC: true })];
         await npcTrack.run(makeCtx({ npcLedger: ledger, state: { npcLedger: ledger } }));
 
-        // 'Aria' appears once from the ledger sweep and once from the PC branch.
-        expect(mockExtract).toHaveBeenCalledWith(ASSISTANT, ['Aria', 'Aria']);
+        expect(mockExtract).toHaveBeenCalledWith(ASSISTANT, ['Aria']);
     });
 
     it('does nothing when the extractor finds no names', async () => {
@@ -160,15 +159,30 @@ describe('track.npc — detection', () => {
         expect(ctx.callbacks!.addNpcSuggestions).toHaveBeenCalledWith(['Kaelen'], ASSISTANT);
     });
 
-    it('stops when validation rejects every candidate', async () => {
-        mockExtract.mockReturnValueOnce(['Kaelen']);
+    it('validates only unknown names; a rejected candidate is not suggested, and known NPCs still update', async () => {
+        const mira = npc({ id: 'n1', name: 'Mira', drives: 'x' } as any);
+        mockExtract.mockReturnValueOnce(['Kaelen', 'Mira']);
+        mockClassify.mockReturnValueOnce({ newNames: ['Kaelen'], existingNpcs: [mira] } as any);
         mockValidate.mockResolvedValueOnce([]);
 
         const ctx = makeCtx();
         await npcTrack.run(ctx);
 
-        expect(mockClassify).not.toHaveBeenCalled();
+        expect(mockValidate).toHaveBeenCalledWith(expect.anything(), ['Kaelen'], ASSISTANT);
         expect(ctx.callbacks!.addNpcSuggestions).not.toHaveBeenCalled();
+        expect(mockBQ.push).toHaveBeenCalledWith('NPC-Update:Mira', expect.any(Function));
+    });
+
+    it('a known NPC named exactly goes to the update step without a validator call', async () => {
+        const mira = npc({ id: 'n1', name: 'Mira', drives: 'x' } as any);
+        mockExtract.mockReturnValueOnce(['Mira']);
+        mockClassify.mockReturnValueOnce({ newNames: [], existingNpcs: [mira] } as any);
+
+        const ctx = makeCtx();
+        await npcTrack.run(ctx);
+
+        expect(mockValidate).not.toHaveBeenCalled();
+        expect(mockBQ.push).toHaveBeenCalledWith('NPC-Update:Mira', expect.any(Function));
     });
 });
 
@@ -201,6 +215,19 @@ describe('track.npc — existing NPC updates', () => {
         expect(ctx.callbacks!.updateNPC).toHaveBeenCalledWith('n1', { lastUpdateScene: 7 });
     });
 
+    it('a failed update leaves the cooldown unspent', async () => {
+        mockExtract.mockReturnValueOnce(['Mira']);
+        mockClassify.mockReturnValueOnce({ newNames: [], existingNpcs: [existing] } as any);
+        mockUpdateExisting.mockResolvedValueOnce(false);
+        mockBQ.push.mockImplementationOnce(async (_label, execute) => execute());
+
+        const ctx = makeCtx({ state: { archiveIndex: [{ sceneId: '007' }] as any } });
+        await npcTrack.run(ctx);
+
+        expect(mockUpdateExisting).toHaveBeenCalled();
+        expect(ctx.callbacks!.updateNPC).not.toHaveBeenCalledWith('n1', { lastUpdateScene: 7 });
+    });
+
     it('RACE GUARD: drops the lastUpdateScene write when the campaign switched mid-flight', async () => {
         mockExtract.mockReturnValueOnce(['Mira']);
         mockValidate.mockResolvedValueOnce(['Mira']);
@@ -222,7 +249,7 @@ describe('track.npc — existing NPC updates', () => {
         mockValidate.mockResolvedValueOnce(['Mira']);
         mockClassify.mockReturnValueOnce({ newNames: [], existingNpcs: [existing] } as any);
         let guard: ((id: string, patch: any) => void) | undefined;
-        mockUpdateExisting.mockImplementationOnce(async (_p: any, _m: any, _n: any, g: any) => { guard = g; });
+        mockUpdateExisting.mockImplementationOnce(async (_p: any, _m: any, _n: any, g: any) => { guard = g; return true; });
         mockBQ.push.mockImplementationOnce(async (_label, execute) => execute());
 
         const ctx = makeCtx({ state: { archiveIndex: [{ sceneId: '007' }] as any } });
@@ -267,21 +294,83 @@ describe('track.npc — existing NPC updates', () => {
         expect(mockBQ.push).not.toHaveBeenCalled();
     });
 
-    it('queues a drives backfill only for NPCs with no drives', async () => {
+    // Drives backfill is disabled (2026-10-04): the agency system replaced drives.
+    it('never queues a drives backfill', async () => {
         const noDrives = npc({ id: 'n2', name: 'Bram' });
         mockExtract.mockReturnValueOnce(['Bram']);
-        mockValidate.mockResolvedValueOnce(['Bram']);
         mockClassify.mockReturnValueOnce({ newNames: [], existingNpcs: [noDrives] } as any);
         mockBQ.push.mockImplementation(async (_label, execute) => execute());
 
         await npcTrack.run(makeCtx({ state: { archiveIndex: [{ sceneId: '001' }] as any } }));
 
-        expect(mockBQ.push).toHaveBeenCalledWith('NPC-Drives-Backfill:Bram', expect.any(Function));
-        expect(mockBackfill).toHaveBeenCalledWith(
-            expect.objectContaining({ modelName: 'm' }),
-            ALL_MSGS,
-            [noDrives],
-            expect.any(Function),
+        expect(mockBQ.push).not.toHaveBeenCalledWith(expect.stringMatching(/^NPC-Drives-Backfill/), expect.any(Function));
+        expect(mockBackfill).not.toHaveBeenCalled();
+    });
+});
+
+describe('track.npc — relationship memory flag', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockActiveCampaignId = 'campaign-1';
+    });
+
+    // The pipeline's track context carries no `state`; the flag lives on the facade's
+    // context. Reading `ctx.state` made it always false.
+    it('passes relationshipMemoryEnabled to the updater when the campaign has it on', async () => {
+        const mira = npc({ id: 'n1', name: 'Mira', drives: 'x', populated: true } as any);
+        mockExtract.mockReturnValueOnce(['Mira']);
+        mockClassify.mockReturnValueOnce({ newNames: [], existingNpcs: [mira] } as any);
+        mockBQ.push.mockImplementation(async (_label, execute) => execute());
+
+        await npcTrack.run(makeCtx({
+            state: { context: { relationshipMemory: true } as any, archiveIndex: [{ sceneId: '007' }] as any },
+        }));
+
+        expect(mockUpdateExisting).toHaveBeenCalledWith(
+            expect.anything(), ALL_MSGS, [mira], expect.any(Function), undefined, { relationshipMemoryEnabled: true },
         );
+    });
+});
+
+describe('track.npc — agency fill for older NPCs', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockActiveCampaignId = 'campaign-1';
+        mockLiveLedger = undefined;
+    });
+
+    const run = async (existing: NPCEntry, aiTier = 'max') => {
+        mockExtract.mockReturnValueOnce([existing.name]);
+        mockClassify.mockReturnValueOnce({ newNames: [], existingNpcs: [existing] } as any);
+        const ctx = makeCtx({ state: { settings: { aiTier } as any, archiveIndex: [{ sceneId: '001' }] as any } });
+        await npcTrack.run(ctx);
+        return ctx;
+    };
+
+    it('fills an unpopulated NPC the first time it is named, without a model call', async () => {
+        const ctx = await run(npc({ id: 'n3', name: 'Sanna', personality: 'cautious, loyal' } as any));
+        const patch = vi.mocked(ctx.callbacks!.updateNPC).mock.calls.find(([id]) => id === 'n3')?.[1];
+        expect(patch).toMatchObject({ populated: true, wantsProvenance: 'pool' });
+        expect(patch?.wants?.short.length).toBeGreaterThan(0);
+    });
+
+    it('leaves an already populated NPC alone', async () => {
+        const ctx = await run(npc({ id: 'n4', name: 'Rin', populated: true } as any));
+        const patch = vi.mocked(ctx.callbacks!.updateNPC).mock.calls.find(([, p]) => (p as any).populated);
+        expect(patch).toBeUndefined();
+    });
+
+    // The fill rolls a personality; the ledger the turn was built from can predate a fill
+    // an earlier commit made, so the live store decides.
+    it('skips an NPC the live store shows as already filled', async () => {
+        mockLiveLedger = [npc({ id: 'n6', name: 'Oska', populated: true } as any)];
+        const ctx = await run(npc({ id: 'n6', name: 'Oska' }));
+        const patch = vi.mocked(ctx.callbacks!.updateNPC).mock.calls.find(([, p]) => (p as any).populated);
+        expect(patch).toBeUndefined();
+    });
+
+    it('does not run when the heartbeat it feeds is off (Lite)', async () => {
+        const ctx = await run(npc({ id: 'n5', name: 'Bram' }), 'lite');
+        expect(ctx.callbacks!.updateNPC).not.toHaveBeenCalled();
     });
 });

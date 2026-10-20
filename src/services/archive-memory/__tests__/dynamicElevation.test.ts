@@ -107,7 +107,6 @@ describe('WO-11 — Dynamic Elevation', () => {
             const { scopeSceneIds, sceneIdToChapterId } = computeSynopsisScope({
                 chapters: sealed,
                 archiveIndex,
-                onStageNpcIds: ['npc_a'],
                 condensedUpToIndex: 11,
                 messages: msgs,
                 config: { summaryChapters: 2, importanceBonus: 0 },
@@ -132,7 +131,6 @@ describe('WO-11 — Dynamic Elevation', () => {
             const { scopeSceneIds } = computeSynopsisScope({
                 chapters: sealed,
                 archiveIndex,
-                onStageNpcIds: ['npc_a'],
                 condensedUpToIndex: 2,
                 messages: msgs,
                 config: { summaryChapters: 7, importanceBonus: 0 },

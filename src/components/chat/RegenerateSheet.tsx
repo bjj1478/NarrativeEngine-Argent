@@ -112,7 +112,7 @@ export function RegenerateSheet({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+            data-motion="overlay" className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
             onClick={handleBackdropClick}
         >
             <div

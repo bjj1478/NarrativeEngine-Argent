@@ -28,7 +28,7 @@ export function ChatAttachmentChip({
     const busy = status === 'uploading' || status === 'captioning';
 
     return (
-        <div className="mx-2 sm:mx-4 mb-2 border border-border bg-void-lighter rounded-sm">
+        <div data-motion="reveal" className="mx-2 sm:mx-4 mb-2 border border-border bg-void-lighter rounded-sm">
             <div className="flex items-start gap-3 p-2">
                 <img
                     src={previewUrl}

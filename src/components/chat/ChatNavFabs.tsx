@@ -1,10 +1,7 @@
 import type { RefObject } from 'react';
-import { ChevronUp, ArrowDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronsDown } from 'lucide-react';
 
-/**
- * WO-NAV — floating message-navigation buttons: jump up one message,
- * or snap back to the latest. Owns the scroll-walking logic.
- */
+/** Message-by-message navigation plus a shortcut back to the latest turn. */
 export function ChatNavFabs({
     scrollContainerRef,
     bottomRef,
@@ -12,41 +9,53 @@ export function ChatNavFabs({
     scrollContainerRef: RefObject<HTMLDivElement | null>;
     bottomRef: RefObject<HTMLDivElement | null>;
 }) {
-    const handlePrevMessage = () => {
+    const jumpMessage = (direction: 'previous' | 'next') => {
         const sc = scrollContainerRef.current;
         if (!sc) return;
-        // Find the last bubble whose bottom is above the current viewport top (i.e. previous).
-        const bubbles = Array.from(sc.querySelectorAll<HTMLElement>('[data-message-id], .chat-bubble-base'));
-        const viewTop = sc.scrollTop;
-        let target: HTMLElement | null = null;
-        for (const b of bubbles) {
-            const top = b.offsetTop;
-            if (top < viewTop - 4) target = b;
-            else break;
-        }
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        else sc.scrollTo({ top: 0, behavior: 'smooth' });
+        const rows = Array.from(sc.querySelectorAll<HTMLElement>('[data-ui="msg-row"]'));
+        const viewportTop = sc.getBoundingClientRect().top + sc.clientTop;
+        const padding = parseFloat(getComputedStyle(sc).scrollPaddingTop) || 0;
+        const tops = rows.map(row => Math.max(0,
+            row.getBoundingClientRect().top - viewportTop + sc.scrollTop - padding));
+        const target = direction === 'previous'
+            ? tops.filter(top => top < sc.scrollTop - 4).at(-1)
+            : tops.find(top => top > sc.scrollTop + 4);
+        const behavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        if (target !== undefined) sc.scrollTo({ top: target, behavior });
+        else if (direction === 'previous') sc.scrollTo({ top: 0, behavior });
+        else sc.scrollTo({ top: sc.scrollHeight, behavior });
     };
 
     const handleJumpToBottom = () => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const behavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
     };
 
     return (
-        <div className="absolute right-3 bottom-[145px] flex flex-col gap-1.5 z-30 pointer-events-auto">
+        <div role="group" aria-label="Message navigation" className="chat-message-navigation">
             <button
-                onClick={handlePrevMessage}
+                onClick={() => jumpMessage('previous')}
                 className="chat-nav-fab flex items-center justify-center w-9 h-9 rounded-full bg-void-darker border border-text-dim/30 hover:border-text-dim text-text-dim hover:text-text-primary shadow-lg transition-all hover:bg-text-dim/10"
                 title="Jump up one message"
+                aria-label="Previous message"
             >
                 <ChevronUp size={16} />
+            </button>
+            <button
+                onClick={() => jumpMessage('next')}
+                className="chat-nav-fab flex items-center justify-center w-9 h-9 rounded-full bg-void-darker border border-text-dim/30 hover:border-text-dim text-text-dim hover:text-text-primary shadow-lg transition-all hover:bg-text-dim/10"
+                title="Jump down one message"
+                aria-label="Next message"
+            >
+                <ChevronDown size={16} />
             </button>
             <button
                 onClick={handleJumpToBottom}
                 className="chat-nav-fab flex items-center justify-center w-9 h-9 rounded-full bg-void-darker border border-text-dim/30 hover:border-text-dim text-text-dim hover:text-text-primary shadow-lg transition-all hover:bg-text-dim/10"
                 title="Jump to latest message"
+                aria-label="Latest message"
             >
-                <ArrowDown size={16} />
+                <ChevronsDown size={16} />
             </button>
         </div>
     );

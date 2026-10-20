@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Terrain sprite variants A-D</title>
+<style>body{margin:32px;background:#18251e;color:#ecf1de;font:16px system-ui}h1{font-size:26px}p{color:#becab4}table{border-spacing:12px}th{text-align:left;text-transform:capitalize}canvas{image-rendering:pixelated;border-radius:4px}td{text-align:center}small{color:#becab4}</style>
+<h1>Terrain sprites / A / B / C / D</h1><p>Four distinct 16 x 16 pixel motifs per terrain. The patch on the right shows their stable mix.</p><table id="gallery"><tr><th>Terrain</th><th>A</th><th>B</th><th>C</th><th>D</th><th>Map patch</th></tr></table>
+<script type="module">
+import { PIXEL_PALETTE, paintTerrainVariant, terrainVariant } from '../pixelArt.js';
+const gallery = document.querySelector('#gallery');
+for (const biome of Object.keys(PIXEL_PALETTE)) {
+ const row = document.createElement('tr'); const label = document.createElement('th'); label.textContent = biome; row.append(label);
+ for (let v = 0; v < 5; v++) {
+  const td = document.createElement('td'), canvas = document.createElement('canvas');
+  canvas.width = v === 4 ? 192 : 64; canvas.height = 64; const ctx = canvas.getContext('2d');
+  if (v < 4) paintTerrainVariant(ctx, biome, v, 0, 0, 64);
+  else for (let y = 0; y < 2; y++) for (let x = 0; x < 6; x++) paintTerrainVariant(ctx, biome, terrainVariant(x,y), x*32,y*32,32);
+  td.append(canvas); row.append(td);
+ } gallery.append(row);
+}
+</script></html>

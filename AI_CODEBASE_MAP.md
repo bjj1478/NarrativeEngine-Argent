@@ -103,7 +103,7 @@ directory under `src/services/` (or `server/`) with co-located or `__tests__/` t
 | **Prompt Assembly** | `src/services/payload/` (+ `contributions/`) | `payloadBuilder.ts`, `stable.ts`, `volatile.ts`, `volatileSegments.ts`, `world.ts`, `history.ts`, `budgets.ts`, `budgetClaims.ts`, `lodRenderer.ts`, `pinnedMemories.ts`, `traceCollector.ts` + `contributions/{registry,assemble,builtins,extensions,types}.ts` | 5-block payload assembly, budget-claim registry, LOD chapter rendering, contribution registry for final user message |
 | **Archive Memory** | `src/services/archive-memory/` | `recall.ts`, `idf.ts`, `scoring.ts`, `dynamicMax.ts`, `dynamicElevation.ts`, `slottedRag.ts`, `condenser.ts`, `deepArchiveSearch.ts`, `archiveChapterEngine.ts`, `archiveManager.ts`, `archivePlanner.ts`, `backfillRunner.ts`, `importanceRater.ts`, `sceneEventExtractor.ts`, `witnessCapture.ts`, `relationshipMemory.ts`, `synopsisBackfill.ts` | RRF hybrid retrieval, IDF, dynamic ceiling, dynamic elevation (WO-11), slotted RAG (WO-12), deep search, chapter funnel, witness capture, relationship memory |
 | **Rules RAG** | `src/services/rules/` | `defaultRules.ts`, `rulesIndexer.ts`, `rulesRetriever.ts` | System rules text, RAG rules chunking + IDF+RRF retrieval |
-| **Lore RAG** | `src/services/lore/` | `loreChunker.ts`, `loreRetriever.ts`, `loreNPCParser.ts`, `loreLocationParser.ts`, `loreEngineSeeder.ts`, `loreCheck.ts`, `loreKeywordEnricher.ts`, `lootTreeLoader.ts`, `worldLoreAI.ts`, `worldLoreExport.ts`, `worldLoreImport.ts` | Lore chunking with RAG hints, IDF+RRF retrieval, lore-consistency verifier, world-builder AI |
+| **Lore RAG** | `src/services/lore/` | `loreChunker.ts`, `loreRetriever.ts`, `loreNPCParser.ts`, `loreLocationParser.ts`, `loreEngineSeeder.ts`, `loreCheck.ts`, `loreKeywordEnricher.ts`, `lootTreeLoader.ts`, `worldLoreAI.ts`, `worldLoreExport.ts`, `worldLoreImport.ts` | Lore chunking with RAG hints; selection fuses three ranked lists — keyword IDF, meaning search, and the Context Recommender's lore picks (`contextGatherer` waits for the recommender before lore). Field labels (`type`, `aliases`, `appearance`…, `lore/fieldLabels.ts`) are never trigger keywords. Lore-consistency verifier, world-builder AI |
 | **Campaign State** | `src/services/campaign-state/` | `divergenceRegister.ts`, `knowledgeScope.ts`, `timelineResolver.ts`, `factClusterer.ts`, `factDeduper.ts` | Divergence register, scoped knowledge tokens, timeline supersession, fact clustering + dedup |
 | **LLM Interface** | `src/services/llm/` | `llmService.ts`, `llmRequestQueue.ts`, `apiClient.ts`, `llmFetch.ts`, `cacheTelemetry.ts`, `timeouts.ts`, `utilityCallTracker.ts` + `utils/llmCall.ts`, `utils/llmApiHelper.ts` | Streaming chat, per-endpoint adaptive concurrency queue, utility call tracker, cache telemetry |
 | **Engines** | `src/services/engine/` | `engineRolls.ts`, `diceTier.ts`, `lootEngine.ts`, `pcCreationScript.ts` | Pre-rolled dice, fairness DC, 3-gate manual rolls, loot tree walker, PC point-buy |
@@ -281,7 +281,7 @@ When modifying core files, consult this matrix to trace downstream effects.
 
 ### Critical Risk Zones (High Blast Radius)
 
-1. **`server/lib/vectorStore.js`** (405 lines) — sqlite-vec schema, MMR algorithm, embedding versioning. A schema change without a migration path breaks `data/embeddings.db` and prevents campaigns from loading. The `EMBEDDING_VERSION = 1` constant + `embedding_meta` table are the migration seam.
+1. **`server/lib/vectorStore.js`** (405 lines) — sqlite-vec schema, MMR algorithm, embedding versioning. A schema change without a migration path breaks `data/embeddings.db` and prevents campaigns from loading. The per-type `EMBEDDING_VERSIONS` (`{ scene: 2, lore: 1, rule: 1 }`) + `embedding_meta` table are the migration seam: bumping a type marks its vectors stale (excluded from search, flagged by the re-index banner) until Re-index rebuilds them.
 2. **`server/lib/modLoader.js`** (1,990 lines, largest file in the repo) — manifest validation, sandbox trust, table/panel/screen/tier declarations. Faults (never throws) but a bad change takes down ALL mods at boot, including bundled worldmap/enemies/arc.
 3. **`server/lib/tableRegistry.js`** (375 lines) — descriptor schema + both dynamic route mounts. Breaks `locations` (the one built-in table), all mod tables, and transfer bundling.
 4. **`server/vault.js`** (394 lines) — custom binary format with magic bytes `NEV1`. Any change to the IV/ciphertext/tag layout breaks every existing `.nevault` file. PBKDF2 iteration counts re-derive keys. Includes `archiveForRecovery()` reset path.
@@ -432,8 +432,8 @@ The main game loop flows through `runTurn()` in `turnOrchestrator.ts` (234 lines
 `postTurnPipeline.ts` (524 lines) — track orchestrator:
 - Prologue tracks: `autoProfileTrack`, `digestClearTrack`.
 - `Promise.allSettled` post-turn tracks: `npcTrack`, `pressureTrack` + mod-registered compute tracks (e.g. `mod.arc.compute`).
-- Sequential tracks: `agencyTrack`, `locationHeaderTrack`, `onStageTrack`, `repressionTrack`.
-- Post-commit tracks (9): `chapterSealTrack`, `eventExtractionTrack`, `inventoryScanTrack`, `locationScanTrack`, `pcDriftTrack`, `profileScanTrack`, `relationshipMemoryTrack`, `traitScanTrack`, `travelAdvanceTrack` (halt safety valve only — if the location header names an unrelated place it halts the journey).
+- Sequential tracks: `agencyTrack`, `locationHeaderTrack`, `onStageTrack`, `repressionTrack`. `onStageTrack` reads the GM's 👥 field through `services/npc/presentHeader.ts`, which accepts every header shape the rulesets use (the old exact `👥 [Present]` regex matched none of the owner's campaigns).
+- Post-commit tracks (10): `chapterSealTrack`, `eventExtractionTrack`, `witnessCaptureTrack` (scene witnesses from the 👥 field on every tier, or a thinking-off model read on Max via `witnessAux`; `services/npc/witnessCapture.ts`), `inventoryScanTrack`, `locationScanTrack`, `pcDriftTrack`, `profileScanTrack`, `relationshipMemoryTrack`, `traitScanTrack`, `travelAdvanceTrack` (halt safety valve only — if the location header names an unrelated place it halts the journey).
 
 `travelState.ts` (396 lines) + `travelPress.ts` + `travelFacts.ts` + `departureComposer.ts` + `mapTravelPreview.ts` — the WO 6.5 travel system: travel is an **engine action, not an LLM turn**. `depart`/`departMultiHop` (pathfinder routes from the worldmap mod), `advance` (one press = one day = one checkpoint), `arrive`, `abandonJourney`, `halt`, `jump`. Engine `role:'system'` checkpoint messages, no model call. `travelFacts` feeds the Continuity Director hard world facts (max 3, silent unless `context.worldDay` set).
 
@@ -448,9 +448,53 @@ The main game loop flows through `runTurn()` in `turnOrchestrator.ts` (234 lines
 `tierBlockRegistry.ts` (116 lines) — registry for mod-declared tier entries (per-tier matrix + cooldown + modId provenance).
 `absoluteCommand.ts` (39 lines) — Absolute Command v1: binding `[USER ABSOLUTE COMMAND — OUT OF CHARACTER, BINDING]` block placed LAST, suppressing Director Brief/watchdog/GM_REMINDER for that turn.
 
+### 9.2a NPC systems — which one is current (read before touching NPC code)
+
+Three NPC motivation/personality layers exist in the code. Only one is current. **The design docs live in the mobile
+repo, not here** — desktop received the code through "port from mobile" commits (1e26e6b 2026-06-19, cb42caf
+2026-06-27) without the plans, and some desktop comments name mobile functions that were never ported.
+
+| Layer | Since | Status | What it is |
+|---|---|---|---|
+| **Agency** (`personalityHex`, `wants`, `goalRecords`, `traits`, `skillRung`, `populated`) | 2026-06-19 | **CURRENT** | 6-axis personality hexagon (stored as numbers, shown to the writer only as band-words), tiered wants (≤4 short / ≤3 medium / 1 long), goal records the off-screen heartbeat rolls against, controlled-vocab traits. The engine can act on it. |
+| **Drives** (`drives.coreWant/sessionWant/sceneWant`) | 2026-05-05 | **LEGACY** | Three fixed sentences for the writer. Superseded by `wants` (design §9.4: "seed from it, don't blank"). |
+| **Relationship memory** (NPC Ledger v3) | 2026-08-13 | Layer on top, per-campaign flag, default off | Relationships as accumulated history, not scalars. Plans: `Upgrade/_archive/NPC-Ledger-v3/`. |
+
+**Where the plans are:**
+- `mobileApp/Upgrade/OpusPlans/dynamic_world__npc_agency__arc_direction__DESIGN.md` (§0 why; §9.4 supersession table)
+- `mobileApp/Upgrade/OpusPlans/NPC_Agency_Phase1..4/`
+- `mobileApp/Upgrade/OpusPlans/NPC_Generation_Refit/00_SPEC.md` (propose → roll → render)
+
+**Who fills the agency fields on desktop:**
+- **New NPCs:** `npc-generation/profile.ts`, born `populated`. The model proposes groups and anchor traits, the engine
+  rolls the hex, the model renders flavour. Drives are **not** generated (removed 2026-10-04).
+- **Imported ST cards:** `import/populateImportedNPC.ts` (mechanical, no LLM).
+- **Lore-authored NPCs:** `lore/loreNPCParser.ts`. It still maps authored CoreWant/SessionWant/SceneWant to `drives`;
+  the lazy fill carries them into `wants` on first appearance.
+- **Older NPCs (pre-agency saves):** `npc/agency/agencyLazyFill.ts`, from `tracks/npcTrack.ts`, the first time the GM
+  names them, when `heartbeatTick` is on. Mechanical, no LLM: keyword hex, pool wants, long want from drives/goals.
+  - This is desktop's stand-in for mobile's `populateAgencyFields` (LLM-based, **never ported**).
+  - Until 2026-10-04 nothing filled them, so the ~170 NPCs in the Spirit Card World saves never ticked.
+- **Ongoing:** the NPC updater (`npc-generation/update.ts`) refines wants/hex/traits from play. Its rule: "wants, NOT
+  drives"; it strips any `drives` the model sends.
+
+**Kept alongside agency, not replaced:** `hardBoundaries` / `softBoundaries` / `behavioralTriggers` (`WON'T` /
+`RESENTS` / `ON "x"` in the NPC directive). Design §9.4: boundaries are free-text specifics, traits are engine switches,
+"no lossy collapse". They are written at generation and by the NPC updater.
+
+**Legacy code still present, on purpose:**
+- `npc-generation/backfill.ts` (`backfillNPCDrives`): its call in `npcTrack.ts` is commented out with the reason. The
+  `drivesBackfill` block is marked unwired and off in every preset, so stored settings stay valid.
+- Drives display as a fallback when an NPC has no `wants` (`payload/world.ts`, `npc/npcBehaviorDirective.ts`).
+
+**Traps:**
+- `populated` gates off-screen agency (`agencyHeartbeat.ts`): an unpopulated NPC never ticks.
+- Comments mentioning `populateAgencyFields` describe the mobile app.
+- Do not reintroduce drives generation or backfill: it gives NPCs two competing motivation sets.
+
 ### 9.2 NPC Agency (`src/services/npc/agency/`)
 
-**17 production files (+10 test files).**
+**18 production files (+11 test files)**, including `agencyLazyFill.ts` (see 9.2a).
 
 The agency tick is a heartbeat-driven NPC off-screen life simulator. Every tick:
 1. **Timeskip detection** (`detectTimeskip`, 13 regex patterns): if non-ambiguous weeks>0 and tier allows `timeskipRun`, run `runTimeskipPath` (batched engine state + 1 narration LLM call) and return.
@@ -534,8 +578,8 @@ Server-side chapter refit lives in `server/services/chapterFitting.js` (355 line
 Key library files:
 - **`server/lib/modLoader.js`** (1,990 lines, largest file in repo): folder-manifest validation (`mods/<mod-id>/manifest.json`; flat `*.mod.json` rejected as legacy), compute/native file trust, table/panel/screen/tier declarations, `PROTECTED_SUPPRESSION_IDS`, per-mod i18n.
 - **`server/lib/tableRegistry.js`** (375 lines): descriptor schema, `createTableRegistry`, hooks (5 kinds), `mountGenericTableRoutes` (serves `locations` — the one built-in descriptor) + `mountModTableRoutes` (`/mod-tables/:table`, `/mod-data/:modId`).
-- **`server/lib/vectorStore.js`** (405 lines): sqlite-vec, 3 vec0 tables (cosine). `EMBEDDING_VERSION=1` + `embedding_meta`. `MMR_LAMBDA=0.7`, `MMR_MIN_POOL=4`, `SCOPE_FALLBACK_OVERFETCH_CAP=64`. Rules never diversified. Dims via `settings.json → settings.embeddingDims` (fallback 1024).
-- **`server/lib/embedder.js`** (202 lines): mxbai-embed-large-v1 q8, 1024 dims, LRU 512. `resolveIndexingSpeed`: eco (4, 250ms) / balanced (8, 100ms) / aggressive (16, 0ms). Text caps 500 chars.
+- **`server/lib/vectorStore.js`** (405 lines): sqlite-vec, 3 vec0 tables (cosine). Per-type `EMBEDDING_VERSIONS` + `embedding_meta`. Scenes are stored as one row per passage and searched with a 6× row fan-out, each scene ranked by its nearest passage (`SCENE_ROWS_PER_ITEM`). `MMR_LAMBDA=0.7`, `MMR_MIN_POOL=4`, `SCOPE_FALLBACK_OVERFETCH_CAP=64`. Rules never diversified. Dims via `settings.json → settings.embeddingDims` (fallback 1024).
+- **`server/lib/embedder.js`** (202 lines): mxbai-embed-large-v1 q8, 1024 dims, LRU 512. `resolveIndexingSpeed`: eco (4, 250ms) / balanced (8, 100ms) / aggressive (16, 0ms). Scenes are embedded from their prose via `buildScenePassages` (≤1,500-char passages, place/cast context line, roll lines and markup stripped, max 16 per scene); queries go through `embedQuery`, which adds the model's retrieval instruction. Lore text caps 500 chars.
 - **`server/lib/nlp.js`** (361 lines): NPC name detection (6 numbered passes server-side), `estimateImportance` (base 3, +3 death, +2 MEMORABLE, clamped 1–10), `extractWitnessesHeuristic`, 5 timeline regex predicates, `extractIndexKeywords` (cap 20).
 - **`server/lib/entityResolution.js`** (52 lines): 3-tier normalization (exact → substring → Levenshtein, threshold 2/3 by length).
 - **`server/lib/tts.js`** (209 lines): Kokoro-82M q8, `DEFAULT_VOICE='af_heart'`, SHA-256 WAV cache. Warmup is a no-op if model not cached. ASAR workaround sets cache env before dynamic import.

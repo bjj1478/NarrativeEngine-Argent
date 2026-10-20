@@ -80,7 +80,7 @@ export function AskGmPanel({ snapshot, utilityProvider, storyBusy, hasArmedBrief
     const canPass = hasCompletedConversation(messages) && !storyBusy && !isBusy && !preview;
 
     return (
-        <aside className="absolute inset-y-0 right-0 z-40 w-full max-w-md border-l border-terminal/40 bg-void-darker/95 backdrop-blur flex flex-col shadow-2xl" aria-label="Ask GM side chat">
+        <aside data-motion="side-panel" className="absolute inset-y-0 right-0 z-40 w-full max-w-md border-l border-terminal/40 bg-void-darker/95 backdrop-blur flex flex-col shadow-2xl" aria-label="Ask GM side chat">
             <header className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div><h2 className="text-terminal text-sm font-bold tracking-widest">Ask GM</h2><p className="text-[10px] text-text-dim">Read-only - does not advance the story</p></div>
                 <button onClick={close} title="Close Ask GM" className="text-text-dim hover:text-text-primary"><X size={18} /></button>

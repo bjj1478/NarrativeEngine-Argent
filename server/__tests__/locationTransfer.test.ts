@@ -15,7 +15,7 @@ describe('P5-04 location transfer opt-in', () => {
         vi.stubEnv('DATA_DIR', tmpDir);
         vi.doMock('../lib/embedder.js', () => ({
             embedText: vi.fn(),
-            buildArchiveText: vi.fn(),
+            buildScenePassages: vi.fn(() => []),
             buildLoreText: vi.fn(),
         }));
         vi.doMock('../lib/vectorStore.js', () => ({

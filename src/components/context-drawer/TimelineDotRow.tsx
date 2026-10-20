@@ -33,6 +33,7 @@ function DotPopover({
     return (
         <div
             ref={ref}
+            data-motion="popover"
             className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-64 bg-void-dark border border-border-bright rounded-lg shadow-xl p-2"
         >
             <div className="flex items-center justify-between mb-1.5">

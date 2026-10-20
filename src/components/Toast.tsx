@@ -93,6 +93,7 @@ export function ToastContainer() {
         return (
           <div
             key={t.id}
+            data-motion="toast"
             className={`pointer-events-auto flex items-start gap-2 px-3 py-2 border ${c.border} ${c.bg}
                          rounded shadow-lg backdrop-blur-sm max-w-[360px] font-mono text-xs
                          animate-[toast-in_0.25s_ease-out]`}

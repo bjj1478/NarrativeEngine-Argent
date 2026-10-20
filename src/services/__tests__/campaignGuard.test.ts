@@ -38,7 +38,7 @@ vi.mock('../llm/apiClient', () => ({
 // NOTE: backgroundQueue is NOT mocked — we use the real queue so the guard
 // closures actually execute and we can assert drop/pass behavior.
 
-vi.mock('../archive-memory/importanceRater', () => ({ rateImportance: vi.fn().mockResolvedValue(3) }));
+vi.mock('../archive-memory/importanceRater', async (importOriginal) => ({ ...(await importOriginal<typeof import('../archive-memory/importanceRater')>()), rateImportance: vi.fn().mockResolvedValue(3) }));
 vi.mock('../npc/npcDetector', () => ({
     extractNPCNames: vi.fn().mockReturnValue([]),
     classifyNPCNames: vi.fn().mockReturnValue({ newNames: [], existingNpcs: [] }),

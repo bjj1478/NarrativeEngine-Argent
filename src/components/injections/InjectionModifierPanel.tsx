@@ -27,7 +27,7 @@ export function InjectionModifierPanel() {
     }, [open, close, campaignId]);
     if (!open || !campaignId) return null;
     return (
-        <aside ref={panelRef} tabIndex={-1} aria-label="Injection Modifier" data-ui="injection-modifier"
+        <aside data-motion="side-panel" ref={panelRef} tabIndex={-1} aria-label="Injection Modifier" data-ui="injection-modifier"
             className="fixed inset-y-0 right-0 z-[60] flex w-full min-w-0 flex-col border-l border-border bg-surface shadow-xl outline-none sm:w-[min(36rem,calc(100vw-2rem))] xl:static xl:z-auto xl:w-[min(36rem,38vw)] xl:shrink-0">
             <header className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3">
                 <h2 className="text-sm font-semibold text-terminal">Injection Modifier</h2>

@@ -187,7 +187,7 @@ export function ContextNavigationDrawer() {
                                         <span className="flex-1 text-left">{group.label}</span>
                                         {groupBadge !== undefined && <span className="text-terminal font-mono">{groupBadge}</span>}
                                     </button>
-                                    {isExpanded && (group.id === 'injections' ? <InjectionQuickControls /> : <div className="pb-1">{legacyLeaves[group.id].map((leaf) => <NavRow key={leaf.id} leaf={leaf} />)}</div>)}
+                                    {isExpanded && (group.id === 'injections' ? <InjectionQuickControls /> : <div data-motion="reveal" className="pb-1">{legacyLeaves[group.id].map((leaf) => <NavRow key={leaf.id} leaf={leaf} />)}</div>)}
                                 </section>
                             );
                         })}

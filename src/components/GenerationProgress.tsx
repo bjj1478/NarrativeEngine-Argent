@@ -48,7 +48,7 @@ export function GenerationProgress({ phase, stats, directorBriefRunning, onSkipD
     const showGatherStages = phase === 'gathering-context' && gatherStages.length > 0;
 
     return (
-        <div className="flex items-center gap-2 px-4 py-1.5 bg-void border-t border-border/50" aria-live="polite">
+        <div data-motion="reveal" className="flex items-center gap-2 px-4 py-1.5 bg-void border-t border-border/50" aria-live="polite">
             <div className="flex items-center gap-1">
                 {STEPS.map((step, idx) => {
                     const isCompleted = idx < currentIdx;

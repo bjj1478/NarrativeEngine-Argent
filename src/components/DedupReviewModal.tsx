@@ -61,7 +61,7 @@ export function DedupReviewModal({
     const groupCount = groups ? groups.length : 0;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
+        <div data-motion="overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onCancel}>
             <div
                 className="bg-surface border border-border rounded-lg w-full max-w-lg max-h-[85vh] flex flex-col mx-4"
                 onClick={(e) => e.stopPropagation()}

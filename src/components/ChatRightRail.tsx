@@ -146,7 +146,7 @@ function ImperativeRailPanel({ panel, active }: { readonly panel: RegisteredRail
     }, [panel]);
 
     return (
-        <div hidden={!active} aria-hidden={!active} className="h-full min-h-0 overflow-auto">
+        <div data-motion="rail-panel" hidden={!active} aria-hidden={!active} className="h-full min-h-0 overflow-auto">
             <div ref={nodeRef} className="min-h-full" />
         </div>
     );

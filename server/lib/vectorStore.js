@@ -8,9 +8,12 @@ import fs from 'fs';
 const DB_PATH = path.join(DATA_DIR, 'embeddings.db');
 const VEC_DIMS_KEY = 'embeddingDims';
 
-// Bump this when the embedding model changes. Stale embeddings will be
-// excluded from recall and flagged for re-indexing.
-export const EMBEDDING_VERSION = 1;
+// One version per item type. Bump a type's version when the model, or the text its
+// vectors are built from, changes: older vectors of that type are then excluded from
+// recall and flagged for re-indexing, and the other types are left alone.
+//   scene 2 — the scene's prose as passages (was: names, keywords and the first 120
+//             characters of the player's message, cut to 500 characters).
+export const EMBEDDING_VERSIONS = Object.freeze({ scene: 2, lore: 1, rule: 1 });
 
 // ─── MMR diversity reranking (Phase G) ──────────────────────────────────────
 // Ported from mobileApp/src/services/embedding/vectorSearch.ts. mobileApp runs
@@ -100,7 +103,7 @@ let currentDims = null;
 
 /**
  * Embeddings whose vectors were dropped by a schema rebuild are marked with
- * this version in `embedding_meta`. It is below every real `EMBEDDING_VERSION`,
+ * this version in `embedding_meta`. It is below every real version in `EMBEDDING_VERSIONS`,
  * so re-index picks them up through its ordinary stale path, and it is never
  * written by a store — so a row at this version means exactly "needs rebuild".
  */
@@ -116,9 +119,11 @@ let unavailableReason = null;
  * quietly fell back to keyword search and the user had no way to know.
  *   - 'unavailable'     — the database failed to open. Vector calls are no-ops
  *                          for the life of the process.
- *   - 'reindex-needed'  — the embedding size changed, so the vector tables
- *                          were recreated empty, and `count` of this campaign's
- *                          embeddings are still waiting to be rebuilt.
+ *   - 'reindex-needed'  — `count` of this campaign's embeddings are older than
+ *                          their type's version: the embedding size changed (the
+ *                          tables were recreated empty) or the text a type is
+ *                          built from changed. Either way they are excluded from
+ *                          recall until re-index rebuilds them.
  *
  * Derived from the database rather than held in memory, so it survives a
  * restart and clears itself as re-index rebuilds each vector.
@@ -129,11 +134,13 @@ let unavailableReason = null;
 export function getVectorHealth(campaignId) {
     if (unavailableReason !== null) return { status: 'unavailable', detail: unavailableReason };
     if (!db) return { status: 'ok' };
+    const stale = `((item_type = 'scene' AND version < ?) OR (item_type = 'lore' AND version < ?) OR (item_type = 'rule' AND version < ?))`;
+    const versions = [EMBEDDING_VERSIONS.scene, EMBEDDING_VERSIONS.lore, EMBEDDING_VERSIONS.rule];
     const row = campaignId
-        ? db.prepare('SELECT COUNT(*) AS n FROM embedding_meta WHERE campaign_id = ? AND version = ?')
-            .get(campaignId, REBUILD_PENDING_VERSION)
-        : db.prepare('SELECT COUNT(*) AS n FROM embedding_meta WHERE version = ?')
-            .get(REBUILD_PENDING_VERSION);
+        ? db.prepare(`SELECT COUNT(*) AS n FROM embedding_meta WHERE campaign_id = ? AND ${stale}`)
+            .get(campaignId, ...versions)
+        : db.prepare(`SELECT COUNT(*) AS n FROM embedding_meta WHERE ${stale}`)
+            .get(...versions);
     return row.n > 0 ? { status: 'reindex-needed', count: row.n } : { status: 'ok' };
 }
 
@@ -269,7 +276,7 @@ export function initDb() {
         writeJson(SETTINGS_FILE, settings);
     }
 
-    console.log(`[VectorStore] Initialized (${currentDims} dims, cosine, meta v${EMBEDDING_VERSION})`);
+    console.log(`[VectorStore] Initialized (${currentDims} dims, cosine, meta versions ${JSON.stringify(EMBEDDING_VERSIONS)})`);
 }
 
 function createStoreFn(table, idCol, itemType) {
@@ -284,6 +291,10 @@ function createStoreFn(table, idCol, itemType) {
     // cache must be rebuilt rather than reused against the old handle.
     let preparedFor = null;
 
+    // `embedding` is one vector, or a list of them: a scene is stored as one row per
+    // passage under the same id, and search ranks the scene by its best row. The
+    // item's old rows are replaced as a whole. An empty list removes the item's rows
+    // and still stamps it current — there is nothing to embed.
     return (campaignId, itemId, embedding) => {
         if (!db) return;
         if (preparedFor !== db) {
@@ -293,14 +304,14 @@ function createStoreFn(table, idCol, itemType) {
                 ins: db.prepare(`INSERT INTO ${table}(campaign_id, ${idCol}, embedding) VALUES (?, ?, ?)`),
                 meta: db.prepare(`INSERT OR REPLACE INTO embedding_meta (campaign_id, item_type, item_id, version, updated_at) VALUES (?, ?, ?, ?, ?)`),
             };
-            runTx = db.transaction((cId, iId, emb) => {
+            runTx = db.transaction((cId, iId, vectors) => {
                 stmts.del.run(cId, iId);
-                stmts.ins.run(cId, iId, emb);
+                for (const v of vectors) stmts.ins.run(cId, iId, v);
                 // Stamp version metadata
-                stmts.meta.run(cId, itemType, iId, EMBEDDING_VERSION, Date.now());
+                stmts.meta.run(cId, itemType, iId, EMBEDDING_VERSIONS[itemType], Date.now());
             });
         }
-        runTx(campaignId, itemId, embedding);
+        runTx(campaignId, itemId, Array.isArray(embedding) ? embedding : [embedding]);
     };
 }
 export const storeArchiveEmbedding = createStoreFn('archive_vss', 'scene_id', 'scene');
@@ -313,6 +324,11 @@ export const storeRulesEmbedding = createStoreFn('rules_vss', 'rule_id', 'rule')
 // is rejected, we over-fetch (limit * 4, capped here) and JS-filter to scopeIds.
 // The cap bounds the worst-case row count pulled back before filtering.
 const SCOPE_FALLBACK_OVERFETCH_CAP = 64;
+
+// Row fan-out for scene search. A scene holds up to 16 passage rows, but a query
+// rarely lands near more than a few passages of one scene; 6× the pool keeps enough
+// distinct scenes after each keeps its nearest row.
+const SCENE_ROWS_PER_ITEM = 6;
 
 /**
  * Normalize the optional `scopeIds` opt. Returns null when no scope is requested
@@ -333,13 +349,17 @@ function normalizeScopeIds(scopeIds) {
 // chunks aren't redundant, and diversity-reranking could evict the one rule a
 // turn needs in favour of a "more different" but less relevant one. searchRules
 // is built with applyMmr=false and ignores the `diversity` flag entirely.
-function createSearchFn(table, idCol, resultKey, itemType, applyMmr) {
+//
+// `rowsPerItem` is how many rows one item may hold. Scenes are stored as several
+// passage rows (see `createStoreFn`), so the KNN query fetches that many times more
+// rows and each item keeps only its nearest row: a scene ranks by its best passage.
+function createSearchFn(table, idCol, resultKey, itemType, applyMmr, rowsPerItem = 1) {
     return (campaignId, queryEmbedding, limit, diversity = true, opts = {}) => {
         if (!db) return [];
         const useMmr = applyMmr && diversity !== false;
         // Pull a wider candidate pool than the final limit so MMR has room to
         // diversify, then return `limit` after reranking.
-        const poolSize = useMmr ? Math.max(limit, MMR_MIN_POOL, limit * 3) : limit;
+        const poolSize = (useMmr ? Math.max(limit, MMR_MIN_POOL, limit * 3) : limit) * rowsPerItem;
         const cols = useMmr ? `${idCol}, distance, embedding` : `${idCol}, distance`;
         try {
             let rows;
@@ -362,7 +382,7 @@ function createSearchFn(table, idCol, resultKey, itemType, applyMmr) {
                     // cap 64) and JS-filter to scopeIds. The fallback query's own
                     // errors propagate to the outer catch.
                     console.warn(`[VectorStore] ${table} scoped search (SQL IN) failed, falling back to over-fetch: ${scopeErr.message}`);
-                    const overFetch = Math.min(limit * 4, SCOPE_FALLBACK_OVERFETCH_CAP);
+                    const overFetch = Math.min(limit * 4, SCOPE_FALLBACK_OVERFETCH_CAP) * rowsPerItem;
                     rows = db.prepare(`
                         SELECT ${cols}
                         FROM ${table}
@@ -382,8 +402,12 @@ function createSearchFn(table, idCol, resultKey, itemType, applyMmr) {
                     LIMIT ?
                 `).all(queryEmbedding, campaignId, poolSize);
             }
+            // An item with several rows keeps its nearest one (rows arrive nearest first).
+            const seen = new Set();
+            rows = rows.filter(r => !seen.has(r[idCol]) && seen.add(r[idCol]));
+
             // Filter out stale embeddings (version mismatch) and unversioned embeddings (no meta entry)
-            const currentVersion = EMBEDDING_VERSION;
+            const currentVersion = EMBEDDING_VERSIONS[itemType];
             const staleIds = new Set();
             if (rows.length > 0) {
                 const ids = rows.map(r => r[idCol]);
@@ -426,7 +450,7 @@ function createSearchFn(table, idCol, resultKey, itemType, applyMmr) {
         }
     };
 }
-export const searchArchive = createSearchFn('archive_vss', 'scene_id', 'sceneId', 'scene', true);
+export const searchArchive = createSearchFn('archive_vss', 'scene_id', 'sceneId', 'scene', true, SCENE_ROWS_PER_ITEM);
 export const searchLore = createSearchFn('lore_vss', 'lore_id', 'loreId', 'lore', true);
 // Rules are deliberately never diversified — see comment above createSearchFn.
 export const searchRules = createSearchFn('rules_vss', 'rule_id', 'ruleId', 'rule', false);
@@ -478,8 +502,7 @@ export function deleteCampaignEmbeddings(campaignId) {
 }
 
 export function getEmbeddingStatus(campaignId) {
-    if (!db) return { scenes: { total: 0, current: 0, stale: 0 }, lore: { total: 0, current: 0, stale: 0 }, rules: { total: 0, current: 0, stale: 0 }, version: EMBEDDING_VERSION };
-    const currentVersion = EMBEDDING_VERSION;
+    if (!db) return { scenes: { total: 0, current: 0, stale: 0 }, lore: { total: 0, current: 0, stale: 0 }, rules: { total: 0, current: 0, stale: 0 }, versions: EMBEDDING_VERSIONS };
     const sceneMeta = db.prepare("SELECT version, COUNT(*) as count FROM embedding_meta WHERE campaign_id = ? AND item_type = 'scene' GROUP BY version").all(campaignId);
     const loreMeta = db.prepare("SELECT version, COUNT(*) as count FROM embedding_meta WHERE campaign_id = ? AND item_type = 'lore' GROUP BY version").all(campaignId);
     const rulesMeta = db.prepare("SELECT version, COUNT(*) as count FROM embedding_meta WHERE campaign_id = ? AND item_type = 'rule' GROUP BY version").all(campaignId);
@@ -487,21 +510,21 @@ export function getEmbeddingStatus(campaignId) {
     let scenesTotal = 0, scenesCurrent = 0, scenesStale = 0;
     for (const row of sceneMeta) {
         scenesTotal += row.count;
-        if (row.version >= currentVersion) scenesCurrent += row.count;
+        if (row.version >= EMBEDDING_VERSIONS.scene) scenesCurrent += row.count;
         else scenesStale += row.count;
     }
 
     let loreTotal = 0, loreCurrent = 0, loreStale = 0;
     for (const row of loreMeta) {
         loreTotal += row.count;
-        if (row.version >= currentVersion) loreCurrent += row.count;
+        if (row.version >= EMBEDDING_VERSIONS.lore) loreCurrent += row.count;
         else loreStale += row.count;
     }
 
     let rulesTotal = 0, rulesCurrent = 0, rulesStale = 0;
     for (const row of rulesMeta) {
         rulesTotal += row.count;
-        if (row.version >= currentVersion) rulesCurrent += row.count;
+        if (row.version >= EMBEDDING_VERSIONS.rule) rulesCurrent += row.count;
         else rulesStale += row.count;
     }
 
@@ -509,7 +532,7 @@ export function getEmbeddingStatus(campaignId) {
         scenes: { total: scenesTotal, current: scenesCurrent, stale: scenesStale },
         lore: { total: loreTotal, current: loreCurrent, stale: loreStale },
         rules: { total: rulesTotal, current: rulesCurrent, stale: rulesStale },
-        version: EMBEDDING_VERSION,
+        versions: EMBEDDING_VERSIONS,
     };
 }
 

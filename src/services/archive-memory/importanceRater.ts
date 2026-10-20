@@ -42,9 +42,9 @@ export async function rateImportance(
 
     try {
         const raw = modelCall
-            ? (await modelCall({ prompt, priority: 'low', trackingLabel: 'importance-rating', timeoutMs: AI_CALL_TIMEOUT_MS })).content
+            ? (await modelCall({ prompt, priority: 'low', thinkingEffort: 'off', trackingLabel: 'importance-rating', timeoutMs: AI_CALL_TIMEOUT_MS })).content
             : provider
-                ? await llmCall(provider, prompt, { priority: 'low', trackingLabel: 'importance-rating', timeoutMs: AI_CALL_TIMEOUT_MS })
+                ? await llmCall(provider, prompt, { priority: 'low', thinkingEffort: 'off', trackingLabel: 'importance-rating', timeoutMs: AI_CALL_TIMEOUT_MS })
                 : '';
         const match = raw.trim().match(/\b([1-5])\b/);
         if (match) return parseInt(match[1], 10);
@@ -52,6 +52,18 @@ export async function rateImportance(
         console.warn('[ImportanceRater] LLM call failed, using heuristic fallback:', err);
     }
     return heuristicImportance(`${userText}\n${gmText}`);
+}
+
+/**
+ * The archive index stores importance on the server heuristic's 1–10 scale
+ * (`server/lib/nlp.js` estimateImportance), and its readers threshold on that
+ * scale: NPC knowledge limits at >= 6, the LOD importance bonus at >= 8. The rater
+ * answers 1–5, so it is mapped 2r − 1 (1, 3, 5, 7, 9) before it is stored:
+ * Significant (4) and Critical (5) clear the knowledge-limit bar, Critical alone
+ * the LOD bonus. Stored unmapped, a Max-tier scene could never reach either.
+ */
+export function ratingToIndexImportance(rating: number): number {
+    return Math.min(10, Math.max(1, 2 * Math.round(rating) - 1));
 }
 
 export function heuristicImportance(text: string): number {

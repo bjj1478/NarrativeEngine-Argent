@@ -150,7 +150,12 @@ export function retrieveArchiveMemory(
 
 /**
  * Fetch full verbatim scene content from the server for a set of scene IDs.
- * Returns scenes within the token budget, sorted chronologically.
+ *
+ * `sceneIds` is best-first. The token budget is filled in that order and the
+ * scenes that fit are returned sorted chronologically. Sorting before filling
+ * the budget filled it oldest-first: with ~1,500-token scenes in a 3,000-token
+ * budget, the two oldest picks always won and a better-ranked newer scene was
+ * dropped (a probe about a deal made in scenes 533–534 got scenes 115, 207, 271).
  */
 export async function fetchArchiveScenes(
     campaignId: string,
@@ -169,11 +174,14 @@ export async function fetchArchiveScenes(
 
         const raw: { sceneId: string; content: string }[] = await res.json();
 
-        const sorted = raw.sort((a, b) => safeSceneNum(a.sceneId) - safeSceneNum(b.sceneId));
+        // The server answers in archive order; restore the caller's ranking.
+        const rank = new Map(sceneIds.map((id, i) => [safeSceneNum(id), i]));
+        const byRank = raw.slice().sort((a, b) =>
+            (rank.get(safeSceneNum(a.sceneId)) ?? Infinity) - (rank.get(safeSceneNum(b.sceneId)) ?? Infinity));
         const selected: ArchiveScene[] = [];
         let usedTokens = 0;
 
-        for (const scene of sorted) {
+        for (const scene of byRank) {
             const tokens = countTokens(scene.content);
             if (usedTokens + tokens > tokenBudget) {
                 // Partially include the scene if there's a meaningful amount of budget remaining
@@ -195,7 +203,7 @@ export async function fetchArchiveScenes(
             `(${usedTokens} tokens used of ${tokenBudget} budget).`
         );
 
-        return selected;
+        return selected.sort((a, b) => safeSceneNum(a.sceneId) - safeSceneNum(b.sceneId));
     } catch (err) {
         console.warn('[Archive Retrieval] Error fetching scenes:', err);
         return [];

@@ -186,7 +186,7 @@ export function BackupModal() {
     }
 
     return (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={() => { setSelectedBackups(new Set()); toggleBackupModal(); }}>
+        <div data-motion="overlay" className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={() => { setSelectedBackups(new Set()); toggleBackupModal(); }}>
             <div
                 className="bg-surface border border-border rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl"
                 onClick={(e) => e.stopPropagation()}

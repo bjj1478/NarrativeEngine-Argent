@@ -161,13 +161,13 @@ html[data-ui="beta"] .chrome-label {
 }
 
 /* ── The story. This is the thing you read for hours. ──
-   It was 14px monospace (MessageBubble.tsx). */
+   It was 14px monospace (MessageBubble.tsx). Size, line height and column
+   width are the player's reading settings now (index.css, "Session journal"),
+   shared with the classic UI; beta contributes only the face, via --lamp-story. */
 html[data-ui="beta"] .gm-prose,
 html[data-ui="beta"] [data-ui="msg"] .gm-prose p,
 html[data-ui="beta"] [data-ui="msg"] .gm-prose li {
   font-family: var(--lamp-story);
-  font-size: 18px;
-  line-height: 1.7;
   letter-spacing: 0.002em;
 }
 html[data-ui="beta"] [data-ui="msg"] { font-family: var(--lamp-story); }
@@ -197,14 +197,11 @@ html[data-ui="beta"] [data-ui="composer-input"] textarea::placeholder {
 html[data-ui="beta"] .chat-panel { padding-top: 26px; }
 
 html[data-ui="beta"] [data-ui="msg-row"] {
-  /* The reading measure, set by measurement rather than by eye: 600px of 18px
-     EB Garamond renders ~80 characters per line. 780px measured 112 and 700px
-     measured 96 — both past the width where the eye starts losing its place on
-     the carriage return.
-     NOTE this is the ONE place the "fill the window" rule is deliberately not
+  /* The reading measure lives in the reading settings (readingPrefs.ts): 600px
+     of 18px EB Garamond measured ~80 characters per line, and 780px measured
+     112 — past the width where the eye loses its place on the carriage return.
+     This is the ONE place the "fill the window" rule is deliberately not
      applied. Chrome fills the window; body text is measured. */
-  max-width: 600px;
-  margin-inline: auto;
   width: 100%;
   justify-content: flex-start;
   position: relative;
@@ -659,10 +656,6 @@ html[data-ui="beta"] [data-ui="hub"] > button:hover {
 }
 .beta-toggle .beta-state { opacity: 0.65; font-weight: 400; }
 .beta-toggle[aria-pressed="true"] .beta-state { opacity: 1; font-weight: 700; }
-
-@media (prefers-reduced-motion: reduce) {
-  html[data-ui="beta"] * { transition-duration: 0.01ms !important; }
-}
 
 /* ─────────────────────────────────────────────────────────────────────────
    13. SETTINGS — structure, not just colour (audit F11 + F14)
@@ -1226,4 +1219,158 @@ html[data-ui="beta"] [data-ui="settings"] > div > div > label[class*="tracking-w
    fall back to the scrolling list the headings already organise. */
 @media (max-width: 899px) {
   html[data-ui="beta"] [data-ui="settings-nav"] { display: none; }
+}
+
+/* Motion belongs to the opt-in skin. Hooks on shared components are inert in
+   classic UI. Animate opacity/translate/scale, never `all`, chat height, or rail width
+   (the latter is dragged by the user). No forwards fill: a finished animation
+   must not leave a containing block around fixed menus or selection tools. */
+html[data-ui="beta"] {
+  --beta-motion-fast: 120ms;
+  --beta-motion-menu: 200ms;
+  --beta-motion-normal: 240ms;
+  --beta-motion-panel: 300ms;
+  --beta-motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+html[data-ui="beta"] :where(button, a, summary, [role="tab"], [role="option"]) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, translate;
+  transition-duration: var(--beta-motion-fast);
+  transition-timing-function: var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] :where(input, textarea, select, [data-ui="composer-input"]) {
+  transition: border-color var(--beta-motion-fast) var(--beta-motion-ease),
+    background-color var(--beta-motion-fast) var(--beta-motion-ease),
+    box-shadow var(--beta-motion-fast) var(--beta-motion-ease);
+}
+
+/* A one-pixel press is enough feedback without moving the hit target away. */
+html[data-ui="beta"] button:active:not(:disabled):not([aria-disabled="true"]) {
+  translate: 0 1px;
+}
+
+html[data-ui="beta"] [data-motion="overlay"],
+html[data-ui="beta"] [data-ui="palette-veil"] {
+  animation: beta-fade-in var(--beta-motion-menu) var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] [data-motion="overlay"] > :where(div, section, form):not([data-ui="screen"]):not([class~="inset-0"]),
+html[data-ui="beta"] [data-ui="palette"] {
+  animation: beta-surface-in var(--beta-motion-panel) var(--beta-motion-ease);
+}
+
+/* Full working screens fade without shrinking or sliding the entire viewport. */
+html[data-ui="beta"] [data-ui="screen"],
+html[data-ui="beta"] [data-ui="ledger"] {
+  animation: beta-fade-in var(--beta-motion-panel) var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] [data-motion="popover"],
+html[data-ui="beta"] :where([role="menu"], [role="listbox"]):not(select) {
+  transform-origin: top center;
+  animation: beta-popover-in var(--beta-motion-menu) var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] [data-ui="drawer"] {
+  animation: beta-drawer-in var(--beta-motion-panel) var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] [data-motion="side-panel"] {
+  animation: beta-side-in var(--beta-motion-panel) var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] [data-motion="reveal"],
+html[data-ui="beta"] [data-ui="settings"] > [data-motion="tab"]:not(.hidden),
+html[data-ui="beta"] [data-ui="settings-section"][data-active="true"],
+html[data-ui="beta"] [data-motion="rail-panel"]:not([hidden]) {
+  animation: beta-fade-in var(--beta-motion-normal) var(--beta-motion-ease);
+}
+
+/* Stable React message keys make this a mount-only arrival. Streaming chunks,
+   swipe updates, and status text edits must never restart the bubble animation. */
+html[data-ui="beta"] [data-ui="msg-row"] {
+  animation: beta-message-in var(--beta-motion-normal) var(--beta-motion-ease);
+}
+
+html[data-ui="beta"] [data-ui="msg-rail"] {
+  transition: opacity var(--beta-motion-fast) var(--beta-motion-ease);
+}
+html[data-ui="beta"] [data-ui="msg-row"]:focus-within [data-ui="msg-rail"] {
+  opacity: 1;
+}
+
+html[data-ui="beta"] [data-motion="toast"] {
+  animation: beta-surface-in var(--beta-motion-normal) var(--beta-motion-ease);
+}
+html[data-ui="beta"] [data-ui="gauge-bar"] i {
+  transition: width var(--beta-motion-normal) var(--beta-motion-ease);
+}
+html[data-ui="beta"] [data-ui="armed-chip"] {
+  animation: beta-fade-in var(--beta-motion-fast) var(--beta-motion-ease);
+}
+html[data-ui="beta"] .animate-pulse {
+  animation-duration: 2.8s;
+}
+
+/* Native disclosures keep their semantics, focus, and keyboard behavior. The
+   fallback fades the contents; supporting browsers also interpolate height in
+   both directions, including reasoning, debug payloads, and import previews. */
+html[data-ui="beta"] details[open] > :not(summary) {
+  animation: beta-fade-in var(--beta-motion-normal) var(--beta-motion-ease);
+}
+@supports (interpolate-size: allow-keywords) and selector(details::details-content) {
+  html[data-ui="beta"] details { interpolate-size: allow-keywords; }
+  html[data-ui="beta"] details::details-content {
+    block-size: 0;
+    overflow: clip;
+    opacity: 0;
+    transition: block-size var(--beta-motion-normal) var(--beta-motion-ease),
+      opacity var(--beta-motion-fast) var(--beta-motion-ease),
+      content-visibility var(--beta-motion-normal) allow-discrete;
+  }
+  html[data-ui="beta"] details[open]::details-content {
+    block-size: auto;
+    opacity: 1;
+  }
+}
+
+@keyframes beta-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes beta-surface-in {
+  from { opacity: 0; translate: 0 12px; scale: 0.985; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes beta-popover-in {
+  from { opacity: 0; translate: 0 -6px; scale: 0.97; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes beta-drawer-in {
+  from { opacity: 0; translate: -20px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes beta-side-in {
+  from { opacity: 0; translate: 20px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes beta-message-in {
+  from { opacity: 0; translate: 0 6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+/* Last in the skin so legacy utility animations and pseudo-elements also obey
+   reduced motion. Reset delays as well as durations; retain immediate feedback. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="beta"] *,
+  html[data-ui="beta"] *::before,
+  html[data-ui="beta"] *::after,
+  html[data-ui="beta"] details::details-content {
+    animation: none !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  html[data-ui="beta"] button:active { translate: none; }
 }

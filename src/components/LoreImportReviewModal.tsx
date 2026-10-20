@@ -104,7 +104,7 @@ export function LoreImportReviewModal({ draft, onStartClassification, onMerge, o
     };
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Import Lore">
+        <div data-motion="overlay" className="fixed inset-0 z-[110] flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Import Lore">
             <div className="absolute inset-0 bg-ember/40 backdrop-blur-sm" onClick={onClose} />
 
             <div className="relative bg-surface border border-border w-full h-full sm:h-[85vh] sm:max-w-2xl sm:mx-4 flex flex-col shadow-2xl overflow-hidden">

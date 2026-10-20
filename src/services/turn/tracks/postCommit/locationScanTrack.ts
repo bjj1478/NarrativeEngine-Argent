@@ -2,7 +2,7 @@ import { parseStoryMovement } from '../../storyMovement';
 import { resolveLocationHeader } from '../../../locationHeader';
 import { mergeLocationScanLedger, scanLocation } from '../../../locationParser';
 import { backgroundQueue } from '../../../infrastructure/backgroundQueue';
-import { tierAllows } from '../../aiTier';
+import { isBlockEnabled } from '../../blockEnablement';
 import type { PostCommitTrackContext, PostTurnTrack } from '../types';
 import { assertStillActive } from '../guarded';
 
@@ -16,7 +16,7 @@ export const locationScanTrack: PostTurnTrack<PostCommitTrackContext> = {
     callsModel: true,
     shouldRun: (ctx) => ctx.bookkeepingDue
         && ctx.bkAvailable
-        && tierAllows(ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, 'locationScan'),
+        && isBlockEnabled('locationScan', ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, ctx.facade?.config.moduleEnabled ?? ctx.state.settings.moduleEnabled),
     async run(ctx) {
         backgroundQueue.push('Location-Scan', async () => {
             if (!assertStillActive(ctx.activeCampaignId, 'Location-Scan')) return;

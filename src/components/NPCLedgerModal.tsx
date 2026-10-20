@@ -702,7 +702,7 @@ export function NPCLedgerModal() {
                 {/* The pass itself. An overlay like the dialogs, because the ledger
                     underneath is live and already holds every imported NPC. */}
                 {adaptPhase !== 'idle' && (
-                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-void/80 backdrop-blur-sm p-4">
+                    <div data-motion="overlay" className="absolute inset-0 z-20 flex items-center justify-center bg-void/80 backdrop-blur-sm p-4">
                         <div className="w-full max-w-lg max-h-full overflow-y-auto bg-surface border border-border rounded-lg shadow-2xl p-5">
                             <AdaptationPanel
                                 progress={adaptProgress}

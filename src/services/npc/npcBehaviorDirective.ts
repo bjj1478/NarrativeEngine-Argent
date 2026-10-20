@@ -4,6 +4,7 @@ import { buildReactionMenu, type ReactionContext } from './reactionMenu';
 import { applyRepressionToMenu } from './reactionRepression';
 import { readPcAffinity } from './affinityAccess';
 import { parseKnownByToken, parseFactions } from '../campaign-state/knowledgeScope';
+import { createWitnessResolver, type WitnessResolver } from './witnessResolve';
 
 function affinityDescriptor(v: number): string {
     if (v <= 15) return 'Nemesis — actively hostile';
@@ -185,16 +186,20 @@ export function buildDriftAlert(npc: NPCEntry): string | null {
 export function buildKnowledgeBoundary(
     npc: NPCEntry,
     archiveIndex: ArchiveIndexEntry[],
-    divergenceFacts?: DivergenceEntry[]
+    divergenceFacts?: DivergenceEntry[],
+    resolveWitness?: WitnessResolver,
 ): string {
     const parts: string[] = [];
 
-    // ── Layer 1: scene-witness filter (existing behavior, unchanged) ──
+    // ── Layer 1: scene-witness filter ──
+    // Witness lists hold names that may be short ("Rin" for "Rin Holmes") or an
+    // alias; resolve them against the ledger rather than comparing names exactly.
     if (archiveIndex && archiveIndex.length > 0) {
+        const resolve = resolveWitness ?? createWitnessResolver([npc]);
         const witnessedSceneIds = new Set(
             archiveIndex
                 .filter(e => (e.witnesses ?? []).some(w =>
-                    w.toLowerCase() === npc.name.toLowerCase()
+                    resolve(w).some(n => n.id === npc.id)
                 ))
                 .map(e => e.sceneId)
         );

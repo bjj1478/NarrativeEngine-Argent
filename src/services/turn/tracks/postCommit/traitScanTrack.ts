@@ -1,6 +1,6 @@
 import { scanCharacterTraits } from '../../../characterTraitParser';
 import { backgroundQueue } from '../../../infrastructure/backgroundQueue';
-import { tierAllows } from '../../aiTier';
+import { isBlockEnabled } from '../../blockEnablement';
 import type { PostCommitTrackContext, PostTurnTrack } from '../types';
 import { assertStillActive } from '../guarded';
 
@@ -15,7 +15,7 @@ export const traitScanTrack: PostTurnTrack<PostCommitTrackContext> = {
     shouldRun: (ctx) => ctx.bookkeepingDue
         && ctx.bkAvailable
         && ctx.freshContext.characterProfileActive
-        && tierAllows(ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, 'profileScan'),
+        && isBlockEnabled('profileScan', ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, ctx.facade?.config.moduleEnabled ?? ctx.state.settings.moduleEnabled),
     async run(ctx) {
         const traitProfile = ctx.freshContext.characterProfile || { identity: {}, activeTraits: [] };
         backgroundQueue.push('Trait-Scan', async () => {

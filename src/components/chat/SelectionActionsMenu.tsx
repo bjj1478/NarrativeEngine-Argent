@@ -24,6 +24,7 @@ export function SelectionActionsMenu() {
     return (
         <div
             ref={selectionMenuRef}
+            data-motion="popover"
             role="toolbar"
             aria-label="Selected text actions"
             className="fixed z-[120] max-w-[calc(100vw-24px)] rounded-md border border-terminal/80 bg-void-darker/95 p-2 shadow-2xl backdrop-blur-md"

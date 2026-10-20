@@ -55,7 +55,7 @@ export function NPCReviewModal({
     const total = archiveCount + deleteCount;
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60" onClick={onCancel}>
+        <div data-motion="overlay" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60" onClick={onCancel}>
             <div
                 className="bg-surface border border-border rounded-lg w-full max-w-lg max-h-[85vh] flex flex-col mx-4 font-sans text-text-primary"
                 onClick={(e) => e.stopPropagation()}

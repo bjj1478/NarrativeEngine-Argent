@@ -24,7 +24,7 @@ export function GalleryPicker({
 }) {
     if (matches.length === 0) return null;
     return (
-        <div className="mx-2 sm:mx-4 mb-1 border border-terminal/40 bg-void rounded-sm overflow-hidden shadow-lg">
+        <div data-motion="popover" className="mx-2 sm:mx-4 mb-1 border border-terminal/40 bg-void rounded-sm overflow-hidden shadow-lg">
             <div className="px-2 py-1 text-[8px] uppercase tracking-widest text-text-dim border-b border-border/50">
                 Show the GM an image
             </div>

@@ -9,45 +9,30 @@ import { isCampaignMetaFile, getTransferableTables, serverTableRegistry } from '
 import { modTableSuffix, scanModTableFiles } from '../lib/modTableRegistry.js';
 import { RETIRED_CAMPAIGN_TABLES } from '../lib/legacyTables.js';
 import { readMigrationLedger, normalizeLedger, migrationLedgerPath } from '../lib/legacyAdoption.js';
-import { embedText, buildArchiveText, buildLoreText } from '../lib/embedder.js';
+import { embedText, embedBatch, buildScenePassages, buildLoreText } from '../lib/embedder.js';
 import { storeArchiveEmbedding, storeLoreEmbedding } from '../lib/vectorStore.js';
 import { wrapAsync } from '../lib/asyncHandler.js';
+import { parseArchiveScenes } from '../lib/archiveScenes.js';
 import path from 'path';
 
 function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-// Parse the .archive.md format into SceneRecord[]
+// Parse the .archive.md format into SceneRecord[]. The timestamp comes from the
+// index entry, falling back to the block's own timestamp line.
 function parseArchiveMd(content, indexEntries = []) {
     const byId = {};
     for (const e of indexEntries) byId[e.sceneId] = e;
 
-    const blocks = content.split(/^(?=## SCENE )/m).filter(b => b.trim());
-    return blocks.map(block => {
-        const idMatch = block.match(/^## SCENE (\d+)/);
-        if (!idMatch) return null;
-        const sceneId = idMatch[1].padStart(3, '0');
-
-        const entry = byId[sceneId];
-        let timestamp = entry?.timestamp ?? 0;
-        if (!timestamp) {
-            const tsMatch = block.match(/^\*(.+)\*$/m);
-            if (tsMatch) {
-                const parsed = new Date(tsMatch[1]).getTime();
-                if (!isNaN(parsed)) timestamp = parsed;
-            }
+    return parseArchiveScenes(content).map(({ sceneId, timestampText, userContent, assistantContent }) => {
+        let timestamp = byId[sceneId]?.timestamp ?? 0;
+        if (!timestamp && timestampText) {
+            const parsed = new Date(timestampText).getTime();
+            if (!isNaN(parsed)) timestamp = parsed;
         }
-
-        const userMatch = block.match(/\*\*\[USER\]\*\*\n([\s\S]*?)\n\n\*\*\[GM\]\*\*/);
-        const assistantMatch = block.match(/\*\*\[GM\]\*\*\n([\s\S]*?)(?:\n\n---|\n---|\s*$)/);
-        return {
-            sceneId,
-            userContent: userMatch?.[1]?.trim() ?? '',
-            assistantContent: assistantMatch?.[1]?.trim() ?? '',
-            timestamp,
-        };
-    }).filter(Boolean);
+        return { sceneId, userContent, assistantContent, timestamp };
+    });
 }
 
 // Reconstruct .archive.md from SceneRecord[]
@@ -315,12 +300,16 @@ export function createTransferRouter() {
         setImmediate(async () => {
             let embedOk = 0;
             let embedFail = 0;
-            for (const entry of bundle.archiveIndex || []) {
+            const indexById = new Map((bundle.archiveIndex || []).map(e => [e.sceneId, e]));
+            for (const scene of bundle.scenes || []) {
                 try {
-                    const vec = await embedText(buildArchiveText(entry));
-                    storeArchiveEmbedding(newId, entry.sceneId, vec);
+                    const entry = indexById.get(scene.sceneId);
+                    const names = [...(entry?.witnesses ?? []), ...(entry?.npcsMentioned ?? [])];
+                    const passages = buildScenePassages(scene.userContent, scene.assistantContent, names);
+                    const vectors = passages.length > 0 ? await embedBatch(passages, 16, 0) : [];
+                    storeArchiveEmbedding(newId, scene.sceneId, vectors);
                     embedOk++;
-                } catch (e) { console.warn('[Transfer] Archive embed failed:', entry.sceneId, e.message); embedFail++; }
+                } catch (e) { console.warn('[Transfer] Archive embed failed:', scene.sceneId, e.message); embedFail++; }
             }
             for (const chunk of bundle.lore || []) {
                 try {

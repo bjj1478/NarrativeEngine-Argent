@@ -2,7 +2,7 @@ import type { ArchiveChapter } from '../../types';
 import type { TurnState } from '../turn/turnOrchestrator';
 import { deepArchiveScan } from '../archive-memory/deepArchiveSearch';
 import { queryFacts, formatFactsForContext } from '../retrieval/semanticMemory';
-import { tierAllows } from '../turn/aiTier';
+import { isBlockEnabled } from '../turn/blockEnablement';
 import { hasHostModelRole, type HostFacade } from '../turn/hostFacade';
 
 export type DeepSearchDeps = {
@@ -25,7 +25,7 @@ export async function gatherDeepSearch(
         return undefined;
     }
 
-    if (!tierAllows(config?.aiTier ?? state.settings.aiTier, 'deepScan')) {
+    if (!isBlockEnabled('deepScan', config?.aiTier ?? state.settings.aiTier, config?.moduleEnabled ?? state.settings.moduleEnabled)) {
         return undefined;
     }
 

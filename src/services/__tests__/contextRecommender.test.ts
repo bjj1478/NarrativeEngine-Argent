@@ -99,4 +99,22 @@ describe('recommendContext', () => {
         const result = await recommendContext(endpoint, [], [], [], 'wander');
         expect(result).toMatchObject(emptyResult);
     });
+
+    // The recommenderThinking block: off by default (thinking took each pick from ~1 s
+    // to ~20 s on DS v4 Flash and chose no better); on, the endpoint's effort applies.
+    it('asks for thinking off by default, on both call paths', async () => {
+        mockLlmCall.mockResolvedValueOnce('{}');
+        await recommendContext(endpoint, [], [], [], 'wander');
+        expect(mockLlmCall.mock.calls[0][2]).toMatchObject({ thinkingEffort: 'off' });
+
+        const modelCall = vi.fn().mockResolvedValue({ content: '{}' });
+        await recommendContext(undefined, [], [], [], 'wander', undefined, undefined, undefined, undefined, undefined, modelCall);
+        expect(modelCall.mock.calls[0][0]).toMatchObject({ thinkingEffort: 'off' });
+    });
+
+    it('with the thinking block on, leaves the endpoint\'s own effort in place', async () => {
+        const modelCall = vi.fn().mockResolvedValue({ content: '{}' });
+        await recommendContext(undefined, [], [], [], 'wander', undefined, undefined, undefined, undefined, undefined, modelCall, true);
+        expect(modelCall.mock.calls[0][0].thinkingEffort).toBeUndefined();
+    });
 });

@@ -4,7 +4,7 @@ import { retrieveArchiveMemory, fetchArchiveScenes } from '../archiveMemory';
 import { rankChapters, selectArchiveSceneIdsWithChapterFunnel } from '../archive-memory/archiveChapterEngine';
 import { runArchivePlanner } from '../archive-memory/archivePlanner';
 import { getDivergenceSceneIds, EMPTY_REGISTER, buildSceneMap } from '../campaign-state/divergenceRegister';
-import { tierAllows } from '../turn/aiTier';
+import { isBlockEnabled } from '../turn/blockEnablement';
 import type { SemanticCandidates } from './semanticCandidates';
 import { hasHostModelRole, type HostFacade } from '../turn/hostFacade';
 import type { RecallDepth } from '../archive-memory/dynamicMax';
@@ -38,6 +38,8 @@ export interface MemoryRecallAnswer {
 export interface MemoryRecallCoreContext {
     readonly chapters: readonly ArchiveChapter[];
     readonly aiTier: TurnState['settings']['aiTier'];
+    /** The Block View toggles (`settings.moduleEnabled`); an explicit entry beats the tier preset. */
+    readonly moduleEnabled?: Record<string, boolean>;
     readonly utilityProvider?: EndpointConfig | ProviderConfig;
     readonly modelCall?: (request: import('../turn/hostFacade').ModelRequest) => Promise<import('../turn/hostFacade').ModelResponse>;
 }
@@ -90,7 +92,11 @@ export async function selectMemoryRecallIds(
 
     const chapters = context.chapters as ArchiveChapter[];
     const hasSealedChapters = chapters.some((chapter) => chapter.sealedAt && chapter.summary);
-    if (!hasSealedChapters || !tierAllows(context.aiTier, 'archiveFunnel')) {
+    // The funnel is off in every preset: on the Turn Prep memory probes it locked onto
+    // the wrong chapters, and its scene step is keyword-only (it never sees the meaning
+    // search or the planner), while archive-wide search found the right scenes. Read
+    // through the block switch so a user who turns it back on gets it.
+    if (!hasSealedChapters || !isBlockEnabled('archiveFunnel', context.aiTier, context.moduleEnabled)) {
         return flatMemoryRecallIds(input);
     }
 
@@ -154,9 +160,13 @@ export async function gatherPlannerSceneIds(
     facade?: HostFacade,
 ): Promise<string[] | undefined> {
     const plannerEndpoint = facade ? undefined : state.getUtilityEndpoint?.();
-    const plannerEnabled = facade?.config.enableArchivePlanner ?? state.settings.enableArchivePlanner;
     const plannerAvailable = facade ? hasHostModelRole(facade, 'utility') : Boolean(plannerEndpoint?.endpoint);
-    if (tierAllows(facade?.config.aiTier ?? state.settings.aiTier, 'planner') && plannerEnabled && plannerAvailable) {
+    // Off in every preset (its picks never changed recall on the Turn Prep probes); read
+    // through the block switch so a user who turns it back on in Block View gets it.
+    const plannerBlockOn = isBlockEnabled('planner', facade?.config.aiTier ?? state.settings.aiTier, state.settings.moduleEnabled);
+    // The Block View block is the only switch (the Global Settings "Archive Agent Planner"
+    // toggle, a hidden second switch, was removed 2026-10-05).
+    if (plannerBlockOn && plannerAvailable) {
         try {
             return await runArchivePlanner(
                 plannerEndpoint,
@@ -222,6 +232,7 @@ export async function gatherArchiveRecall(
     setMemoryRecallDefaultContext({
         chapters: deps.chapters,
         aiTier: facade?.config.aiTier ?? state.settings.aiTier,
+        moduleEnabled: state.settings.moduleEnabled,
         utilityProvider: facade ? undefined : state.getUtilityEndpoint?.(),
         modelCall: facade
             ? (request: import('../turn/hostFacade').ModelRequest) => facade.model.call('utility', request)

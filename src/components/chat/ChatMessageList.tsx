@@ -6,6 +6,7 @@ import { MessageBubble } from '../MessageBubble';
 import { ChatEmptyState } from './ChatEmptyState';
 import { UtilityCallStrip } from '../UtilityCallStrip';
 import { GenerationProgress } from '../GenerationProgress';
+import { normalizeReadingAlign, normalizeReadingFont, readingStyleVars } from './readingPrefs';
 import type { useSwipeVariants } from '../hooks/useSwipeVariants';
 import type { useSceneContinue } from '../hooks/useSceneContinue';
 import type { useMessageEditor } from '../hooks/useMessageEditor';
@@ -77,7 +78,16 @@ export function ChatMessageList({
     }, [messages]);
 
     return (
-        <div ref={scrollContainerRef} className="chat-panel flex-1 overflow-y-auto px-2 md:px-4 py-4 space-y-3 relative">
+        // Reading typography is a persisted setting (Settings → Display, or the
+        // Aa control beside the story), projected as CSS variables here.
+        <div
+            ref={scrollContainerRef}
+            className="chat-panel story-journal flex-1 overflow-y-auto relative"
+            data-reading-font={normalizeReadingFont(settings.readingFont)}
+            data-reading-align={normalizeReadingAlign(settings.readingAlign)}
+            style={readingStyleVars(settings)}
+        >
+            <div className="journal-pages">
             {messages.length === 0 && (
                 <ChatEmptyState onCreateCharacter={onCreateCharacter} />
             )}
@@ -150,6 +160,7 @@ export function ChatMessageList({
             )}
 
             <div ref={bottomRef} />
+            </div>
         </div>
     );
 }

@@ -6,6 +6,11 @@ export function routeKnowledge(cells, days, mode, explored = new Set(), roads = 
     const margin = uncertain ? Math.max(1, Math.ceil(days * (0.25 + 0.25 * unknown / Math.max(1, cells.length)))) : 0;
     return { uncertain, minDays: Math.max(1, days - margin), maxDays: Math.max(1, days + margin) };
 }
-export function estimateLabel(estimate) {
-    return 'Estimated ' + estimate.minDays + '–' + estimate.maxDays + ' days · route uncertain';
+/** What one leg reads as: a day of travel, or an hour when the campaign travels in hours. */
+export function legWords(unit) {
+    return unit === 'hours' ? { one: 'hour', many: 'hours', stop: 'stop' } : { one: 'day', many: 'days', stop: 'camp' };
+}
+/** `remaining` reads the range as what is left of a journey already under way. */
+export function estimateLabel(estimate, unit, remaining = false) {
+    return 'Estimated ' + estimate.minDays + '–' + estimate.maxDays + ' ' + (remaining ? 'more ' : '') + legWords(unit).many + ' · uncharted route';
 }

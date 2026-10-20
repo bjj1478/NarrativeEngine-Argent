@@ -113,7 +113,7 @@ export function GalleryModal() {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={closeGallery}>
+        <div data-motion="overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={closeGallery}>
             <div
                 className="w-full max-w-5xl max-h-[85vh] flex flex-col bg-void border border-border rounded-sm shadow-2xl"
                 onClick={e => e.stopPropagation()}

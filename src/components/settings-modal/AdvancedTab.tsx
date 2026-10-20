@@ -11,7 +11,7 @@ import { generateTts, getTtsStatus, initTtsModel, type TtsStatus } from '../../s
 type EmbedderInfo = {
     modelId: string;
     dims: number;
-    embeddingVersion: number;
+    embeddingVersions: { scene: number; lore: number; rule: number };
 };
 
 const DEFAULT_TTS_PREVIEW_TEXT = 'The rain settles over the road as a distant bell marks the turning of the hour.';
@@ -324,7 +324,7 @@ export function AdvancedTab() {
                         </div>
                         <div className="text-[9px] text-text-dim">
                             {embedderInfo
-                                ? `${embedderInfo.dims}-dim · server-side · v${embedderInfo.embeddingVersion}`
+                                ? `${embedderInfo.dims}-dim · server-side · scenes v${embedderInfo.embeddingVersions.scene} · lore v${embedderInfo.embeddingVersions.lore}`
                                 : 'Loading…'}
                         </div>
                     </div>
@@ -353,8 +353,7 @@ export function AdvancedTab() {
                 {embedStatus && !reindexing && (
                     <div className="text-[9px] text-text-dim">
                         Scenes: {embedStatus.scenes.current}/{embedStatus.scenes.total} current · Lore: {embedStatus.lore.current}/{embedStatus.lore.total} current
-                        {embedStatus.scenes.stale > 0 && ` · ${embedStatus.scenes.stale + embedStatus.lore.stale} stale`}
-                        {` (v${embedStatus.version})`}
+                        {embedStatus.scenes.stale + embedStatus.lore.stale > 0 && ` · ${embedStatus.scenes.stale + embedStatus.lore.stale} stale`}
                     </div>
                 )}
                 {!activeCampaignId && (

@@ -47,10 +47,13 @@ RULES:
 3. If no scenes are relevant, return an empty array [].
 4. Output a single JSON array of strings only. No markdown formatting, no prose, no reasoning tags, no backticks.`;
 
+        // Thinking off: a ranking with a 300-token answer. Left to inherit the endpoint's
+        // effort, a thinking endpoint spent the whole capped budget reasoning and returned
+        // nothing, after blocking the turn for ~40s (Turn Prep Experiment smoke run).
         const raw = modelCall
-            ? (await modelCall({ prompt, temperature: 0.1, priority: 'high', maxTokens: 300, signal, trackingLabel: 'archive-planner', timeoutMs: AI_CALL_TIMEOUT_MS })).content
+            ? (await modelCall({ prompt, temperature: 0.1, priority: 'high', maxTokens: 300, thinkingEffort: 'off', signal, trackingLabel: 'archive-planner', timeoutMs: AI_CALL_TIMEOUT_MS })).content
             : provider
-                ? await llmCall(provider, prompt, { temperature: 0.1, priority: 'high', maxTokens: 300, signal, trackingLabel: 'archive-planner', timeoutMs: AI_CALL_TIMEOUT_MS })
+                ? await llmCall(provider, prompt, { temperature: 0.1, priority: 'high', maxTokens: 300, thinkingEffort: 'off', signal, trackingLabel: 'archive-planner', timeoutMs: AI_CALL_TIMEOUT_MS })
                 : '';
 
         const { value: parsed, parseOk } = extractJsonRobust<string[]>(raw, []);

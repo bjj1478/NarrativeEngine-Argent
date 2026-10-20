@@ -4,7 +4,7 @@ import { listTierBlocks, MATRIX, modTierBlocks, type TierFeature } from '../aiTi
 /**
  * WORKORDER-P5-01 §4 Step 5 — the declaration table tests.
  *
- * 27 TierFeature ids in, 27 TierBlock entries out. One entry per id, no dupes,
+ * 28 TierFeature ids in, 28 TierBlock entries out. One entry per id, no dupes,
  * no omissions. Shape mirrors `ContributionRegistry.list()` and
  * `PostTurnTrackRegistry.list()`. `arcSpawn` is `trigger: 'manual'` and
  * `toggleable: false` per §3 (the press IS the gate; the matrix value is never
@@ -12,7 +12,7 @@ import { listTierBlocks, MATRIX, modTierBlocks, type TierFeature } from '../aiTi
  * are `trigger: 'unwired'`: present-but-inert, shown to the user as "no call
  * site exists yet" so a reader does not hunt for a control that is not there.
  *
- * Phase 8.3 — `enemyDiscovery` is gone from the union (27 built-ins now). The
+ * Phase 8.3 — `enemyDiscovery` is gone from the union (27 built-ins then; `recommenderThinking` made it 28). The
  * enemies mod (8.5) declares its own `mod.enemies.enemyDiscovery` tier entry
  * through the 7.3 registry; `listTierBlocks` returns it alongside the built-ins
  * once the mod is enabled.
@@ -20,7 +20,7 @@ import { listTierBlocks, MATRIX, modTierBlocks, type TierFeature } from '../aiTi
 
 const TIER_FEATURE_IDS: TierFeature[] = [
     'introEngine', 'planner', 'expandQuery', 'reranker', 'archiveFunnel',
-    'deepScan', 'recommender', 'npcStance',
+    'deepScan', 'recommender', 'recommenderThinking', 'npcStance',
     'importanceRating', 'witnessAux', 'npcValidate', 'npcProfileGen',
     'npcUpdate', 'drivesBackfill', 'profileScan', 'inventoryScan', 'locationScan', 'locationEnrich', 'sealChapter',
     'sceneStakesClassify',
@@ -34,13 +34,13 @@ const TIER_FEATURE_IDS: TierFeature[] = [
 describe('WORKORDER-P5-01 — listTierBlocks declaration table', () => {
     beforeEach(() => {
         // Phase 7.3 — ensure no mod-declared tier entries leak in from other
-        // test files. The declaration table tests expect exactly 27 built-ins.
+        // test files. The declaration table tests expect exactly 28 built-ins.
         modTierBlocks.clear();
     });
 
     const blocks = listTierBlocks();
 
-    it('returns one entry per TierFeature id (27 in, 27 out)', () => {
+    it('returns one entry per TierFeature id (28 in, 28 out)', () => {
         expect(blocks).toHaveLength(TIER_FEATURE_IDS.length);
         const blockIds = blocks.map(b => b.id);
         for (const id of TIER_FEATURE_IDS) {
@@ -79,10 +79,6 @@ describe('WORKORDER-P5-01 — listTierBlocks declaration table', () => {
         // Per §5: a feature with no pipeline step AND no button is `unwired`, not `manual`.
         // `manual` means "fires from a button"; these have no button either. Labelling them
         // manual sends a user hunting for a control that does not exist.
-        const witnessAux = blocks.find(b => b.id === 'witnessAux');
-        expect(witnessAux).toBeDefined();
-        expect(witnessAux!.trigger).toBe('unwired');
-
         const npcProfileGen = blocks.find(b => b.id === 'npcProfileGen');
         expect(npcProfileGen).toBeDefined();
         expect(npcProfileGen!.trigger).toBe('unwired');
@@ -94,8 +90,8 @@ describe('WORKORDER-P5-01 — listTierBlocks declaration table', () => {
         expect(arcSpawn!.callsModel).toBe(true);
     });
 
-    it('the 23 pipeline-fired features are automatic', () => {
-        const nonAutomaticIds = new Set(['arcSpawn', 'witnessAux', 'npcProfileGen']);
+    it('every pipeline-fired feature is automatic', () => {
+        const nonAutomaticIds = new Set(['arcSpawn', 'npcProfileGen', 'drivesBackfill']);
         for (const block of blocks) {
             if (nonAutomaticIds.has(block.id)) continue;
             expect(block.trigger, `${block.id} should be automatic`).toBe('automatic');

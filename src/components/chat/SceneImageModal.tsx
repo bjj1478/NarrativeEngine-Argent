@@ -125,7 +125,7 @@ export function SceneImageModal() {
     };
 
     return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-void-darker/80 p-4 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]">
+        <div data-motion="overlay" className="fixed inset-0 z-[150] flex items-center justify-center bg-void-darker/80 p-4 backdrop-blur-sm animate-[fadeIn_0.15s_ease-out]">
             <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg border border-cyan-500/40 bg-void-darker shadow-2xl overflow-hidden font-mono">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-cyan-500/20 bg-void-lighter/60 px-5 py-3.5">

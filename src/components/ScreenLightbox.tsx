@@ -105,6 +105,7 @@ export function ScreenLightbox({ size = 'default', width = 'form', title, onClos
 
     return (
         <div
+            data-motion="overlay"
             className="fixed inset-0 z-[100] flex items-center justify-center bg-void/80 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"

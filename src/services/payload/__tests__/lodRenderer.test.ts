@@ -5,8 +5,8 @@ import type { ArchiveChapter, ArchiveIndexEntry, ChatMessage } from '../../../ty
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WO-08 — tests for the pure LOD chapter renderer.
-// Covers: tier split, importance-bonus promotion, witness exclusion, broadcast
-// inclusion, synopsis fallback chain, demotion cascade, determinism, dedup rule.
+// Covers: tier split, importance-bonus promotion, no witness filter, synopsis
+// fallback chain, demotion cascade, determinism, straddling chapters.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function mkChapter(over: Partial<ArchiveChapter> & { chapterId: string }): ArchiveChapter {
@@ -72,7 +72,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 11,
             messages: msgs,
             budgetTokens: 100000,
@@ -106,7 +105,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 11,
             messages: msgs,
             budgetTokens: 100000,
@@ -118,46 +116,22 @@ describe('WO-08 — renderLodChapters', () => {
         expect(result.tierByChapterId['CH02']).toBe('synopsis');
     });
 
-    it('witness exclusion: a chapter whose scenes were all witnessed only by off-stage NPCs is excluded', () => {
+    it('no witness filter: a chapter witnessed only by NPCs who are not on stage still renders', () => {
+        // Chapter summaries are the narrator's recap and sit in the cached prefix,
+        // so who is on stage never decides which chapters render.
         const sealed: ArchiveChapter[] = [
             mkChapter({ chapterId: 'CH01', sceneRange: ['001', '003'], sceneIds: ['001', '002', '003'] }),
         ];
         const msgs: ChatMessage[] = [];
         for (let i = 1; i <= 3; i++) msgs.push(mkMessage(String(i).padStart(3, '0')));
         const archiveIndex: ArchiveIndexEntry[] = [
-            mkIndexEntry('001', { witnesses: ['npc_offstage'] }),
-            mkIndexEntry('002', { witnesses: ['npc_offstage'] }),
-            mkIndexEntry('003', { witnesses: ['npc_offstage'] }),
+            mkIndexEntry('001', { witnesses: ['Offstage Olga'] }),
+            mkIndexEntry('002', { witnesses: ['Offstage Olga'] }),
+            mkIndexEntry('003', { witnesses: ['Offstage Olga'] }),
         ];
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_onstage'],
-            condensedUpToIndex: 2,
-            messages: msgs,
-            budgetTokens: 100000,
-            config: DEFAULT_CONFIG,
-        });
-        expect(result.tierByChapterId['CH01']).toBeUndefined();
-        expect(result.text).toBe('');
-        expect(result.tokens).toBe(0);
-    });
-
-    it('broadcast inclusion: a chapter whose scenes have no witness data is always included', () => {
-        const sealed: ArchiveChapter[] = [
-            mkChapter({ chapterId: 'CH01', sceneRange: ['001', '003'], sceneIds: ['001', '002', '003'] }),
-        ];
-        const msgs: ChatMessage[] = [];
-        for (let i = 1; i <= 3; i++) msgs.push(mkMessage(String(i).padStart(3, '0')));
-        const archiveIndex: ArchiveIndexEntry[] = [
-            mkIndexEntry('001', { witnesses: [] }),
-            mkIndexEntry('002', { witnesses: [] }),
-            mkIndexEntry('003', { witnesses: [] }),
-        ];
-        const result = renderLodChapters({
-            chapters: sealed,
-            archiveIndex,
-            onStageNpcIds: [], // empty on-stage cast — broadcast scenes still pass
             condensedUpToIndex: 2,
             messages: msgs,
             budgetTokens: 100000,
@@ -186,7 +160,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 2,
             messages: msgs,
             budgetTokens: 100000,
@@ -215,7 +188,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 2,
             messages: msgs,
             budgetTokens: 100000,
@@ -243,7 +215,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 2,
             messages: msgs,
             budgetTokens: 100000,
@@ -271,7 +242,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 2,
             messages: msgs,
             budgetTokens: 100000,
@@ -311,7 +281,7 @@ describe('WO-08 — renderLodChapters', () => {
         // shape directly by setting summaryChapters = 2 (CH02 + CH03 are the two
         // newest → summary; CH01 → synopsis by default).
         const target = renderLodChapters({
-            chapters: sealed, archiveIndex, onStageNpcIds: ['npc_a'],
+            chapters: sealed, archiveIndex,
             condensedUpToIndex: 8, messages: msgs,
             budgetTokens: 100000, config: { summaryChapters: 2, importanceBonus: 0 },
         });
@@ -325,7 +295,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 8,
             messages: msgs,
             budgetTokens: target.tokens,
@@ -361,7 +330,7 @@ describe('WO-08 — renderLodChapters', () => {
 
         // All-synopsis baseline: dropping at least one must reduce tokens.
         const allSyns = renderLodChapters({
-            chapters: sealed, archiveIndex, onStageNpcIds: ['npc_a'],
+            chapters: sealed, archiveIndex,
             condensedUpToIndex: 8, messages: msgs,
             budgetTokens: 100000, config: { summaryChapters: 0, importanceBonus: 0 },
         });
@@ -378,7 +347,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 8,
             messages: msgs,
             budgetTokens: targetBudget,
@@ -402,7 +370,6 @@ describe('WO-08 — renderLodChapters', () => {
         const input = {
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 8,
             messages: msgs,
             budgetTokens: 100000,
@@ -415,28 +382,70 @@ describe('WO-08 — renderLodChapters', () => {
         expect(r2.tierByChapterId).toEqual(r1.tierByChapterId);
     });
 
-    it('dedup rule: a chapter straddling the condensed boundary is excluded', () => {
-        // CH01 covers scenes 001–006, but the boundary is at scene 003 — only
-        // scenes 001–003 are condensed. CH01 straddles the boundary → excluded.
+    it('a sealed chapter straddling the condensed boundary renders, so its condensed scenes are covered', () => {
+        // CH01 covers scenes 001–006; only 001–003 are condensed, 004–006 are verbatim.
+        // Excluding it would leave 001–003 in neither the verbatim window nor a summary.
         const sealed: ArchiveChapter[] = [
             mkChapter({ chapterId: 'CH01', sceneRange: ['001', '006'], sceneIds: ['001', '002', '003', '004', '005', '006'] }),
         ];
         const msgs: ChatMessage[] = [];
-        for (let i = 1; i <= 3; i++) msgs.push(mkMessage(String(i).padStart(3, '0')));
-        // Boundary at index 2 — max stamped scene is 003.
+        for (let i = 1; i <= 6; i++) msgs.push(mkMessage(String(i).padStart(3, '0')));
+        // Boundary at index 2 — max stamped condensed scene is 003.
         const archiveIndex = broadcastIndex(['001', '002', '003', '004', '005', '006']);
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 2,
             messages: msgs,
             budgetTokens: 100000,
             config: DEFAULT_CONFIG,
         });
-        // chapterEnd (006) > maxStampedScene (003) → not wholly behind → excluded.
-        expect(result.tierByChapterId['CH01']).toBeUndefined();
-        expect(result.text).toBe('');
+        expect(result.tierByChapterId['CH01']).toBe('summary');
+        expect(result.text).toContain('Chapter CH01 — Chapter CH01');
+    });
+
+    it('a sealed chapter still wholly in the verbatim window is not rendered', () => {
+        const sealed: ArchiveChapter[] = [
+            mkChapter({ chapterId: 'CH01', sceneRange: ['001', '003'], sceneIds: ['001', '002', '003'] }),
+            mkChapter({ chapterId: 'CH02', sceneRange: ['004', '006'], sceneIds: ['004', '005', '006'] }),
+        ];
+        const msgs: ChatMessage[] = [];
+        for (let i = 1; i <= 6; i++) msgs.push(mkMessage(String(i).padStart(3, '0')));
+        const archiveIndex = broadcastIndex(['001', '002', '003', '004', '005', '006']);
+        const result = renderLodChapters({
+            chapters: sealed,
+            archiveIndex,
+            condensedUpToIndex: 2, // scenes 001–003 condensed, 004–006 verbatim
+            messages: msgs,
+            budgetTokens: 100000,
+            config: DEFAULT_CONFIG,
+        });
+        expect(result.tierByChapterId['CH01']).toBe('summary');
+        expect(result.tierByChapterId['CH02']).toBeUndefined();
+    });
+
+    it('without sceneId stamps on condensed messages, the first verbatim scene bounds eligibility', () => {
+        const sealed: ArchiveChapter[] = [
+            mkChapter({ chapterId: 'CH01', sceneRange: ['001', '006'], sceneIds: ['001', '002', '003', '004', '005', '006'] }),
+            mkChapter({ chapterId: 'CH02', sceneRange: ['007', '009'], sceneIds: ['007', '008', '009'] }),
+        ];
+        const msgs: ChatMessage[] = [
+            { id: 'u1', role: 'user', content: 'old', timestamp: 0 } as ChatMessage,
+            { id: 'u2', role: 'user', content: 'old', timestamp: 0 } as ChatMessage,
+            mkMessage('005'),
+            mkMessage('006'),
+        ];
+        const archiveIndex = broadcastIndex(['001', '002', '003', '004', '005', '006', '007', '008', '009']);
+        const result = renderLodChapters({
+            chapters: sealed,
+            archiveIndex,
+            condensedUpToIndex: 1,
+            messages: msgs,
+            budgetTokens: 100000,
+            config: DEFAULT_CONFIG,
+        });
+        expect(result.tierByChapterId['CH01']).toBe('summary');
+        expect(result.tierByChapterId['CH02']).toBeUndefined();
     });
 
     it('open (unsealed) chapter is never rendered', () => {
@@ -452,7 +461,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: 5,
             messages: msgs,
             budgetTokens: 100000,
@@ -462,7 +470,7 @@ describe('WO-08 — renderLodChapters', () => {
         expect(result.tierByChapterId['CH02']).toBeUndefined();
     });
 
-    it('nothing condensed: no chapters are eligible (conservative "wholly behind" check)', () => {
+    it('nothing condensed: no chapters are eligible', () => {
         const sealed: ArchiveChapter[] = [
             mkChapter({ chapterId: 'CH01', sceneRange: ['001', '003'], sceneIds: ['001', '002', '003'] }),
         ];
@@ -470,7 +478,6 @@ describe('WO-08 — renderLodChapters', () => {
         const result = renderLodChapters({
             chapters: sealed,
             archiveIndex,
-            onStageNpcIds: ['npc_a'],
             condensedUpToIndex: -1,
             messages: [],
             budgetTokens: 100000,

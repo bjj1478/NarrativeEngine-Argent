@@ -1,6 +1,6 @@
 import { backgroundQueue } from '../../../infrastructure/backgroundQueue';
 import { hasHostModelRole } from '../../hostFacade';
-import { tierAllows } from '../../aiTier';
+import { isBlockEnabled } from '../../blockEnablement';
 import type { PostCommitTrackContext, PostTurnTrack } from '../types';
 import { assertStillActive } from '../guarded';
 
@@ -17,7 +17,7 @@ export const pcDriftTrack: PostTurnTrack<PostCommitTrackContext> = {
         && ctx.facade
         && hasHostModelRole(ctx.facade, 'story')
         && ctx.pc
-        && tierAllows(ctx.facade.config.aiTier ?? ctx.state.settings.aiTier, 'npcUpdate'),
+        && isBlockEnabled('npcUpdate', ctx.facade.config.aiTier ?? ctx.state.settings.aiTier, ctx.facade.config.moduleEnabled ?? ctx.state.settings.moduleEnabled),
     ),
     async run(ctx) {
         const pc = ctx.pc;

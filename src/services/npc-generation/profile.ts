@@ -129,11 +129,11 @@ export async function generateNPCProfile(
             personality: coerceStringField(parsed.personality, parsed.disposition || 'Unknown'),
             exampleOutput: coerceStringField(parsed.exampleOutput),
             affinity: 50,
-            drives: (parsed.drives && typeof parsed.drives === 'object' && !Array.isArray(parsed.drives)) ? {
-                coreWant: coerceStringField(parsed.drives.coreWant),
-                sessionWant: coerceStringField(parsed.drives.sessionWant),
-                sceneWant: coerceStringField(parsed.drives.sceneWant),
-            } : undefined,
+            // No `drives` (2026-10-04, owner decision: one motivation system). New NPCs are
+            // born with agency wants below (short/medium pool draws + the model's longWant),
+            // which the prompt and the NPC updater read first. Generating drives as well gave
+            // every new NPC a second, competing set of motivations. A `drives` key the model
+            // still sends is ignored.
             behavioralTriggers: Array.isArray(parsed.behavioralTriggers)
                 ? parsed.behavioralTriggers.filter((t: Record<string, unknown>) => t.keyword && t.shift).map((t: Record<string, unknown>) => ({ keyword: String(t.keyword), shift: String(t.shift) }))
                 : undefined,
@@ -302,11 +302,6 @@ ${voiceSection}OUTPUT FORMAT — respond with a JSON object matching this struct
   },
   "personality": "String — core personality traits in plain language, CONSISTENT with the rolled band-words. What drives them? How do they treat others? What do they fear?",
   "exampleOutput": "String — one line of in-character dialogue that DEMONSTRATES the VOICE DIRECTION (the axis extremes above). Include a brief action in brackets if needed.",
-  "drives": {
-    "coreWant": "String — one sentence: a deep character truth this NPC carries (NOT a goal). Example: 'to be seen as capable, not just loyal'",
-    "sessionWant": "String — one sentence: what this NPC is working toward in the current arc. Example: 'convince the party to take the northern route'",
-    "sceneWant": "String — one sentence: what this NPC wants from the immediate scene. Example: 'get the player to trust her enough to share information'"
-  },
   "behavioralTriggers": [
     { "keyword": "String — a word or phrase that, when it appears in player input or narrative, activates this trigger", "shift": "String — a PHYSICAL or VERBAL behavioral shift (NOT an emotion). Good: 'crosses arms, answers in single syllables'. Bad: 'becomes angry'." }
   ],
