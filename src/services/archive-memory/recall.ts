@@ -11,18 +11,15 @@ import { computeDynamicMax, PLANNER_RELEVANCE_BOOST, type RecallDepth } from './
  * archive-memory/recall.ts
  *
  * The public recall entry points. retrieveArchiveMemory orchestrates the
- * IDF-weighted keyword ranker + the server's embedding ranker, fused via RRF,
- * with divergence scenes force-surfaced. fetchArchiveScenes pulls verbatim
- * content; recallArchiveScenes is the search+fetch convenience used pre-payload.
+ * IDF-weighted keyword ranker + the server's embedding ranker, fused via RRF.
+ * fetchArchiveScenes pulls verbatim content; recallArchiveScenes is the
+ * search+fetch convenience used pre-payload.
  */
-
-/** Divergence scenes force-surfaced without matching this turn (most recent first). */
-export const MAX_UNMATCHED_DIVERGENCE_SCENES = 2;
 
 /**
  * Search the archive index with hybrid retrieval: an IDF-weighted keyword ranker fused with
- * the server's embedding ranker via RRF. Divergence scenes are force-surfaced. Returns the
- * matched scene IDs in fused (front-loaded) order, best first.
+ * the server's embedding ranker via RRF. Returns the matched scene IDs in fused order,
+ * best first.
  */
 export function retrieveArchiveMemory(
     index: ArchiveIndexEntry[],
@@ -34,7 +31,6 @@ export function retrieveArchiveMemory(
     sceneRanges?: [string, string][],
     npcPerspective?: string,
     semanticCandidateIds?: string[],
-    divergenceSceneIds?: Set<string>,
     excludeSceneIds?: Set<string>,
     plannerSceneIds?: string[],
     recallDepth: RecallDepth = 'standard',
@@ -112,29 +108,17 @@ export function retrieveArchiveMemory(
     // ─── RRF fusion ───
     const fused = fuseRRF(keywordRanked, embeddingRanked);
 
-    // ─── Divergence front-loading ───
-    // Divergence scenes (where the story left canon) must surface for continuity even when
-    // they don't match the current turn's keywords or embeddings. Matched ones keep their
-    // fused order; unmatched ones are injected after, by recency — capped, so a cluster of
-    // fact-heavy scenes from one past thread can't occupy the recall slots every turn.
-    // The register's [ESTABLISHED FACTS] block already carries those facts.
-    let ordered = fused;
-    if (divergenceSceneIds && divergenceSceneIds.size > 0) {
-        const fusedSet = new Set(fused);
-        const divInScope = scopedIndex
-            .map(e => e.sceneId)
-            .filter(id => divergenceSceneIds.has(id));
-        if (divInScope.length > 0) {
-            const divSet = new Set(divInScope);
-            const matchedDiv = fused.filter(id => divSet.has(id));
-            const unmatchedDiv = divInScope
-                .filter(id => !fusedSet.has(id))
-                .sort((a, b) => safeSceneNum(b) - safeSceneNum(a))
-                .slice(0, MAX_UNMATCHED_DIVERGENCE_SCENES);
-            const rest = fused.filter(id => !divSet.has(id));
-            ordered = [...matchedDiv, ...unmatchedDiv, ...rest];
-        }
-    }
+    // Divergence scenes (where the story left canon) rank like any other scene.
+    //
+    // They used to be force-surfaced ahead of the fused order. That was harmless while
+    // fetchArchiveScenes spent the token budget chronologically — front-loading changed
+    // which ids were REQUESTED, not which survived. Once the budget began filling in
+    // caller-rank order, front-loading decided survival: at ~1,500 tokens a scene against
+    // a 3,000-token budget only about two fit, so divergence scenes could take the whole
+    // budget and leave nothing matching the player's turn. The register's
+    // [ESTABLISHED FACTS] block carries those facts into every payload regardless, so
+    // continuity never depended on force-surfacing the scenes themselves.
+    const ordered = fused;
 
     const dynamicMax = computeDynamicMax(keywordRanked, embeddingRanked, recallDepth, topKeywordRelevance, maxScenes);
     const result = ordered.slice(0, dynamicMax);
@@ -224,12 +208,11 @@ export async function recallArchiveScenes(
     semanticFacts?: { subject: string; predicate: string; object: string; importance: number }[],
     npcPerspective?: string,
     semanticCandidateIds?: string[],
-    divergenceSceneIds?: Set<string>,
     excludeSceneIds?: Set<string>,
     plannerSceneIds?: string[],
     recallDepth: RecallDepth = 'standard',
 ): Promise<ArchiveScene[]> {
-    const matchedIds = retrieveArchiveMemory(index, userMessage, recentMessages, npcLedger, undefined, semanticFacts, undefined, npcPerspective, semanticCandidateIds, divergenceSceneIds, excludeSceneIds, plannerSceneIds, recallDepth, campaignId);
+    const matchedIds = retrieveArchiveMemory(index, userMessage, recentMessages, npcLedger, undefined, semanticFacts, undefined, npcPerspective, semanticCandidateIds, excludeSceneIds, plannerSceneIds, recallDepth, campaignId);
     if (matchedIds.length === 0) return [];
     return fetchArchiveScenes(campaignId, matchedIds, tokenBudget);
 }

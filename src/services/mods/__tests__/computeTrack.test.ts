@@ -114,4 +114,62 @@ describe('compute track — the Arc Engine keeps the arcTick switch', () => {
         const other = modToComputeTrack({ ...mod, id: 'weather' } as ValidatedMod, { sandboxPolicy: createSandboxFaultPolicy() });
         expect(other.shouldRun(withConfig({ aiTier: 'lite', moduleEnabled: { arcTick: false } }))).toBe(true);
     });
+
+    it('a long skip still runs nothing while the switch is off', () => {
+        const ctx = withConfig({ aiTier: 'max', moduleEnabled: { arcTick: false } });
+        (ctx as { state?: unknown }).state = { armedTimeskip: { days: 365, weeks: 52, ticks: 24 } };
+        expect(track.shouldRun(ctx)).toBe(false);
+    });
+});
+
+// The arc mod scales its ticks with simulated elapsed time. `elapsedTicks` is the only
+// route into a sandboxed compute mod for that budget — events and `ctx.subscribe` are
+// native-tier only — so the plumbing from the turn's armed skip is worth pinning.
+describe('compute track — elapsedTicks reaches the sandbox', () => {
+    class CapturingWorker implements SandboxWorkerLike {
+        onmessage: SandboxWorkerLike['onmessage'] = null;
+        onerror: SandboxWorkerLike['onerror'] = null;
+        static lastRun: SandboxHostMessage | undefined;
+
+        postMessage(message: SandboxHostMessage): void {
+            if (message.type === 'run') {
+                CapturingWorker.lastRun = message;
+                queueMicrotask(() => this.onmessage?.({
+                    data: { type: 'done', writes: [], result: undefined },
+                } as unknown as MessageEvent<SandboxWorkerMessage>));
+            }
+        }
+
+        terminate(): void { /* no-op */ }
+    }
+
+    async function runWith(armedTimeskip: unknown): Promise<number | undefined> {
+        CapturingWorker.lastRun = undefined;
+        const track = modToComputeTrack(
+            { ...mod, computeSource: 'export default async function () {}' } as ValidatedMod,
+            { sandboxPolicy: createSandboxFaultPolicy(), sandboxOptions: { createWorker: () => new CapturingWorker() } },
+        );
+        const ctx = makeContext([]);
+        (ctx.facade as { config: unknown }).config = { contextLimit: 4096, aiTier: 'max' };
+        (ctx as { state?: unknown }).state = armedTimeskip ? { armedTimeskip } : {};
+        (ctx as { callbacks?: unknown }).callbacks = {
+            getFreshLocationState: () => ({
+                activeCampaignId: 'campaign',
+                context: {},
+                locationLedger: [],
+            }),
+        };
+
+        await track.run(ctx);
+        const snapshot = (CapturingWorker.lastRun as unknown as { snapshot?: { data?: { location?: { elapsedTicks?: number } } } } | undefined)?.snapshot;
+        return snapshot?.data?.location?.elapsedTicks;
+    }
+
+    it('carries the armed skip budget through to the mod', async () => {
+        expect(await runWith({ days: 91, weeks: 13, ticks: 6 })).toBe(6);
+    });
+
+    it('is 0 on an ordinary turn', async () => {
+        expect(await runWith(undefined)).toBe(0);
+    });
 });

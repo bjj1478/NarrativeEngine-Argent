@@ -44,7 +44,7 @@ export async function searchCampaignRecords(
     const semantic = await semanticIds(snapshot.campaignId, question, signal);
     const localArchiveIds = retrieveArchiveMemory(
         snapshot.archiveIndex, question, snapshot.messages, snapshot.npcLedger, 2,
-        snapshot.semanticFacts, undefined, undefined, semantic.archive, undefined, undefined,
+        snapshot.semanticFacts, undefined, undefined, semantic.archive, undefined,
         undefined, 'lean', snapshot.campaignId,
     ).slice(0, 2);
     const archive = await fetchArchiveScenes(snapshot.campaignId, localArchiveIds, 500);

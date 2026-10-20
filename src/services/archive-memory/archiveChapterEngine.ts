@@ -381,7 +381,7 @@ export async function selectArchiveSceneIdsWithChapterFunnel(
     const matchedIds = retrieveArchiveMemory(
         index, userMessage, recentMessages, npcLedger,
         undefined, semanticFacts, sceneRanges,
-        undefined, undefined, undefined, excludeSceneIds
+        undefined, undefined, excludeSceneIds
     );
 
     if (matchedIds.length === 0) return [];

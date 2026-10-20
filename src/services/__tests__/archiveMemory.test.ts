@@ -4,7 +4,6 @@ import {
     computeArchiveIdf,
     clearArchiveIdfCache,
 } from '../archiveMemory';
-import { MAX_UNMATCHED_DIVERGENCE_SCENES } from '../archive-memory/recall';
 import type { ArchiveIndexEntry } from '../../types';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────
@@ -153,7 +152,6 @@ describe('retrieveArchiveMemory — embedding scope guard', () => {
             index, 'alpha beta gamma', [], undefined, undefined,
             undefined, undefined, undefined,
             ['1', '2', '3'],               // embedding includes scene 2
-            undefined,
             new Set(['2']),                // …but scene 2 is excluded
         );
         expect(result).not.toContain('2');
@@ -187,61 +185,44 @@ describe('retrieveArchiveMemory — planner boost', () => {
         const result = retrieveArchiveMemory(
             index, 'unrelated', [], undefined, undefined,
             undefined, undefined, undefined,
-            undefined, undefined, undefined,
+            undefined, undefined,
             ['P'], // planner scene IDs
         );
         expect(result).toContain('P');
     });
 });
 
-// ─── Divergence front-loading (replaces the old +5, no double-count) ────────
+// ─── Divergence scenes rank like any other scene ───────────────────────────
+//
+// They used to be force-surfaced ahead of the fused order. Once fetchArchiveScenes
+// began spending the token budget in caller-rank order, that front position decided
+// which scenes SURVIVED the budget, so an off-topic divergence scene could evict the
+// scenes the player's turn was actually about. Divergence facts reach the payload
+// through the register's [ESTABLISHED FACTS] block either way.
 
-describe('retrieveArchiveMemory — divergence front-loading', () => {
-    it('forces an unmatched divergence scene to the front of the result', () => {
+describe('retrieveArchiveMemory — divergence scenes are not privileged', () => {
+    it('an off-topic divergence scene does not displace a scene that matches the turn', () => {
         const index = [
             makeEntry({ sceneId: '1', keywordStrengths: { topic: 5 } }),
             makeEntry({ sceneId: '2', keywordStrengths: { topic: 5 } }),
             makeEntry({ sceneId: 'DIV', keywordStrengths: { offtopic: 5 } }), // no match this turn
         ];
-        const result = retrieveArchiveMemory(
-            index, 'topic', [], undefined, undefined,
-            undefined, undefined, undefined,
-            undefined,
-            new Set(['DIV']), // divergence scene
-        );
-        expect(result[0]).toBe('DIV');
+
+        const result = retrieveArchiveMemory(index, 'topic', []);
+
+        // Ranked purely on relevance: the matching scenes lead, the off-topic
+        // divergence scene is not pulled to the front and earns no slot at all.
+        expect(result[0]).not.toBe('DIV');
+        expect(result).not.toContain('DIV');
+        expect(result).toEqual(expect.arrayContaining(['1', '2']));
     });
 
-    it('caps unmatched divergence scenes at the most recent MAX_UNMATCHED_DIVERGENCE_SCENES', () => {
-        const index = [
-            makeEntry({ sceneId: '001', keywordStrengths: { topic: 5 } }),
-            makeEntry({ sceneId: '010', keywordStrengths: { offtopic: 5 } }),
-            makeEntry({ sceneId: '011', keywordStrengths: { offtopic: 5 } }),
-            makeEntry({ sceneId: '012', keywordStrengths: { offtopic: 5 } }),
-            makeEntry({ sceneId: '013', keywordStrengths: { offtopic: 5 } }),
-        ];
-        const result = retrieveArchiveMemory(
-            index, 'topic', [], undefined, undefined,
-            undefined, undefined, undefined,
-            undefined,
-            new Set(['010', '011', '012', '013']),
-        );
-        expect(MAX_UNMATCHED_DIVERGENCE_SCENES).toBe(2);
-        expect(result.slice(0, 2)).toEqual(['013', '012']);
-        expect(result).not.toContain('010');
-        expect(result).not.toContain('011');
-        expect(result).toContain('001');
-    });
-
-    it('does not cap divergence scenes that match the turn', () => {
+    it('a divergence scene that DOES match the turn still ranks on its own merit', () => {
         const index = ['010', '011', '012', '013'].map(sceneId =>
             makeEntry({ sceneId, keywordStrengths: { topic: 5 } }));
-        const result = retrieveArchiveMemory(
-            index, 'topic', [], undefined, undefined,
-            undefined, undefined, undefined,
-            undefined,
-            new Set(['010', '011', '012', '013']),
-        );
+
+        const result = retrieveArchiveMemory(index, 'topic', []);
+
         expect(new Set(result)).toEqual(new Set(['010', '011', '012', '013']));
     });
 });
@@ -264,7 +245,7 @@ describe('retrieveArchiveMemory — un-caged dynamic max', () => {
         const result = retrieveArchiveMemory(
             index, query, [], undefined, undefined,
             undefined, undefined, undefined, undefined,
-            undefined, undefined, undefined,
+            undefined, undefined,
             'standard',
         );
         expect(result.length).toBe(8); // high tier (10) ≥ 8 available → all 8
@@ -276,7 +257,7 @@ describe('retrieveArchiveMemory — un-caged dynamic max', () => {
         const result = retrieveArchiveMemory(
             index, query, [], undefined, undefined,
             undefined, undefined, undefined, undefined,
-            undefined, undefined, undefined,
+            undefined, undefined,
             'lean',
         );
         expect(result.length).toBe(5);
@@ -287,7 +268,7 @@ describe('retrieveArchiveMemory — un-caged dynamic max', () => {
         const result = retrieveArchiveMemory(
             index, query, [], undefined, 3,
             undefined, undefined, undefined, undefined,
-            undefined, undefined, undefined,
+            undefined, undefined,
             'standard',
         );
         expect(result.length).toBe(3);

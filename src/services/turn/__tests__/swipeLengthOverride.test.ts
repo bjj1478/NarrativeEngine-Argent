@@ -56,6 +56,31 @@ describe('getSwipeLengthOverride', () => {
         expect(getSwipeLengthOverride()).toBe(beatBudgetLine('short', undefined));
     });
 
+    // `useChatOperations` wires getFreshContext to `useAppStore.getState().context`, so the
+    // override reads the LIVE store at swipe time, not a copy captured when the turn started.
+    // That is deliberate and it is only correct while this turn's own stakes are still
+    // unwritten: before commit, the store holds the stakes the payload was actually built
+    // with. Upstream's commit rework (withLiveCampaignState) moved other live reads around
+    // this same boundary, so pin the wiring here — if a commit ever writes this turn's stakes
+    // before its swipes are drained, the swipe would silently get a budget for a scene the
+    // player has not seen yet, and this is where that surfaces.
+    it('reads stakes through the live store, the way production wires it', () => {
+        useAppStore.setState({
+            context: { ...useAppStore.getState().context, lastSceneStakes: 'tense' } as GameContext,
+        });
+        const state = {
+            settings: { responseLength: 'long' } as AppSettings,
+            getMessages: () => [],
+            getFreshContext: () => useAppStore.getState().context,
+            activeCampaignId: 'c1',
+            npcLedger: [],
+        } as unknown as TurnState;
+        capturePendingTurnSnapshot(state, [], 'I wait.');
+        setCurrent('flexible');
+
+        expect(getSwipeLengthOverride()).toBe(beatBudgetLine('flexible', 'tense'));
+    });
+
     it('switching to flexible reads the turn\'s stakes and time skip', () => {
         snapshotWith('long', 'dangerous');
         setCurrent('flexible');

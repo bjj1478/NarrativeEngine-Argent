@@ -26,6 +26,9 @@ export interface MemoryRecallInput {
     readonly candidateSceneIds?: readonly string[];
     readonly plannerSceneIds?: readonly string[];
     readonly excludeSceneIds: readonly string[];
+    /** Scenes a divergence fact points at. Part of the role contract and still supplied,
+     *  but the built-in recall no longer force-surfaces them — they rank on relevance like
+     *  any other scene (see recall.ts). A custom recall role may still use them. */
     readonly divergenceSceneIds: readonly string[];
     readonly depth: RecallDepth;
     readonly tokenBudget: number;
@@ -75,7 +78,6 @@ function flatMemoryRecallIds(
         sceneRanges,
         undefined,
         input.candidateSceneIds as string[] | undefined,
-        new Set(input.divergenceSceneIds),
         new Set(input.excludeSceneIds),
         input.plannerSceneIds as string[] | undefined,
         input.depth,

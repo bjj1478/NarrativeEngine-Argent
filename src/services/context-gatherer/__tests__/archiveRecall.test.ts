@@ -60,7 +60,7 @@ describe('selectMemoryRecallIds — the chapter funnel block', () => {
         expect(mocks.selectArchiveSceneIdsWithChapterFunnel).not.toHaveBeenCalled();
         const args = mocks.retrieveArchiveMemory.mock.calls[0];
         expect(args[8]).toEqual(['534', '533']); // meaning-search candidates
-        expect(args[11]).toEqual(['533']);       // planner picks
+        expect(args[10]).toEqual(['533']);       // planner picks
     });
 
     it('a stored "off" from an older preset is respected too', async () => {

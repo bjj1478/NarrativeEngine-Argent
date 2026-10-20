@@ -1,7 +1,6 @@
 import type { ArchiveScene, ArchiveChapter } from '../../types';
 import type { TurnState } from '../turn/turnOrchestrator';
 import { retrieveArchiveMemory, fetchArchiveScenes } from '../archiveMemory';
-import { getDivergenceSceneIds, EMPTY_REGISTER } from '../campaign-state/divergenceRegister';
 import type { SemanticCandidates } from './semanticCandidates';
 
 export type PinnedChaptersDeps = {
@@ -37,7 +36,6 @@ export async function injectPinnedChapters(
             archiveIndex, input, messages, npcLedger,
             undefined, state.semanticFacts,
             pinnedRanges, undefined, semanticArchiveIds,
-            getDivergenceSceneIds(state.divergenceRegister || EMPTY_REGISTER),
             excludeSceneIds,
             plannerSceneIds,
             archiveRecallDepth

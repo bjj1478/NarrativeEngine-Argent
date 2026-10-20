@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Hourglass, X } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { isBlockEnabled } from '../services/turn/blockEnablement';
+import { isModEnabled } from '../services/mods/modEnablement';
+import { computeTrackId } from '../services/mods/computeTrack';
+import { postTurnTracks } from '../services/turn/tracks';
 import {
     TIMESKIP_UNITS,
     timeskipDuration,
@@ -80,6 +83,21 @@ function SkipTimeModal({
     const duration = timeskipDuration(amount, unit);
     const worldDay = useAppStore(s => s.context.worldDay);
     const valid = duration.days > 0;
+
+    // The arc mod spends the same tick budget the agency engine does, but its compute
+    // track is gated on the `arcTick` block. With that switch off a skip advances the
+    // calendar and the NPCs while world arcs stand still — say so rather than letting
+    // the press look like it did everything.
+    //
+    // Liveness comes from the registered compute track, not from `isModEnabled` alone:
+    // that predicate reads `explicit !== false`, so an absent key (arc never installed)
+    // would read as enabled and warn about arcs the campaign doesn't have.
+    const moduleEnabled = useAppStore(s => s.settings.moduleEnabled);
+    const aiTier = useAppStore(s => s.settings.aiTier);
+    const arcsWontTick =
+        postTurnTracks.list().some(t => t.id === computeTrackId('arc'))
+        && isModEnabled({ id: 'arc' }, moduleEnabled)
+        && !isBlockEnabled('arcTick', aiTier, moduleEnabled);
 
     const handleConfirm = () => {
         if (!valid) return;
@@ -163,6 +181,13 @@ function SkipTimeModal({
                             Sent as your message for this turn, so it steers what you return to.
                         </p>
                     </div>
+
+                    {arcsWontTick && (
+                        <p className="text-[10px] text-text-dim border-l-2 border-border pl-2">
+                            World arcs won&rsquo;t advance during this skip — the Arc Engine block is
+                            switched off. Time still passes and the cast still moves.
+                        </p>
+                    )}
                 </div>
 
                 <div className="flex justify-end gap-2 p-4 border-t border-border">
