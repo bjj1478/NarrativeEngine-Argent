@@ -30,13 +30,14 @@ beforeEach(async () => {
 
     vi.doMock('../lib/embedder.js', () => ({
         embedText: vi.fn(async () => new Float32Array(32)),
-        buildArchiveText: vi.fn((e) => `MOCK ${e.sceneId}`),
+    embedQuery: vi.fn(async () => new Float32Array(32)),
+        buildScenePassages: vi.fn(() => ['MOCK passage']),
         buildLoreText: vi.fn(() => 'MOCK_LORE'),
         warmup: vi.fn(async () => {}),
         embedBatch: vi.fn(async () => []),
         getActiveDims: vi.fn(() => 32),
         getActiveModelId: vi.fn(() => 'mock'),
-        EMBEDDING_VERSION: 1,
+        EMBEDDING_VERSIONS: { scene: 2, lore: 1, rule: 1 },
     }));
     vi.doMock('../lib/vectorStore.js', () => ({
         storeArchiveEmbedding: vi.fn(),
@@ -44,7 +45,7 @@ beforeEach(async () => {
         searchArchive: vi.fn(async () => []),
         searchLore: vi.fn(async () => []),
         getEmbeddingStatus: vi.fn(() => ({ status: 'mock', loaded: true })),
-        EMBEDDING_VERSION: 1,
+        EMBEDDING_VERSIONS: { scene: 2, lore: 1, rule: 1 },
         getDb: vi.fn(() => null),
         deleteArchiveEmbedding: deleteMock,
         deleteAllArchiveEmbeddings: deleteAllMock,

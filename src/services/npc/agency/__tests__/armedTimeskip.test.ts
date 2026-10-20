@@ -91,7 +91,7 @@ describe('armed timeskip — explicit beats phrasing', () => {
     });
 
     it('does not run a skip when the tier blocks it', () => {
-        // The gate is the real `tierAllows` now, not a stub that always returned true.
+        // The gate is the real `isBlockEnabled` now, not a stub that always returned true.
         runAgencyTick(
             makeState({
                 settings: { aiTier: 'lite' } as never,

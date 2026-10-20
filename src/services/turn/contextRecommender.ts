@@ -112,7 +112,10 @@ export async function recommendContext(
     inventoryItems?: InventoryItem[],
     characterProfile?: CharacterProfile,
     timeoutMs?: number,
-    modelCall?: (request: ModelRequest) => Promise<ModelResponse>
+    modelCall?: (request: ModelRequest) => Promise<ModelResponse>,
+    // The `recommenderThinking` block. Off by default: on DS v4 Flash, thinking took
+    // each pick from ~1 s to ~20 s and chose no better (Turn Prep Experiment).
+    thinking = false,
 ): Promise<RecommenderResult> {
     const npcRoster = buildNPCRoster(npcLedger);
     const loreIndex = buildLoreIndex(loreChunks);
@@ -130,10 +133,12 @@ export async function recommendContext(
 
     // High priority — story AI cannot start until this returns. Tracked so it shows in
     // the UtilityCallStrip (otherwise this is an invisible blocking call during gather).
+    // With thinking on, the endpoint's own effort applies.
+    const thinkingEffort = thinking ? undefined : 'off' as const;
     const rawContent = modelCall
-        ? (await modelCall({ prompt: userContent, temperature: 0.1, signal, priority: 'high', trackingLabel: 'context-recommender', timeoutMs: timeoutMs ?? AI_CALL_TIMEOUT_MS })).content
+        ? (await modelCall({ prompt: userContent, temperature: 0.1, signal, priority: 'high', thinkingEffort, trackingLabel: 'context-recommender', timeoutMs: timeoutMs ?? AI_CALL_TIMEOUT_MS })).content
         : utilityEndpoint
-            ? await llmCall(utilityEndpoint, userContent, { temperature: 0.1, signal, priority: 'high', trackingLabel: 'context-recommender', timeoutMs: timeoutMs ?? AI_CALL_TIMEOUT_MS })
+            ? await llmCall(utilityEndpoint, userContent, { temperature: 0.1, signal, priority: 'high', thinkingEffort, trackingLabel: 'context-recommender', timeoutMs: timeoutMs ?? AI_CALL_TIMEOUT_MS })
             : '';
 
     // Parse the JSON response — handle thinker blocks and markdown wrapping

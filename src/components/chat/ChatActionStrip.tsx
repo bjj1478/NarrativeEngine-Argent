@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { Save, Loader2, Zap, Scroll, Search, Package, Dices } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
+import { isBlockEnabled } from '../../services/turn/blockEnablement';
+import type { AiTier } from '../../types';
 import { toast } from '../Toast';
 import { OneShotInjectorButton } from '../OneShotInjectorButton';
 import { AbsoluteCommandButton } from '../AbsoluteCommandButton';
@@ -177,7 +179,7 @@ function renderComposerBuiltin(id: string, deps: {
     onOpenOoc: () => void;
     onOpenArchive: () => void;
     onSendText: (text: string) => void;
-    settings: { deepContextSearch?: boolean } | null;
+    settings: { aiTier?: AiTier; moduleEnabled?: Record<string, boolean> } | null;
     context: { lootTree?: unknown } | null;
     activeCampaignId: string | null;
     deepArmed: boolean;
@@ -216,7 +218,8 @@ function renderComposerBuiltin(id: string, deps: {
                 </button>
             );
         case 'deepSearch':
-            return deps.settings?.deepContextSearch ? (
+            // Shown when Deep Archive Search is on in Block View (its only switch).
+            return isBlockEnabled('deepScan', deps.settings?.aiTier, deps.settings?.moduleEnabled) ? (
                 <button
                     key="deepSearch"
                     onClick={() => deps.setDeepArmed(!deps.deepArmed)}

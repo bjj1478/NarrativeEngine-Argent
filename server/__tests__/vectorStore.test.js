@@ -267,3 +267,47 @@ describe('searchArchive — scoped fallback filter correctness (WO-10)', () => {
         expect(cap(0)).toBe(0);
     });
 });
+
+// ─── Scenes as passages, per-type versions ──────────────────────────────────
+// A scene is stored as one row per passage of its prose; search ranks it by its
+// nearest passage and returns it once. Each item type carries its own version.
+
+describe('scenes stored as passages', () => {
+    const PCAMP = 'camp-passages';
+
+    it('a scene with several passages is returned once, ranked by its nearest passage', () => {
+        vs.storeArchiveEmbedding(PCAMP, 'p1', [
+            makeVec([[5, 1]]),               // far from the query
+            makeVec([[0, 0.99], [6, 0.14]]), // the passage that matches
+            makeVec([[7, 1]]),               // far
+        ]);
+        vs.storeArchiveEmbedding(PCAMP, 'p2', makeVec([[0, 0.8], [8, 0.6]]));
+
+        const hits = vs.searchArchive(PCAMP, QUERY, 5, false);
+        expect(hits.map(h => h.sceneId)).toEqual(['p1', 'p2']);
+        expect(hits[0].distance).toBeCloseTo(1 - 0.99, 2);
+    });
+
+    it('re-storing a scene replaces all of its old passages', () => {
+        vs.storeArchiveEmbedding(PCAMP, 'p1', [makeVec([[5, 1]])]);
+        expect(vs.searchArchive(PCAMP, QUERY, 5, false).map(h => h.sceneId)).toEqual(['p2', 'p1']);
+    });
+
+    it('an empty passage list removes the scene from search but stamps it current', () => {
+        vs.storeArchiveEmbedding(PCAMP, 'p1', []);
+        expect(vs.searchArchive(PCAMP, QUERY, 5, false).map(h => h.sceneId)).toEqual(['p2']);
+        expect(vs.getEmbeddingStatus(PCAMP).scenes).toEqual({ total: 2, current: 2, stale: 0 });
+    });
+
+    it('scenes older than the scene version are stale, excluded from search and flagged; lore is judged by its own version', () => {
+        vs.storeLoreEmbedding(PCAMP, 'l1', makeVec([[0, 1]]));
+        vs.getDb().prepare("UPDATE embedding_meta SET version = ? WHERE campaign_id = ? AND item_type = 'scene' AND item_id = 'p2'")
+            .run(vs.EMBEDDING_VERSIONS.scene - 1, PCAMP);
+
+        expect(vs.searchArchive(PCAMP, QUERY, 5, false)).toEqual([]);
+        expect(vs.searchLore(PCAMP, QUERY, 5, false).map(h => h.loreId)).toEqual(['l1']);
+        expect(vs.getEmbeddingStatus(PCAMP).scenes).toEqual({ total: 2, current: 1, stale: 1 });
+        expect(vs.getEmbeddingStatus(PCAMP).lore).toEqual({ total: 1, current: 1, stale: 0 });
+        expect(vs.getVectorHealth(PCAMP)).toEqual({ status: 'reindex-needed', count: 1 });
+    });
+});

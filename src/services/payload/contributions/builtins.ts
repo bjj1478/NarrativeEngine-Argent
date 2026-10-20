@@ -322,7 +322,7 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
             name: 'Chain-of-Thought Invocation',
             description: 'Asks the writer to work through the reasoning framework before writing.',
             details: {
-                "trigger": "Automatic when the active story provider has Thinking Effort set to Low, Medium, High, or Max.",
+                "trigger": "Automatic when the active preset's Story slot has Thinking set to Low, Medium, High, or Max.",
                 // Rendered from the live constant, not hand-copied, so the Block View can't
                 // document a prompt that is no longer sent.
                 "prompt": `${WRITER_COT}
@@ -330,7 +330,7 @@ export const BUILTIN_FINAL_USER_MODULES: readonly Builtin[] = [
 Final-turn invocation:
 Work through the [WRITER REASONING FRAMEWORK] in your reasoning before writing.`,
                 "tokenImpact": "The six-step framework is 467 input tokens in the stable prompt. The normal final-turn invocation is 18 more input tokens. The [BEAT BUDGET] line is not part of this block — it is its own contribution (Response Length) and ships whether or not thinking is on. There is no separate COT output-token cap; the provider/model controls hidden reasoning and answer limits.",
-                "quietWhen": "Thinking Effort is Off. An Absolute Command swaps the normal invocation for a 38-token instruction that tells the model to follow the command where they conflict."
+                "quietWhen": "The Story slot's Thinking is Off. An Absolute Command swaps the normal invocation for a 38-token instruction that tells the model to follow the command where they conflict."
             },
             explain: 'Asks the writer to think through the scene before writing it, instead of answering straight away. Only does anything when thinking is switched on for your model — with thinking off it adds nothing at all.',
             example: "Same request: you lie to a character who already knows the truth.\n\n**Without COT** — \"I believe you.\" She reacts to the words and lets the scene move on.\n\n**With COT** — she notices that the lie is known, decides whether to expose it, and lets that choice shape the reply.\n\nThe wording still varies by model; the difference is what the writer considers before answering.",

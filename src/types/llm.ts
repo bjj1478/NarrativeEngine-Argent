@@ -5,7 +5,8 @@ import type { LocaleCode } from '../i18n/types';
 export type ApiFormat = 'openai' | 'ollama' | 'claude' | 'gemini' | 'comfyui' | 'openrouter';
 
 /**
- * Native ComfyUI image-generation settings (scene images only). Attached to an
+ * Native ComfyUI image-generation settings (scene images, NPC portraits and location
+ * illustrations — all routed through the server's ComfyUI provider). Attached to an
  * image-role LLMProvider whose apiFormat is 'comfyui'. When customWorkflowJson is
  * blank the server falls back to a built-in basic txt2img graph. The provider's
  * modelName is the checkpoint name substituted into that built-in graph (%model%).
@@ -34,14 +35,25 @@ export type ArmedTimeskip = {
     readonly ticks: number;
 };
 
+/** Story-column typography (separate from uiScale). See components/chat/readingPrefs.ts. */
+export type ReadingFont = 'serif' | 'sans';
+export type ReadingLeading = 'tight' | 'normal' | 'relaxed';
+export type ReadingWidth = 'narrow' | 'standard' | 'wide' | 'full';
+export type ReadingAlign = 'left' | 'center' | 'right';
 
 export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
+
+/** Preset slots that carry their own thinking level. Image generation has no thinking. */
+export type ThinkingSlot = 'story' | 'summarizer' | 'utility' | 'auxiliary' | 'vision';
 
 export type EndpointConfig = {
     endpoint: string;
     apiKey: string;
     modelName: string;
     apiFormat?: ApiFormat;
+    /** Effective thinking level for a request. On a config returned by the role getters
+     *  (`getActive*Endpoint`) this is the preset slot's level; on a stored provider it is
+     *  the deprecated provider-wide value (see `LLMProvider.thinkingEffort`). */
     thinkingEffort?: ThinkingEffort;
     /** The endpoint's maximum output tokens per response. Optional — unset means unknown,
      * and the thinking reserve stays conservative (see WORKORDER-thinking-token-floor §3.2).
@@ -79,6 +91,9 @@ export type LLMProvider = {
     modelName: string;
     streamingEnabled?: boolean;
     apiFormat?: ApiFormat;
+    /** @deprecated Thinking is set per preset slot (`AIPreset.slotThinking`). Kept so stored
+     *  values survive and seed the story slot on migration; it is still the last fallback
+     *  when a slot has no level of its own. The role getters overwrite it on the copy they return. */
     thinkingEffort?: ThinkingEffort;
     /** The endpoint's maximum output tokens per response. Optional — unset means unknown,
      * and the thinking reserve stays conservative (see WORKORDER-thinking-token-floor §3.2).
@@ -116,6 +131,9 @@ export type AIPreset = {
      *  + appearance prose). Optional: unset means the "Read Image" action is unavailable.
      *  Must point at a multimodal model; see services/vision/describeImage.ts. */
     visionAIProviderId?: string;
+    /** Thinking level per slot. Unset for a slot means the provider's legacy level.
+     *  A per-call `thinkingEffort` (e.g. `'off'` on short JSON calls) still wins. */
+    slotThinking?: Partial<Record<ThinkingSlot, ThinkingEffort>>;
     sampling?: SamplingConfig;
     // Legacy inline endpoint configs — kept ONLY for one-time migration; ignored after migration runs.
     storyAI?: EndpointConfig;
@@ -150,7 +168,9 @@ export type AppSettings = {
     theme?: 'light' | 'dark' | 'system';
     locale?: LocaleCode;             // UI chrome language. Defaults to the browser language on first run, then never auto-changes. Independent of narration language (Phase 3).
     showReasoning?: boolean;
+    /** @deprecated Unread since 2026-10-05: Deep Archive Search is switched in Block View (`deepScan`). Kept so stored settings load. */
     deepContextSearch?: boolean;
+    /** @deprecated No effect since f03e6c7 (per-turn divergence extraction removed); its toggle was removed 2026-10-07. Kept so stored settings load. */
     autoExtractDivergences?: boolean;
     divergenceTokenBudget?: number;
     divergenceScanBudget?: number;
@@ -160,10 +180,13 @@ export type AppSettings = {
     rulesBudgetPct?: number;               // fraction of context limit for rules RAG, default 0.10
     autoGenerateRuleKeywords?: boolean;    // default true; false = header+bold extraction only
     storyTimeoutSeconds?: number;          // streaming AI idle deadline, 30-3600 seconds (default 600)
-    utilityTimeoutSeconds?: number;        // soft deadline for utility AI calls (default 45)
+    /** @deprecated No reader since 6969e90 (utility calls use fixed timeouts, llm/timeouts.ts); its controls were removed 2026-10-07. Kept so stored settings load. */
+    utilityTimeoutSeconds?: number;
     verboseUtilityLogging?: boolean;
+    /** @deprecated Unread since 2026-10-05: the Archive Planner is switched in Block View (`planner`). Kept so stored settings load. */
     enableArchivePlanner?: boolean;
     retrievalAlgorithm?: 'classic' | 'idf-rrf';
+    loreDepth?: 'lean' | 'balanced' | 'deep';  // lore RAG ceiling as a share of contextLimit + relevance-floor leniency; default 'balanced' (services/lore/loreBudget.ts)
     archiveRecallDepth?: 'lean' | 'standard' | 'deep';  // archive recall ceiling; default 'standard' (desktop). 'lean' = mobile parity (3/4/5)
     /** Narrator reply length. Absent reads as 'flexible' at the use site. */
     responseLength?: ResponseLength;
@@ -189,6 +212,13 @@ export type AppSettings = {
     modLoadOrder?: string[];
     aiTier?: AiTier;                 // 'lite' | 'pro' | 'max' — gates which turn stages run (Phase 4)
     uiScale?: number;                // 0.7–1.3, default 1.0 — global UI zoom (ported from mobile settings)
+    /** Story reading area, independent of uiScale (which zooms the whole UI).
+     *  Projected as CSS variables on `.story-journal`; see readingPrefs.ts. */
+    readingFont?: ReadingFont;       // default 'serif'
+    readingSize?: number;            // px, 13–24, default 17
+    readingLeading?: ReadingLeading; // line height 1.4 / 1.55 / 1.75, default 'normal'
+    readingWidth?: ReadingWidth;     // column measure in em of readingSize, default 'standard'
+    readingAlign?: ReadingAlign;     // where the column sits in the story area, default 'center'
     /** Beta UI: opt-in restyle of the whole app (new palette, type scale and
      *  chrome density). Projected onto <html data-ui="beta"> by applyBetaUi;
      *  every rule lives in src/styles/beta.css behind that attribute, so OFF

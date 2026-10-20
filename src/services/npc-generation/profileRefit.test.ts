@@ -174,6 +174,27 @@ describe('generateNPCProfile — Phase-1 refit (propose → roll → render)', (
         expect(renderPrompt).toContain('Do NOT emit a "personalityHex" field');
     });
 
+    // One motivation system: new NPCs get agency wants, never legacy drives (2026-10-04).
+    it('new NPCs are born with wants and no drives; the render prompt does not ask for drives', async () => {
+        const proposal = { candidateGroups: ['scholar'], anchorTraits: [] };
+        const render = {
+            name: 'Kid', status: 'Alive', faction: 'X', disposition: 'Wary', goals: 'g', voice: 'v', appearance: '',
+            personality: 'p', exampleOutput: '"..."', longWant: 'get off the street', region: '',
+            drives: { coreWant: 'c', sessionWant: 's', sceneWant: 'x' }, // a stale model habit — ignored
+        };
+
+        mockProposeThenRender(proposal, render);
+        const created: NPCEntry[] = [];
+        await generateNPCProfile(provider, history, 'Kid', n => created.push(n), [], false, mulberry32(1));
+
+        expect(created[0].drives).toBeUndefined();
+        expect(created[0].wants?.long).toBe('get off the street');
+        expect(created[0].wants?.short.length).toBeGreaterThan(0);
+        const renderPrompt = String(((mockSend.mock.calls[1][1] as unknown[])[0] as { content: string }).content);
+        expect(renderPrompt).not.toContain('"drives"');
+        expect(renderPrompt).not.toContain('sessionWant');
+    });
+
     it('safe fallback when the propose call returns garbage: all GROUP_KEYS + no anchors, still generates', async () => {
         // Propose throws (unparseable) → proposeGroupsAndTraits catches + returns fallback.
         // Render still runs. NPC is created with a rolled hex + group drawn from all GROUP_KEYS.

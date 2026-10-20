@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Router } from 'express';
 import { CAMPAIGNS_DIR, readJson } from '../lib/fileStore.js';
-import { embedText, embedBatch, isModelReady } from '../lib/embedder.js';
+import { embedText, embedQuery, embedBatch, isModelReady } from '../lib/embedder.js';
 import { storeRulesEmbedding, deleteRulesEmbedding, searchRules, getEmbeddingStatus } from '../lib/vectorStore.js';
 import { isJobRunning } from '../lib/embedJobs.js';
 import { wrapAsync } from '../lib/asyncHandler.js';
@@ -97,7 +97,7 @@ export function createRulesRouter() {
             return res.json({ ruleIds: [] });
         }
 
-        const embedding = await embedText(query);
+        const embedding = await embedQuery(query);
         const results = searchRules(campaignId, embedding, limit || 15);
         res.json({ ruleIds: results.map(r => r.ruleId) });
     }));

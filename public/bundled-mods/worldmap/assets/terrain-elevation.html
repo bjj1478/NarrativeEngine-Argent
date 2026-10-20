@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Map elevation and shadows</title>
+<style>body{background:#101d22;color:#e6eee2;font:15px system-ui;margin:24px}h1{font-size:24px}p{color:#acbbb3}main{display:flex;gap:20px}canvas{image-rendering:pixelated;background:#17252d;border-radius:8px}h2{font-size:17px}</style>
+<h1>Elevation lighting and contact shadows</h1><p>Left: unlit terrain. Right: the same terrain with north-west sunlight and sprite shadows.</p><main><section><h2>Before</h2><canvas id="before" width="512" height="384"></canvas></section><section><h2>After</h2><canvas id="after" width="512" height="384"></canvas></section></main>
+<script type="module">
+import {paintPixelCell,paintPixelObjects,paintPixelFog,paintTerrainVariant,terrainVariant,paintPixelRelief,loadPixelArt,drawPixelSprite} from '../pixelArt.js';
+import {hillshadeMultiplier} from '../renderer.js';
+await loadPixelArt();
+const generated=new Set(), visible=new Set();
+const elevation=(x,y)=>0.65*Math.exp(-((x-5)**2+(y-4)**2)/15)+0.12*Math.sin(x*.35+y*.2);
+const biome=(x,y)=>x>11?'farmland':Math.hypot(x-5,y-4)<2.8?'mountain':y<3&&x<4?'forest':'plains';
+for(let y=-1;y<13;y++)for(let x=-1;x<17;x++){generated.add(`${x},${y}`);visible.add(`${x},${y}`);}
+const store={getCell:(x,y)=>generated.has(`${x},${y}`)?{biome:biome(x,y),elevation:elevation(x,y)}:null};
+for(const id of ['before','after']){
+ const real=document.querySelector('#'+id).getContext('2d');
+ const ctx=id==='after'?real:new Proxy(real,{get(t,key){if(key==='fillRect')return (...args)=>{if(!String(t.fillStyle).startsWith('rgba(22, 31, 39')&&!String(t.fillStyle).startsWith('rgba(22,31,39'))t.fillRect(...args);};const value=t[key];return typeof value==='function'?value.bind(t):value;},set(t,key,value){t[key]=value;return true;}});
+ for(let y=0;y<12;y++)for(let x=0;x<16;x++){
+  if(!store.getCell(x,y))continue;
+  paintPixelCell(ctx,store,x,y,x*32,y*32,32);
+  if(id==='after')paintPixelRelief(ctx,store,x,y,x*32,y*32,32,(ex,ey)=>hillshadeMultiplier(ex,ey,0.12));
+ }
+ for(let y=0;y<12;y++)for(let x=0;x<16;x++)paintPixelObjects(ctx,store,x,y,x*32,y*32,32);
+ for(let y=0;y<12;y++)for(let x=0;x<16;x++){
+  if(id==='after')paintPixelFog(ctx,generated,visible,true,x,y,x*32,y*32,32);
+  else if(!visible.has(`${x},${y}`)){ctx.fillStyle=generated.has(`${x},${y}`)?'rgba(12,23,30,.48)':'#17252d';ctx.fillRect(x*32,y*32,32,32);}
+ }
+ drawPixelSprite(ctx,13,3*32,8*32,48,true);drawPixelSprite(ctx,5,10*32,7*32,40,true);
+}
+window.previewReady=true;
+</script></html>

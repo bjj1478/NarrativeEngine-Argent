@@ -12,7 +12,9 @@ import { SelectionActionsMenu } from './chat/SelectionActionsMenu';
 import { ChatActionStrip } from './chat/ChatActionStrip';
 import { ChatComposer } from './chat/ChatComposer';
 import { ChatNavFabs } from './chat/ChatNavFabs';
+import { ReadingControls } from './chat/ReadingControls';
 import { ChatMessageList } from './chat/ChatMessageList';
+import { GenerationTimeline } from './chat/GenerationTimeline';
 import { useSwipeVariants } from './hooks/useSwipeVariants';
 import { useSceneContinue } from './hooks/useSceneContinue';
 import { useRetryStoryAI } from './hooks/useRetryStoryAI';
@@ -287,6 +289,8 @@ export function ChatArea() {
 
             <SelectionActionsMenu />
 
+            <div className="generation-workspace">
+            <div className="story-workspace">
             <ChatMessageList
                 scrollContainerRef={scrollContainerRef}
                 bottomRef={bottomRef}
@@ -309,6 +313,14 @@ export function ChatArea() {
                 onOpenSwipeSheet={setSwipeSheetMessageId}
                 onRetry={retry.retryStoryAI}
             />
+            <div className="chat-side-rail">
+                <ReadingControls />
+                <ChatNavFabs scrollContainerRef={scrollContainerRef} bottomRef={bottomRef} />
+            </div>
+            </div>
+
+            <GenerationTimeline />
+            </div>
 
             <ChatActionStrip
                 isStreaming={isStreaming}
@@ -385,8 +397,6 @@ export function ChatArea() {
 
             {betaUi && <BetaCommandPalette />}
 
-            <ChatNavFabs scrollContainerRef={scrollContainerRef} bottomRef={bottomRef} />
-
             <LootRollModal />
             <DiceRollModal />
             <SceneImageModal />
@@ -425,7 +435,7 @@ function PcPromptModal({ onCreate, onProceed, onCancel }: {
     onCancel: () => void;
 }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" onClick={onCancel}>
+        <div data-motion="overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" onClick={onCancel}>
             <div className="bg-surface border border-border shadow-2xl rounded-lg w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-2">No Character Yet</h3>
                 <p className="text-[12px] text-text-dim mb-4">

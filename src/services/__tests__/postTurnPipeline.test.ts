@@ -25,7 +25,7 @@ vi.mock('../llm/apiClient', () => ({
 vi.mock('../infrastructure/backgroundQueue', () => ({
     backgroundQueue: { push: vi.fn().mockResolvedValue(undefined) },
 }));
-vi.mock('../archive-memory/importanceRater', () => ({ rateImportance: vi.fn().mockResolvedValue(3) }));
+vi.mock('../archive-memory/importanceRater', async (importOriginal) => ({ ...(await importOriginal<typeof import('../archive-memory/importanceRater')>()), rateImportance: vi.fn().mockResolvedValue(3) }));
 vi.mock('../npc/npcDetector', () => ({
     extractNPCNames: vi.fn().mockReturnValue([]),
     classifyNPCNames: vi.fn().mockReturnValue({ newNames: [], existingNpcs: [] }),
@@ -130,7 +130,7 @@ describe('runPostTurnPipeline', () => {
             'campaign-1',
             'attack the goblin',
             ASSISTANT_CONTENT,
-            3  // mocked rateImportance returns 3
+            5  // mocked rating 3 is stored on the 1–10 index scale as 2·3 − 1
         );
     });
 

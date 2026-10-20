@@ -78,9 +78,9 @@ describe('WORKORDER-P5-02 §9 — live wiring (real registries, not mocked)', ()
 
     it('unwired blocks render visible with an UNWIRED badge (not omitted)', () => {
         render(<BlockViewModal />);
-        // witnessAux and npcProfileGen are unwired (reserved slots, no call site).
-        // Each renders the UNWIRED text twice (badge + lock indicator).
+        // npcProfileGen is unwired (reserved slot, no call site). It renders the
+        // UNWIRED text twice (badge + lock indicator).
         const unwiredBadges = screen.getAllByText('blockview.badge.unwired');
-        expect(unwiredBadges.length).toBeGreaterThanOrEqual(4);
+        expect(unwiredBadges.length).toBeGreaterThanOrEqual(2);
     });
 });

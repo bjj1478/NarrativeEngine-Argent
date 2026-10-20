@@ -35,7 +35,7 @@ export function WorldPrimerPanel({ onClose }: { onClose: () => void }) {
     const activeChunk = selectedChunk ? loreChunks.find(c => c.id === selectedChunk) : null;
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-void/80 backdrop-blur-sm p-4">
+        <div data-motion="overlay" className="fixed inset-0 z-[110] flex items-center justify-center bg-void/80 backdrop-blur-sm p-4">
             <div className="bg-surface border border-border shadow-2xl rounded-lg w-full max-w-3xl max-h-[calc(75*var(--app-vh))] flex flex-col overflow-hidden">
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                     <h3 className="text-[13px] font-medium text-terminal uppercase tracking-widest">World Primer</h3>

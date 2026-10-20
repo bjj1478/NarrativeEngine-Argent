@@ -201,13 +201,114 @@ export function getActiveModelId() {
     return MODEL_ID;
 }
 
-export function buildArchiveText(indexEntry) {
-    const parts = [];
-    if (indexEntry.witnesses?.length) parts.push(indexEntry.witnesses.join(' '));
-    if (indexEntry.npcsMentioned?.length) parts.push(indexEntry.npcsMentioned.join(' '));
-    if (indexEntry.keywords?.length) parts.push(indexEntry.keywords.join(' '));
-    if (indexEntry.userSnippet) parts.push(indexEntry.userSnippet);
-    return parts.join(' ').slice(0, 500);
+// mxbai-embed-large-v1 is trained for asymmetric retrieval: a search query carries
+// this instruction and the passages it is matched against carry none (model card).
+const QUERY_INSTRUCTION = 'Represent this sentence for searching relevant passages: ';
+
+/** Embed text that is searched FOR (a player message, an expanded query). */
+export async function embedQuery(text) {
+    if (!text || !text.trim()) return embedText('');
+    return embedText(QUERY_INSTRUCTION + text);
+}
+
+// A scene is embedded as passages of its own prose and ranked by its best passage,
+// so the whole scene is searchable: GMs often recap the deal or the outcome at the
+// END of a scene. The model reads at most 512 tokens per input; ~1,500 characters
+// plus the context line stays under that.
+const PASSAGE_CHARS = 1500;
+const MAX_PASSAGES_PER_SCENE = 16;
+
+// Lines that carry no story: rules, table separators, and engine roll results such as
+// "[SOCIAL: Normal: Failure | KNOWLEDGE: Normal: Success]".
+const NOISE_LINE = /^(?:[\s|:-]*-{3,}[\s|:-]*|\s*\[[A-Z][A-Z /&-]*:[^\]]*\]\s*)$/;
+
+function cleanProse(text) {
+    return String(text ?? '')
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .filter(line => !NOISE_LINE.test(line))
+        .join('\n')
+        .replace(/[*[\]]/g, '')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/[ \t]+/g, ' ')
+        .trim();
+}
+
+// The GM's status line ("Scene #533 | 📅 … | 📍 Soll Estate, Study | 👥 [**Rin**], …")
+// names the place and the cast. Its 📍 and 👥 parts become a context line on every
+// passage; the clock part is dropped so same-day scenes don't look alike for it.
+function splitStatusLine(gmText) {
+    const lines = String(gmText ?? '').replace(/\r\n/g, '\n').split('\n');
+    const first = lines.findIndex(l => l.trim());
+    if (first < 0 || !/📍|👥/u.test(lines[first])) return { context: '', body: gmText ?? '' };
+    const context = lines[first]
+        .split('|')
+        .map(part => part.trim())
+        .filter(part => /^(📍|👥)/u.test(part))
+        .map(part => cleanProse(part.replace(/^(📍|👥)\s*/u, '')))
+        .filter(Boolean)
+        .join(' — ');
+    return { context, body: lines.slice(first + 1).join('\n') };
+}
+
+function splitLong(paragraph) {
+    if (paragraph.length <= PASSAGE_CHARS) return [paragraph];
+    const pieces = [];
+    let current = '';
+    for (const sentence of paragraph.split(/(?<=[.!?…]["”’)]?)\s+/u)) {
+        if (current && current.length + 1 + sentence.length > PASSAGE_CHARS) {
+            pieces.push(current);
+            current = '';
+        }
+        current = current ? `${current} ${sentence}` : sentence;
+        while (current.length > PASSAGE_CHARS) {
+            pieces.push(current.slice(0, PASSAGE_CHARS));
+            current = current.slice(PASSAGE_CHARS);
+        }
+    }
+    if (current) pieces.push(current);
+    return pieces;
+}
+
+/**
+ * The texts a scene is embedded as:
+ *   - its prose (the player's message, then the GM's reply) cleaned of markup and
+ *     roll lines, packed by paragraph into passages of at most PASSAGE_CHARS, each
+ *     led by the scene's place-and-cast line when the GM wrote one;
+ *   - one cast card naming who was in it (`names`: the index's witnesses and
+ *     mentioned NPCs), so a question about a person finds their scenes even where
+ *     the prose names them only in passing. Measured on the Turn Prep probes, prose
+ *     alone lost "who" questions (a market scene outranked Helena's) and names alone
+ *     lost "what happened" questions; passages plus the card won both.
+ * Empty when the scene has neither prose nor names.
+ */
+export function buildScenePassages(userContent, assistantContent, names = []) {
+    const card = [...new Set((names ?? []).map(n => String(n).trim()).filter(Boolean))].join(', ');
+    return [...buildProsePassages(userContent, assistantContent), ...(card ? [card] : [])];
+}
+
+function buildProsePassages(userContent, assistantContent) {
+    const { context, body } = splitStatusLine(assistantContent);
+    const user = cleanProse(userContent);
+    const paragraphs = [
+        ...(user ? [`Player: ${user}`] : []),
+        ...cleanProse(body).split(/\n\s*\n/).map(p => p.trim()).filter(Boolean),
+    ].flatMap(splitLong);
+
+    const passages = [];
+    let current = '';
+    for (const p of paragraphs) {
+        if (current && current.length + 2 + p.length > PASSAGE_CHARS) {
+            passages.push(current);
+            current = '';
+        }
+        current = current ? `${current}\n\n${p}` : p;
+    }
+    if (current) passages.push(current);
+
+    return passages
+        .slice(0, MAX_PASSAGES_PER_SCENE)
+        .map(p => (context ? `${context}\n${p}` : p));
 }
 
 export function buildLoreText(chunk) {

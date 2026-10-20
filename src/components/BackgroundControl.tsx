@@ -103,6 +103,7 @@ export function BackgroundControl() {
                         {/* click-away catcher */}
                         <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
                         <div
+                            data-motion="popover"
                             className="fixed z-[61] w-60 bg-surface border border-border rounded-sm shadow-lg p-3 flex flex-col gap-3"
                             style={{ top: pos.top, left: pos.left }}
                         >

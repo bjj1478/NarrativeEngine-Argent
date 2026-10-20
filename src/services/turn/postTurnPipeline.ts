@@ -2,12 +2,12 @@ import type { ChatMessage, EndpointConfig, ProviderConfig } from '../../types';
 import type { TurnState, TurnCallbacks } from './turnOrchestrator';
 import { useAppStore } from '../../store/useAppStore';
 import { api } from '../llm/apiClient';
-import { rateImportance } from '../archive-memory/importanceRater';
+import { rateImportance, ratingToIndexImportance } from '../archive-memory/importanceRater';
 import { sealChapterCombined, type SealModelCall } from '../saveFileEngine';
 import { toast } from '../../components/Toast';
 import { mergeLifecycleEntries } from '../campaign-state/divergenceRegister';
 import { saveDivergenceRegister } from '../../store/campaignStore';
-import { tierAllows } from './aiTier';
+import { isBlockEnabled } from './blockEnablement';
 import { startPostTurnTracks } from './tracks';
 import { startPostCommitTracks } from './tracks/postCommit';
 import { startPrologueTracks } from './tracks/prologue';
@@ -201,10 +201,11 @@ async function runArchiveTrack(
         let sceneImportance: number | undefined;
         const importanceProvider = facade ? undefined : state.getFreshProvider();
         const importanceAvailable = facade ? hasHostModelRole(facade, 'story') : Boolean(importanceProvider);
-        if (importanceAvailable && tierAllows(facade?.config.aiTier ?? state.settings.aiTier, 'importanceRating')) {
+        if (importanceAvailable && isBlockEnabled('importanceRating', facade?.config.aiTier ?? state.settings.aiTier, state.settings.moduleEnabled)) {
             try {
-                sceneImportance = await rateImportance(importanceProvider, displayInput, lastAssistantContent, allMsgs, facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('story', request) : undefined);
-                console.log(`[ImportanceRater] Scene rated: ${sceneImportance}/5`);
+                const rating = await rateImportance(importanceProvider, displayInput, lastAssistantContent, allMsgs, facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('story', request) : undefined);
+                sceneImportance = ratingToIndexImportance(rating);
+                console.log(`[ImportanceRater] Scene rated: ${rating}/5 (stored as ${sceneImportance}/10)`);
             } catch (err) {
                 console.warn('[ImportanceRater] Failed (non-fatal):', err);
             }

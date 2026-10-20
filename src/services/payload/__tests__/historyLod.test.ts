@@ -809,7 +809,6 @@ describe('WO-09c — Final accounting corrections', () => {
                 collector,
                 chapters: [chapter],
                 archiveIndex,
-                onStageNpcIds: ['npc_a'],
                 lodSummaryChapters: 7,
                 lodImportanceBonus: 0,
             });

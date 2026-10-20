@@ -237,9 +237,9 @@ Example: ["Captain Aldric", "Orin"]`;
 
     try {
         const raw = modelCall
-            ? (await modelCall({ prompt, priority: 'low', trackingLabel: 'npc-validate', timeoutMs: AI_CALL_TIMEOUT_MS })).content
+            ? (await modelCall({ prompt, priority: 'low', thinkingEffort: 'off', trackingLabel: 'npc-validate', timeoutMs: AI_CALL_TIMEOUT_MS })).content
             : provider
-                ? await llmCall(provider, prompt, { priority: 'low', trackingLabel: 'npc-validate', timeoutMs: AI_CALL_TIMEOUT_MS })
+                ? await llmCall(provider, prompt, { priority: 'low', thinkingEffort: 'off', trackingLabel: 'npc-validate', timeoutMs: AI_CALL_TIMEOUT_MS })
                 : '';
 
         if (raw) {

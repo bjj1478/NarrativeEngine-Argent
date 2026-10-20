@@ -482,7 +482,7 @@ export function PCEditForm({
                                     className="w-full bg-surface border border-border rounded pl-7 pr-3 py-1.5 text-[12px] text-text-primary placeholder:text-text-dim/50 focus:outline-none focus:border-terminal"
                                 />
                                 {traitSearch && filteredTraitOptions.length > 0 && (
-                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-void border border-border rounded max-h-32 overflow-y-auto shadow-lg">
+                                    <div data-motion="popover" className="absolute z-20 left-0 right-0 mt-1 bg-void border border-border rounded max-h-32 overflow-y-auto shadow-lg">
                                         {filteredTraitOptions
                                             .filter(t => !(form.traits || []).includes(t))
                                             .slice(0, 10)

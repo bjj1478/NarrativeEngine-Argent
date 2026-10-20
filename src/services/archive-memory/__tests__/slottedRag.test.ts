@@ -426,6 +426,28 @@ describe('WO-12 / WO-12b — Slotted RAG', () => {
 
     // ─────────────────────────────────────────────────────────────────────────
     // WO-12b Correction 2 — verbatim index snippets only.
+        it('witnesses stored as names resolve to on-stage NPCs, and the label uses ledger names', () => {
+            // Real archives store witness names ("Rin"), never ledger ids.
+            const chapters = [mkChapter({ chapterId: 'CH01', sceneIds: ['001', '002'] })];
+            const archiveIndex = [
+                mkIndexEntry('001', { userSnippet: 'Rin was there.', witnesses: ['Rin', 'Grey'] }),
+                mkIndexEntry('002', { userSnippet: 'Only Grey saw it.', witnesses: ['Grey'] }),
+            ];
+
+            const result = buildSlottedRagSnippets({
+                rankedSceneIds: ['001', '002'],
+                elevatedSceneIds: new Set(),
+                archiveIndex,
+                chapters,
+                npcLedger: [mkNpc('npc_rin', 'Rin Holmes'), mkNpc('npc_grey', 'Grey Holmes')],
+                onStageNpcIds: ['npc_rin'],
+            });
+
+            expect(result.snippets).toEqual([
+                { sceneId: '001', chapterId: 'CH01', snippet: 'Rin was there.', witnessedBy: ['Rin Holmes'] },
+            ]);
+        });
+
     //
     // The sole snippet candidate is trimmed `ArchiveIndexEntry.userSnippet`
     // (capped at 200 chars). `SceneEvent.text` and other extracted/generated

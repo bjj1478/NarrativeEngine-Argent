@@ -21,6 +21,7 @@ import type {
     TravelState,
 } from '../../types';
 import { llmCall, type LLMCallPriority } from '../../utils/llmCall';
+import { applyActiveSlotThinking } from '../../store/slices/slotThinking';
 import { extractJson } from '../infrastructure/jsonExtract';
 import type { TurnCallbacks, TurnState } from './turnOrchestrator';
 import { createReactiveReadHub, disposeCampaignSubscriptions, type ReactiveReadHub, type ReactiveStoreLike } from '../mods/reactiveReads';
@@ -101,6 +102,8 @@ export interface FacadeData {
 
 export interface FacadeConfig {
     readonly aiTier: AiTier | undefined;
+    /** Block View switches (`settings.moduleEnabled`); an explicit entry beats the tier preset. */
+    readonly moduleEnabled: Readonly<Record<string, boolean>> | undefined;
     readonly contextLimit: number;
     readonly archiveRecallDepth: 'lean' | 'standard' | 'deep';
     readonly autoArchiveStaleNPCsTurns: number;
@@ -194,11 +197,13 @@ export interface HostFacadeBuildOptions {
         /** WO 6.2 — the in-game day counter, read from the live `GameContext`. */
         readonly worldDay?: number;
     readonly travelMode?: GameContext['travelMode'];
+    readonly travelUnit?: GameContext['travelUnit'];
     };
 }
 
 type FacadeSettings = {
     aiTier?: AiTier;
+    moduleEnabled?: Record<string, boolean>;
     contextLimit: number;
     archiveRecallDepth?: 'lean' | 'standard' | 'deep';
     autoArchiveStaleNPCsTurns?: number;
@@ -249,6 +254,7 @@ function cloneAndFreeze<T>(value: T, seen = new WeakMap<object, unknown>()): T {
 function readFacadeSettings(settings: FacadeSettings): FacadeConfig {
     return Object.freeze({
         aiTier: settings.aiTier,
+        moduleEnabled: settings.moduleEnabled ? Object.freeze({ ...settings.moduleEnabled }) : undefined,
         contextLimit: settings.contextLimit,
         archiveRecallDepth: settings.archiveRecallDepth ?? 'standard',
         autoArchiveStaleNPCsTurns: settings.autoArchiveStaleNPCsTurns ?? 0,
@@ -283,8 +289,11 @@ function hasConfiguredRole(state: TurnState, role: ModelRole): boolean {
     switch (role) {
         case 'story':
             return Boolean(state.provider || typeof state.getFreshProvider === 'function');
+        // The getter always exists; it returns undefined when the preset has no utility model.
+        // Checking the getter alone made every utility step call (and throw) instead of skipping,
+        // and made agency's utility-then-story fallback unreachable.
         case 'utility':
-            return typeof state.getUtilityEndpoint === 'function';
+            return Boolean(state.getUtilityEndpoint?.());
         case 'auxiliary':
             return Boolean(typeof state.getFreshAuxiliaryProvider === 'function' || typeof state.getFreshProvider === 'function' || state.provider);
         case 'summariser':
@@ -304,9 +313,9 @@ function resolveEndpoint(state: TurnState, role: ModelRole): EndpointConfig | Pr
         case 'utility':
             return state.getUtilityEndpoint?.();
         case 'auxiliary':
-            return state.getFreshAuxiliaryProvider?.() ?? story();
+            return state.getFreshAuxiliaryProvider?.() ?? applyActiveSlotThinking(state.settings, 'auxiliary', story());
         case 'summariser':
-            return state.getRawSummariserProvider?.() ?? story();
+            return state.getRawSummariserProvider?.() ?? applyActiveSlotThinking(state.settings, 'summarizer', story());
         case 'raw-auxiliary':
             return state.getRawAuxiliaryProvider?.();
         case 'raw-summariser':
@@ -428,6 +437,7 @@ export function buildHostFacade(
                     travel: fresh?.travel ?? context.travel ?? null,
                     worldDay: fresh?.worldDay ?? context.worldDay,
                     travelMode: fresh?.travelMode ?? context.travelMode,
+                    travelUnit: fresh?.travelUnit ?? context.travelUnit,
                 };
             }
             default: return undefined;

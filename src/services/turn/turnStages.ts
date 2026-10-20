@@ -30,7 +30,6 @@ import { sanitizePayloadForApi } from '../lib/payloadSanitizer';
 import { getToolDefinitions } from './toolHandlers';
 import { resolveToolHandler } from './toolRegistry';
 import { gatherContext } from './contextGatherer';
-import { tierAllows } from './aiTier';
 import { extractAndStripSceneStakes } from './sceneStakesTag';
 import { capturePendingTurnSnapshot } from './pendingCommit';
 import { buildWatchdogDossier } from './directorWatchdog';
@@ -43,7 +42,7 @@ import { hasHostModelRole, type HostFacade } from './hostFacade';
 import { emitCoreEvent, emitCoreEventLazy } from '../mods/events';
 import { runPromptInterceptors } from '../mods/interceptors';
 import { runFactPublishers } from '../mods/facts';
-import { blockTokenCap } from './blockEnablement';
+import { blockTokenCap, isBlockEnabled } from './blockEnablement';
 import { BUILTIN_IDS, getBuiltinTokenCap } from '../payload/contributions/builtins';
 
 const MAX_TOOL_CALLS_PER_TURN = 5;
@@ -237,7 +236,7 @@ export async function runIntroEngineStage(
     const messages = data?.messages ?? state.messages;
     const npcLedger = data?.npcLedger ?? state.npcLedger;
     const provider = facade ? undefined : state.provider;
-    if (!context.npcIntroEngineActive || !tierAllows(config?.aiTier ?? settings.aiTier, 'introEngine')) return;
+    if (!context.npcIntroEngineActive || !isBlockEnabled('introEngine', config?.aiTier ?? settings.aiTier, settings.moduleEnabled)) return;
     const seenNpcNames = new Set((npcLedger ?? []).map((n: NPCEntry) => n.name.toLowerCase()));
     try {
         const auxProvider = facade ? undefined : state.getFreshAuxiliaryProvider?.() ?? provider;
@@ -314,7 +313,7 @@ export async function runDirectorStage(
     // and issues a Writer Brief for the next turn. Runs after context gathering (so the
     // dossier + last assistant message are settled) and before buildPayload (so the Brief
     // can ride below the cache boundary in the final user message). Gated by
-    // tierAllows(tier, 'directorBrief') — lite never calls. Graceful on timeout/abort/
+    // isBlockEnabled('directorBrief', …) — lite never calls. Graceful on timeout/abort/
     // parse-failure/any error: runDirectorBrief returns null and the turn continues with
     // just the watchdog nudge (buildPayload suppresses the nudge only when a Brief string
     // is actually passed). Computed once per (campaignId, userMessage) — a swipe/regenerate
@@ -327,7 +326,7 @@ export async function runDirectorStage(
     // `runDirectorBrief` catches internally and returns null, so the turn proceeds. The
     // `onDirectorBriefPhase` callback toggles the UI's "Director drafting brief…" state.
     let directorBrief: string | null = null;
-    if (tierAllows(settings.aiTier, 'directorBrief')) {
+    if (isBlockEnabled('directorBrief', settings.aiTier, settings.moduleEnabled)) {
         const skipSignal = state.directorSkipController?.signal;
         const directorSignal = skipSignal
             ? AbortSignal.any([abortController.signal, skipSignal])

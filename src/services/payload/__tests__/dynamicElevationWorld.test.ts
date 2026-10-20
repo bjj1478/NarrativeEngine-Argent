@@ -18,8 +18,9 @@ import type { ElevatedScene } from '../../archive-memory/dynamicElevation';
 //  1. archiveRecall: undefined + an elevated broadcast scene renders the elevated label.
 //  2. archiveRecall: [] + an elevated broadcast scene renders identically.
 //  3. A scene already present in post-filter regular recall is not rendered twice.
-//  4. With ordinary recall empty, an elevated scene witnessed only by an NPC outside
-//     the regular filter's allowed set is absent, while a broadcast scene passes.
+//  4. Elevated scenes are never dropped for who witnessed them; each carries the
+//     ledger names of its witnesses, like regular recall (the old witness filter
+//     compared stored names against NPC ids and dropped every witnessed scene).
 //  5. The elevated label exists in the final per-turn world/user content and in no
 //     history/system message.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,7 +93,6 @@ function buildWorldWith(opts: {
         budgetWorld: opts.budgetWorld ?? 8192,
         npcBudgetFloor: opts.npcBudgetFloor ?? 2048,
         matureMode: false,
-        isDebug: opts.isDebug ?? false,
         collector: createTraceCollector(opts.isDebug ?? false),
         elevatedScenes: opts.elevatedScenes,
     });
@@ -165,12 +165,12 @@ describe('WO-11b Correction 1 — Dynamic Elevation renders independently of ord
         expect(worldContent).not.toContain('[ELEVATED MEMORY — Chapter CH02]');
     });
 
-    it('with ordinary recall empty, an unwitnessed elevated scene is absent while a broadcast scene passes', () => {
-        // Scene 004 is witnessed only by npc_offstage (not in active/on-stage set).
+    it('with ordinary recall empty, an elevated scene witnessed by an off-stage NPC renders with a witness label', () => {
+        // Scene 004 is witnessed only by Brenna, who is not on stage.
         // Scene 002 is broadcast (no witnesses). Ordinary recall is undefined.
         const archiveIndex = [
             mkIndexEntry('002', { witnesses: [] }), // broadcast
-            mkIndexEntry('004', { witnesses: ['npc_offstage'] }), // witnessed only by off-stage NPC
+            mkIndexEntry('004', { witnesses: ['Brenna'] }), // witnessed only by an off-stage NPC
         ];
         const elevated = [
             elevatedScene('002', 'Broadcast elevated scene.', 'CH01'),
@@ -181,16 +181,12 @@ describe('WO-11b Correction 1 — Dynamic Elevation renders independently of ord
             archiveRecall: undefined,
             elevatedScenes: elevated,
             archiveIndex,
-            npcLedger: [mkNpc('npc_a', 'Aldric')],
-            onStageNpcIds: ['npc_a'], // npc_offstage is NOT in the active set
+            npcLedger: [mkNpc('npc_a', 'Aldric'), mkNpc('npc_b', 'Brenna Vale')],
+            onStageNpcIds: ['npc_a'],
         });
 
-        // Broadcast scene passes.
-        expect(worldContent).toContain('Broadcast elevated scene.');
-        expect(worldContent).toContain('[ELEVATED MEMORY — Chapter CH01]');
-        // Offstage-witnessed scene is absent — does not leak through just because recall is empty.
-        expect(worldContent).not.toContain('Offstage-witnessed elevated scene.');
-        expect(worldContent).not.toContain('[ELEVATED MEMORY — Chapter CH02]');
+        expect(worldContent).toContain('[ELEVATED MEMORY — Chapter CH01]\n[PAST SCENE]\nBroadcast elevated scene.');
+        expect(worldContent).toContain('[ELEVATED MEMORY — Chapter CH02]\n[PAST SCENE — witnessed by Brenna Vale]\nOffstage-witnessed elevated scene.');
     });
 
     it('the elevated label exists in the final per-turn world/user content and in no history/system message', () => {

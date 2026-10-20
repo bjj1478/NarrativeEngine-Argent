@@ -1,6 +1,8 @@
 import type { LoreChunk, ChatMessage } from '../../types';
 import { computeIdf, fuseRRF } from '../retrieval/lexicalFusion';
 import { getCachedKeywordRegex as getKeywordRegex, makeScanTextGetter } from '../retrieval/retrievalCore';
+import { isFieldLabelKeyword } from './fieldLabels';
+import { DEFAULT_LORE_DEPTH, loreRelevanceTopN, type LoreDepth } from './loreBudget';
 
 // ─── Group Competition ────────────────────────────────────────────────────
 function applyGroupCompetition(
@@ -133,12 +135,15 @@ function retrieveRelevantLoreClassic(
     const grouped = applyGroupCompetition(scored);
     grouped.sort((a, b) => b.score - a.score);
 
+    let retrievedAny = false;
     for (const { chunk } of grouped) {
         if (includedSet.has(chunk.id)) continue;
-        if (usedTokens + chunk.tokens > tokenBudget) continue;
+        // The best match always goes in, even over budget (see the IDF+RRF path).
+        if (retrievedAny && usedTokens + chunk.tokens > tokenBudget) continue;
         results.push(chunk);
         includedSet.add(chunk.id);
         usedTokens += chunk.tokens;
+        retrievedAny = true;
     }
 
     if (usedTokens < tokenBudget) {
@@ -172,6 +177,8 @@ function retrieveRelevantLoreIdfRrf(
     tokenBudget: number,
     recentMessages: ChatMessage[],
     semanticCandidateIds: string[] | undefined,
+    recommendedIds: string[] | undefined,
+    topN: number,
 ): LoreChunk[] {
     const results: LoreChunk[] = [];
     const includedSet = new Set<string>();
@@ -192,7 +199,10 @@ function retrieveRelevantLoreIdfRrf(
     const getScanText = makeScanTextGetter(history, userMessage);
     getScanText(defaultDepth);
 
-    const idf = computeIdf(chunks.map(c => c.triggerKeywords ?? []));
+    // Field labels (`type`, `aliases`, `appearance`…) were extracted as keywords on most
+    // structured chunks; they carry no meaning and match ordinary text. Ignore them.
+    const keywordsOf = (c: LoreChunk) => (c.triggerKeywords ?? []).filter(kw => !isFieldLabelKeyword(kw));
+    const idf = computeIdf(chunks.map(keywordsOf));
     const chunkById = new Map(chunks.map(c => [c.id, c]));
     const semanticSet = new Set(semanticCandidateIds ?? []);
 
@@ -207,7 +217,7 @@ function retrieveRelevantLoreIdfRrf(
 
         const depth = chunk.scanDepth || defaultDepth;
         const scanText = getScanText(depth);
-        const keywords = chunk.triggerKeywords || [];
+        const keywords = keywordsOf(chunk);
 
         let idfScore = 0;
         for (const kw of keywords) {
@@ -255,8 +265,19 @@ function retrieveRelevantLoreIdfRrf(
         return c && c.ragMode !== 'keyword' && !c.disabled;
     });
 
+    // Pass 2b: the Context Recommender's picks — a model that read the message and the lore
+    // index. A third ranked list, fused like the other two: a pick the keyword and meaning
+    // searches also found rises; a pick alone competes at its rank, it does not override them.
+    // On the Turn Prep probes it found the named character's own entry ("I spot Helena
+    // Broadmarsh") that keyword + meaning search ranked below unrelated characters.
+    const recommendedRanked = (recommendedIds ?? []).filter(id => {
+        const c = chunkById.get(id);
+        return c && !c.disabled;
+    });
+
     // Pass 3: RRF fusion
-    const fused = fuseRRF(keywordRanked, embeddingRanked);
+    const fusedTwo = fuseRRF(keywordRanked, embeddingRanked);
+    const fused = [...fusedTwo, ...recommendedRanked.filter(id => !fusedTwo.includes(id))];
 
     // Pass 4: fill token budget in fused order, then group competition, then linked entities
     const fusedChunks = fused
@@ -271,24 +292,47 @@ function retrieveRelevantLoreIdfRrf(
     for (let i = 0; i < embeddingRanked.length; i++) {
         if (!embRankMap.has(embeddingRanked[i])) embRankMap.set(embeddingRanked[i], i);
     }
+    const recRankMap = new Map<string, number>();
+    for (let i = 0; i < recommendedRanked.length; i++) {
+        if (!recRankMap.has(recommendedRanked[i])) recRankMap.set(recommendedRanked[i], i);
+    }
     const scoredForGroup = fusedChunks.map(c => {
         const kwRank = kwRankMap.get(c.id);
         const embRank = embRankMap.get(c.id);
         let score = 0;
         if (kwRank !== undefined) score += 1 / (60 + kwRank + 1);
         if (embRank !== undefined) score += 1 / (60 + embRank + 1);
+        const recRank = recRankMap.get(c.id);
+        if (recRank !== undefined) score += 1 / (60 + recRank + 1);
         return { chunk: c, score };
     });
 
     const grouped = applyGroupCompetition(scoredForGroup);
     grouped.sort((a, b) => b.score - a.score);
 
+    // Relevance floor. RRF scores barely separate rank 1 from rank 10 (1/61 vs 1/71), so a
+    // score cutoff can't tell a strong match from a weak one. Instead a chunk must be picked by
+    // the recommender, found by both keyword and meaning search, or rank in the top `topN` of
+    // either. Without this the budget was also the target: any single weak keyword hit filled it.
+    const passesFloor = (id: string): boolean => {
+        if (recRankMap.has(id)) return true;
+        const kw = kwRankMap.get(id);
+        const emb = embRankMap.get(id);
+        if (kw !== undefined && emb !== undefined) return true;
+        return (kw !== undefined && kw < topN) || (emb !== undefined && emb < topN);
+    };
+
+    let retrievedAny = false;
     for (const { chunk } of grouped) {
         if (includedSet.has(chunk.id)) continue;
-        if (usedTokens + chunk.tokens > tokenBudget) continue;
+        if (!passesFloor(chunk.id)) continue;
+        // The best match always goes in, even over budget — otherwise a chunk larger than the
+        // budget (chunks run to LORE_CHUNK_MAX) could never be retrieved however relevant.
+        if (retrievedAny && usedTokens + chunk.tokens > tokenBudget) continue;
         results.push(chunk);
         includedSet.add(chunk.id);
         usedTokens += chunk.tokens;
+        retrievedAny = true;
     }
 
     // Linked entities cross-pull
@@ -326,6 +370,8 @@ export function retrieveRelevantLore(
     recentMessages?: ChatMessage[],
     semanticCandidateIds?: string[],
     algorithm: 'classic' | 'idf-rrf' = 'idf-rrf',
+    recommendedIds?: string[],
+    depth: LoreDepth = DEFAULT_LORE_DEPTH,
 ): LoreChunk[] {
     if (chunks.length === 0) return [];
 
@@ -340,7 +386,8 @@ export function retrieveRelevantLore(
 
     return retrieveRelevantLoreIdfRrf(
         chunks, userMessage, tokenBudget,
-        messages, semanticCandidateIds,
+        messages, semanticCandidateIds, recommendedIds,
+        loreRelevanceTopN(depth),
     );
 }
 

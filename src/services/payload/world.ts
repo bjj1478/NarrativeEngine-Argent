@@ -9,6 +9,7 @@ import { isFactActive, renderRegisterForPayload } from '../campaign-state/diverg
 import { isKnownToAnyOnStage, parseKnownByToken } from '../campaign-state/knowledgeScope';
 import { dedupElevatedScenes, type ElevatedScene } from '../archive-memory/dynamicElevation';
 import { renderSlottedRagBlock, type SlottedRagSnippet } from '../archive-memory/slottedRag';
+import { createWitnessResolver, witnessNames } from '../npc/witnessResolve';
 import type { TraceCollector } from './traceCollector';
 
 const RECENT_SCENE_WINDOW = 3;      // mobile used 2; desktop can see a touch deeper
@@ -129,7 +130,6 @@ export function buildWorld(opts: {
     npcBudgetFloor: number;
     plannerEventTypes?: SceneEventType[];
     matureMode?: boolean;
-    isDebug: boolean;
     collector: TraceCollector;
     // WO-11: synopsis-tier scenes surfaced verbatim below the cache boundary
     // for this turn only. Each carries a chapterId for the labeled rendering.
@@ -163,7 +163,6 @@ export function buildWorld(opts: {
         npcBudgetFloor,
         plannerEventTypes: plannerEventTypesOpt,
         matureMode,
-        isDebug,
         collector,
         elevatedScenes,
         slottedRagSnippets,
@@ -190,6 +189,18 @@ export function buildWorld(opts: {
     // The post-filter regular-recall IDs feed elevation dedup; empty set when no recall.
     let regularRecallIds = new Set<string>();
 
+    // Witness labels. Recalled and elevated scenes are never dropped for who saw
+    // them: the narrator remembers everything, and the player character was
+    // usually there. Each scene names the NPCs recorded as present instead, so the
+    // writer can keep what each NPC knows straight. (The old perceptual filter
+    // compared witness names against NPC ids, matched nothing, and emptied recall.)
+    const resolveWitness = createWitnessResolver(npcLedger ?? []);
+    const witnessesBySceneId = new Map((archiveIndex ?? []).map(e => [e.sceneId, e.witnesses]));
+    const pastSceneHeader = (sceneId: string): string => {
+        const names = witnessNames(witnessesBySceneId.get(sceneId), resolveWitness);
+        return names.length > 0 ? `[PAST SCENE — witnessed by ${names.join(', ')}]` : '[PAST SCENE]';
+    };
+
     // Archive Recall
     if (archiveRecall && archiveRecall.length > 0) {
         // Simple dedupe against active history
@@ -198,36 +209,16 @@ export function buildWorld(opts: {
             .filter(m => m.role === 'assistant' && typeof m.content === 'string' && m.content.length > 20)
             .map(m => m.content as string);
 
-        let filteredRecall = archiveRecall.filter(scene => {
+        const filteredRecall = archiveRecall.filter(scene => {
             if (activeAssistantContents.some(asst => scene.content.includes(asst))) return false;
             return true;
         });
-
-        // Perceptual archive filtering: only include scenes witnessed by active NPCs
-        if (archiveIndex && npcLedger && archiveIndex.some(e => e.witnesses && e.witnesses.length > 0)) {
-            const activeNpcIds = new Set(
-                npcLedger.filter(n => !n.archived).map(n => n.id)
-            );
-            if (onStageNpcIds) {
-                for (const id of onStageNpcIds) activeNpcIds.add(id);
-            }
-            const sceneWitnessMap = new Map(archiveIndex.map(e => [e.sceneId, e.witnesses]));
-            filteredRecall = filteredRecall.filter(scene => {
-                const witnesses = sceneWitnessMap.get(scene.sceneId);
-                if (!witnesses || witnesses.length === 0) return true; // broadcast — no witness data
-                return witnesses.some(w => activeNpcIds.has(w));
-            });
-            if (isDebug) {
-                const filtered = archiveRecall.length - filteredRecall.length;
-                if (filtered > 0) collector.addTrace({ source: 'Archive Recall', classification: 'world_context', tokens: 0, reason: `Perceptual filter removed ${filtered} scenes (not witnessed by active NPCs)`, included: false });
-            }
-        }
 
         if (filteredRecall.length > 0) {
             // WO-F (2be3ad5) — drop the internal scene number from the header so it never leaks
             // into the GM prompt. The scene id is a storage detail; the AI should recall scenes by
             // content, not by number (and surgical deletes can leave gaps that would confuse it).
-            const text = `[ARCHIVE RECALL — VERBATIM PAST SCENES]\n${filteredRecall.map(s => `[PAST SCENE]\n${s.content}`).join('\n\n')}\n[END ARCHIVE RECALL]`;
+            const text = `[ARCHIVE RECALL — VERBATIM PAST SCENES]\n${filteredRecall.map(s => `${pastSceneHeader(s.sceneId)}\n${s.content}`).join('\n\n')}\n[END ARCHIVE RECALL]`;
             worldBlocks.push({ source: 'Archive Recall', content: text, tokens: countTokens(text), reason: `Verbatim history (${filteredRecall.length} scenes)` });
         }
 
@@ -297,39 +288,16 @@ export function buildWorld(opts: {
     // surface verbatim below the cache boundary, labeled by chapter. Per WO-11b
     // Correction 1, this renders independently of ordinary recall — evaluated
     // whenever elevatedScenes is non-empty, regardless of whether archiveRecall is
-    // undefined, [], or non-empty. Dedup uses the post-filter regular-recall IDs
-    // (empty set when no regular recall rendered). Perceptual filter: elevated
-    // scenes are subject to the same witness semantics as regular recall — broadcast
-    // scenes (no witness data) always pass; witnessed scenes only if at least one
-    // witness is in the active/on-stage NPC set. An unwitnessed elevated scene must
-    // not surface merely because ordinary recall is empty. The scope was already
+    // undefined, [], or non-empty. Dedup uses the regular-recall IDs (empty set when
+    // no regular recall rendered). Elevated scenes carry the same witness labels as
+    // regular recall. The scope was already
     // restricted to synopsis-tier scenes at gather time (computeSynopsisScope), so
     // the LOD history from WO-09 is never touched — elevation is a new path beside
     // it, not a modification. The elevated block stays a worldBlocks entry with
     // source: 'Dynamic Elevation' so it rides below the cache boundary (never in
     // history, stable, pinned, divergence, or a system message).
     if (elevatedScenes && elevatedScenes.length > 0) {
-        let elevated = dedupElevatedScenes(elevatedScenes, regularRecallIds);
-
-        // Perceptual filter — mirrors the archiveRecall filter above. Applies in
-        // every shape (including when ordinary recall is empty) so an unwitnessed
-        // elevated scene never leaks through.
-        if (archiveIndex && npcLedger && archiveIndex.some(e => e.witnesses && e.witnesses.length > 0)) {
-            const activeNpcIds = new Set(npcLedger.filter(n => !n.archived).map(n => n.id));
-            if (onStageNpcIds) {
-                for (const id of onStageNpcIds) activeNpcIds.add(id);
-            }
-            const sceneWitnessMap = new Map(archiveIndex.map(e => [e.sceneId, e.witnesses]));
-            const before = elevated.length;
-            elevated = elevated.filter(scene => {
-                const witnesses = sceneWitnessMap.get(scene.sceneId);
-                if (!witnesses || witnesses.length === 0) return true; // broadcast
-                return witnesses.some(w => activeNpcIds.has(w));
-            });
-            if (isDebug && before > elevated.length) {
-                collector.addTrace({ source: 'Dynamic Elevation', classification: 'world_context', tokens: 0, reason: `Perceptual filter removed ${before - elevated.length} elevated scene(s) (not witnessed by active NPCs)`, included: false });
-            }
-        }
+        const elevated = dedupElevatedScenes(elevatedScenes, regularRecallIds);
 
         if (elevated.length > 0) {
             // Group by chapterId so each chapter's scenes render under one labeled section.
@@ -341,7 +309,7 @@ export function buildWorld(opts: {
             }
             const sections: string[] = [];
             for (const [chapterId, scenes] of byChapter) {
-                const body = scenes.map(s => `[PAST SCENE]\n${s.content}`).join('\n\n');
+                const body = scenes.map(s => `${pastSceneHeader(s.sceneId)}\n${s.content}`).join('\n\n');
                 sections.push(`[ELEVATED MEMORY — Chapter ${chapterId}]\n${body}\n[END ELEVATED MEMORY]`);
             }
             const text = sections.join('\n\n');
@@ -484,7 +452,7 @@ export function buildWorld(opts: {
                 if (drift && fieldTagMatches('drift', npc.fieldTags, plannerTags)) extParts.push(drift);
                 if (archiveIndex && fieldTagMatches('knowledgeBoundary', npc.fieldTags, plannerTags)) {
                     const divergenceFacts = divergenceRegister?.entries;
-                    const boundary = buildKnowledgeBoundary(npc, archiveIndex, divergenceFacts);
+                    const boundary = buildKnowledgeBoundary(npc, archiveIndex, divergenceFacts, resolveWitness);
                     if (boundary) extParts.push(boundary);
                 }
                 // Reaction menu (Phase 2 §9.1) — on-stage NPCs only; the engine-scored menu is the

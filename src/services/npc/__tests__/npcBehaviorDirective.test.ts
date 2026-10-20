@@ -4,6 +4,7 @@ import {
     buildDriftAlert,
     buildKnowledgeBoundary,
 } from '../npcBehaviorDirective';
+import { createWitnessResolver } from '../witnessResolve';
 import type { NPCEntry, ArchiveIndexEntry, DivergenceEntry } from '../../../types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -319,6 +320,21 @@ describe('buildKnowledgeBoundary — Layer 1 (scene-witness filter)', () => {
         ];
         const out = buildKnowledgeBoundary(baseNPC({ name: 'Aldric' }), entries);
         expect(out).toContain('Scene 1: alpha; Scene 2: beta');
+    });
+    it('a short witness name ("Rin") counts as the NPC being present', () => {
+        const entries = [
+            archiveEntry({ sceneId: '5', witnesses: ['Rin'], importance: 7, userSnippet: 'the deal' }),
+        ];
+        expect(buildKnowledgeBoundary(baseNPC({ name: 'Rin Holmes' }), entries)).toBe('');
+    });
+    it('with the ledger resolver, an ambiguous short name counts for nobody', () => {
+        const rin = baseNPC({ id: 'npc_rin', name: 'Rin Holmes' });
+        const grey = baseNPC({ id: 'npc_grey', name: 'Grey Holmes' });
+        const entries = [
+            archiveEntry({ sceneId: '5', witnesses: ['Holmes'], importance: 7, userSnippet: 'the deal' }),
+        ];
+        const out = buildKnowledgeBoundary(rin, entries, undefined, createWitnessResolver([rin, grey]));
+        expect(out).toContain('Scene 5: the deal');
     });
 });
 

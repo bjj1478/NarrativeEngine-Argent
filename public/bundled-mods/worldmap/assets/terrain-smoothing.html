@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Map terrain smoothing</title>
+<style>body{background:#101d22;color:#e6eee2;font:15px system-ui;margin:24px}h1{font-size:24px}p{color:#acbbb3}main{display:flex;gap:20px}canvas{image-rendering:pixelated;background:#17252d;border-radius:8px}h2{font-size:17px}</style>
+<h1>Softer terrain, crisp sprites</h1><p>Terrain transitions, coherent fields, quieter ground, and an inward fog fringe.</p><main><section><h2>Before</h2><canvas id="before" width="512" height="384"></canvas></section><section><h2>After</h2><canvas id="after" width="512" height="384"></canvas></section></main>
+<script type="module">
+import {paintPixelCell,paintPixelObjects,paintPixelFog,paintTerrainVariant,terrainVariant,loadPixelArt,drawPixelSprite} from '../pixelArt.js';
+await loadPixelArt();
+const generated=new Set(), visible=new Set();
+const biome=(x,y)=>x>9+Math.sin(y*.7)*2?'farmland':Math.hypot(x-5,y-3)<3.5?'volcanic':'plains';
+for(let y=-1;y<13;y++)for(let x=-1;x<17;x++)if(x<14+Math.sin(y*.6)*2){generated.add(`${x},${y}`);if(Math.hypot(x-5,y-8)<5)visible.add(`${x},${y}`);}
+const store={getCell:(x,y)=>generated.has(`${x},${y}`)?{biome:biome(x,y)}:null};
+for(const id of ['before','after']){
+ const ctx=document.querySelector('#'+id).getContext('2d');
+ for(let y=0;y<12;y++)for(let x=0;x<16;x++){
+  if(!store.getCell(x,y))continue;
+  if(id==='before')paintTerrainVariant(ctx,biome(x,y),terrainVariant(x,y),x*32,y*32,32);
+  else paintPixelCell(ctx,store,x,y,x*32,y*32,32);
+ }
+ for(let y=0;y<12;y++)for(let x=0;x<16;x++)paintPixelObjects(ctx,store,x,y,x*32,y*32,32);
+ if(id==='before'){
+  ctx.strokeStyle='rgba(220,220,220,.28)';ctx.beginPath();for(let x=0;x<=16;x++){ctx.moveTo(x*32,0);ctx.lineTo(x*32,384);}for(let y=0;y<=12;y++){ctx.moveTo(0,y*32);ctx.lineTo(512,y*32);}ctx.stroke();
+ }
+ for(let y=0;y<12;y++)for(let x=0;x<16;x++){
+  if(id==='after')paintPixelFog(ctx,generated,visible,true,x,y,x*32,y*32,32);
+  else if(!visible.has(`${x},${y}`)){ctx.fillStyle=generated.has(`${x},${y}`)?'rgba(12,23,30,.48)':'#17252d';ctx.fillRect(x*32,y*32,32,32);}
+ }
+ drawPixelSprite(ctx,13,3*32,8*32,48);drawPixelSprite(ctx,5,10*32,7*32,40);
+}
+window.previewReady=true;
+</script></html>

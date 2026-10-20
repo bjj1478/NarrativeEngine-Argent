@@ -2,11 +2,17 @@ import type { EndpointConfig, ProviderConfig, SceneEvent, SceneEventType } from 
 import { llmCall } from '../../utils/llmCall';
 import { extractJsonRobust } from '../infrastructure/jsonExtract';
 import { AI_CALL_TIMEOUT_MS } from '../llm/timeouts';
+import type { ModelRequest, ModelResponse } from '../turn/hostFacade';
 
+/**
+ * `modelCall` is the host-facade path the post-turn pipeline uses; `provider`
+ * is the direct path. With neither, there is nothing to call and no events.
+ */
 export async function extractSceneEvents(
-    provider: EndpointConfig | ProviderConfig,
+    provider: EndpointConfig | ProviderConfig | undefined,
     sceneText: string,
     signal?: AbortSignal,
+    modelCall?: (request: ModelRequest) => Promise<ModelResponse>,
 ): Promise<SceneEvent[]> {
     const prompt = `You are a TTRPG campaign archivist. Analyze the following scene text and extract structured events that occurred in this scene.
 
@@ -40,15 +46,23 @@ RULES:
 
 Respond with a JSON array only. No markdown formatting, no prose, no reasoning tags, no backticks.`;
 
+    // Thinking off: a short JSON answer. A thinking endpoint left at its own effort
+    // can spend the whole 1000-token budget reasoning and return nothing.
+    const request = {
+        temperature: 0.1,
+        priority: 'low' as const,
+        maxTokens: 1000,
+        thinkingEffort: 'off' as const,
+        signal,
+        trackingLabel: 'scene-event-extract',
+        timeoutMs: AI_CALL_TIMEOUT_MS,
+    };
     try {
-        const raw = await llmCall(provider, prompt, {
-            temperature: 0.1,
-            priority: 'low',
-            maxTokens: 1000,
-            signal,
-            trackingLabel: 'scene-event-extract',
-            timeoutMs: AI_CALL_TIMEOUT_MS,
-        });
+        const raw = modelCall
+            ? (await modelCall({ prompt, ...request })).content
+            : provider
+                ? await llmCall(provider, prompt, request)
+                : '';
 
         const { value: parsed, parseOk } = extractJsonRobust<unknown[]>(raw, []);
         if (!parseOk || !Array.isArray(parsed)) return [];

@@ -36,7 +36,6 @@ function build(onStageNpcIds: string[]) {
         onStageNpcIds,
         budgetWorld: 8192,
         npcBudgetFloor: 2048,
-        isDebug: false,
         collector: createTraceCollector(false),
     });
 }

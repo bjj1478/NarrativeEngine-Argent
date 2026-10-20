@@ -1,23 +1,24 @@
 // NPC Agency Engine — Phase 2 port wrapper. Mobile source: turnPostProcess.ts:531-927
 // (runAgencyTick + runTimeskipPath + bumpOnStageActivity). Faithful port with the minimal
 // desktop adaptations:
-//   - The caller (`tracks/sequential/agencyTrack.ts`) gates this whole function on
-//     `tierAllows(aiTier, 'heartbeatTick')`, so nothing here runs on lite. The
-//     `timeskipRun` check below uses the REAL `tierAllows`: it used to be a local stub
-//     that always returned true, which made the Block View's "Timeskip Narration"
-//     switch inert while "NPC Agency Heartbeat" — whose description never mentions time
-//     skips — was the actual kill switch. Mobile already used the real gate
+//   - The caller (`tracks/sequential/agencyTrack.ts`) gates this whole function on the
+//     heartbeat block, so nothing here runs on lite. The `timeskipRun` check below uses
+//     the REAL gate (`isBlockEnabled`): it used to be a local stub that always returned
+//     true, which made the Block View's "Timeskip Narration" switch inert while
+//     "NPC Agency Heartbeat" — whose description never mentions time skips — was the
+//     actual kill switch. Mobile already used the real gate
 //     (`mobile/src/services/turn/postTurn/npcStage.ts`).
 //   - `state.getFreshSummarizerProvider` (mobile) → `state.getUtilityEndpoint` (desktop has no
 //     separate summarizer slot; the utility endpoint is the closest low-priority background LLM).
 //   - Prompt-section helpers (TTRPG_PERSONA_GM_ASSISTANT, joinPromptSections, ANCHOR_BEFORE_INPUT,
 //     INPUT_DELIMITER) are inlined since desktop has no shared infrastructure/utilityPrompts module.
 
-import type { NPCEntry, SceneStakes } from '../../../types';
+import type { NPCEntry, SceneStakes, ThinkingEffort } from '../../../types';
 import type { TurnState, TurnCallbacks } from '../../turn/turnOrchestrator';
 import { hasHostModelRole, type HostFacade } from '../../turn/hostFacade';
 import { uid } from '../../../utils/uid';
 import { llmCall } from '../../../utils/llmCall';
+import { applyActiveSlotThinking } from '../../../store/slices/slotThinking';
 import { backgroundQueue } from '../../infrastructure/backgroundQueue';
 
 import { HEARTBEAT_DC, GOAL_BASE_DC, COLLISION_TANGLE_PROB, type Band } from './agencyConstants';
@@ -32,7 +33,7 @@ import { detectCollision, resolveTangle, buildTangleDeltas } from './agencyColli
 import { buildDigest, visibilityFromBand, type TickDelta } from './agencyDigest';
 import { detectTimeskip, runTimeskip } from './agencyTimeskipRun';
 import { isAgencyEligible } from './agencyLifecycle';
-import { tierAllows } from '../../turn/aiTier';
+import { isBlockEnabled } from '../../turn/blockEnablement';
 
 // Inlined from mobile's services/infrastructure/utilityPrompts (desktop has no equivalent).
 const TTRPG_PERSONA_GM_ASSISTANT = 'You are a background GM assistant running silently.';
@@ -56,9 +57,13 @@ export function runAgencyTick(
         : callbacks;
     const context = facade?.data.context ?? state.context;
     const aiTier = facade?.config.aiTier ?? state.settings.aiTier;
+    const moduleEnabled = facade?.config.moduleEnabled ?? state.settings.moduleEnabled;
     const sceneStakes: SceneStakes = context.lastSceneStakes ?? 'calm';
     const currentTick = context.agencyTick ?? 0;
     const currentDc = context.agencyHeartbeatDC ?? HEARTBEAT_DC.initial;
+    // The digest is read live: the commit's prologue clears last turn's digest after
+    // `context` was captured, and appending to the captured copy brought it back.
+    const liveDigest = (): string => (state.getFreshContext?.() ?? context).agencyDigest ?? '';
 
     // ── Timeskip (§9.7 Piece D, +1 LLM) ──
     // An explicit skip (the Skip Time button) wins over the phrase detector and skips
@@ -69,14 +74,14 @@ export function runAgencyTick(
     const detectedWeeks = detected && !('ambiguous' in detected) ? detected.weeks : undefined;
     const timeskipWeeks = explicitWeeks ?? detectedWeeks;
     if (timeskipWeeks !== undefined && timeskipWeeks > 0) {
-        if (tierAllows(aiTier, 'timeskipRun')) {
+        if (isBlockEnabled('timeskipRun', aiTier, moduleEnabled)) {
             runTimeskipPath(state, callbacks, npcLedger, timeskipWeeks, currentTick, sceneStakes, facade);
             return;
         }
     }
 
     // ── Heartbeat trickle (§5/§9.3#1, +0 LLM) ──
-    if (!tierAllows(aiTier, 'heartbeatTick')) return;
+    if (!isBlockEnabled('heartbeatTick', aiTier, moduleEnabled)) return;
 
     const heartbeat = rollHeartbeat({ dc: currentDc });
     writeCallbacks.updateContext({ agencyHeartbeatDC: heartbeat.nextDc });
@@ -149,7 +154,7 @@ export function runAgencyTick(
                 collision.tone,
             );
 
-            const existingDigest = state.context.agencyDigest ?? '';
+            const existingDigest = liveDigest();
             const newDigest = buildDigest(tangleDeltas, 'player');
             if (newDigest) {
                 const combined = existingDigest ? existingDigest + '\n' + newDigest : newDigest;
@@ -218,7 +223,7 @@ export function runAgencyTick(
             note: '',
         };
 
-        const existingDigest = state.context.agencyDigest ?? '';
+        const existingDigest = liveDigest();
         const newDigest = buildDigest([delta], 'player');
         if (newDigest) {
             const combined = existingDigest ? existingDigest + '\n' + newDigest : newDigest;
@@ -304,14 +309,14 @@ function runTimeskipPath(
     });
 
     // Desktop has no dedicated summarizer slot; utility is preferred, then story.
-    const provider = facade ? undefined : state.getUtilityEndpoint?.() ?? state.getFreshProvider();
+    const provider = facade ? undefined : state.getUtilityEndpoint?.() ?? applyActiveSlotThinking(state.settings, 'utility', state.getFreshProvider());
     const modelRole = facade && hasHostModelRole(facade, 'utility')
         ? 'utility' as const
         : facade && hasHostModelRole(facade, 'story')
             ? 'story' as const
             : undefined;
     const modelCall = modelRole
-        ? (request: { prompt: string; signal?: AbortSignal; maxTokens?: number; priority?: 'low'; trackingLabel?: string; timeoutMs?: number }) =>
+        ? (request: { prompt: string; signal?: AbortSignal; maxTokens?: number; priority?: 'low'; thinkingEffort?: ThinkingEffort; trackingLabel?: string; timeoutMs?: number }) =>
             facade!.model.call(modelRole, request).then(result => result.content)
         : undefined;
 
@@ -350,7 +355,8 @@ function runTimeskipPath(
     if (result.deltas.length > 0) {
         const digestText = buildDigest(result.deltas, 'player');
         if (digestText) {
-            const existing = context.agencyDigest ?? '';
+            // Live, for the same reason as `liveDigest` in runAgencyTick.
+            const existing = (state.getFreshContext?.() ?? context).agencyDigest ?? '';
             const combined = existing ? existing + '\n' + digestText : digestText;
             writeCallbacks.updateContext({ agencyDigest: combined });
         }
@@ -380,14 +386,17 @@ function runTimeskipPath(
                     `OFF-SCREEN DEVELOPMENTS:\n${result.narration}`,
                 );
                 const narrationText = modelCall
-                    ? await modelCall({ prompt: narrationPrompt, priority: 'low', maxTokens: 300, trackingLabel: 'timeskip-narration', timeoutMs: 120000 })
+                    ? await modelCall({ prompt: narrationPrompt, priority: 'low', maxTokens: 300, thinkingEffort: 'off', trackingLabel: 'timeskip-narration', timeoutMs: 120000 })
                     : await llmCall(provider!, narrationPrompt, { priority: 'low', maxTokens: 300, thinkingEffort: 'off' });
-                if (narrationText && narrationText.trim()) {
+                // An empty reply (e.g. a thinking endpoint spending the 300 tokens on reasoning)
+                // used to add nothing; fall back to the deterministic narration like a throw does.
+                const seamText = narrationText?.trim() || result.narration;
+                if (seamText) {
                     callbacks.addMessage({
                         id: uid(),
                         role: 'system',
                         name: 'timeskip-seam',
-                        content: `[Time passes] ${narrationText.trim()}`,
+                        content: `[Time passes] ${seamText}`,
                         timestamp: Date.now(),
                     });
                 }

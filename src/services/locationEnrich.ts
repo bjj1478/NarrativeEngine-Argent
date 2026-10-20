@@ -17,7 +17,8 @@ import { llmCall } from '../utils/llmCall';
 import { AI_CALL_TIMEOUT_MS } from './llm/timeouts';
 import { connectionBand, resolvePlace } from './locationParser';
 import { useAppStore } from '../store/useAppStore';
-import { tierAllows } from './turn/aiTier';
+import { applyActiveSlotThinking } from '../store/slices/slotThinking';
+import { isBlockEnabled } from './turn/blockEnablement';
 import { toast } from '../components/Toast';
 import { LOCATION_BIOMES, requestPlacementContext, sanitizePlacement } from './location/placement';
 import { DISTANCE_BANDS } from './location/distance';
@@ -214,8 +215,8 @@ export function queueLocationEnrichment(entryId: string): void {
             ...(!location.knowledge && !location.coordinates ? { knowledge: live.context?.currentPlaceId === entryId ? 'visited' as const : 'rumoured' as const } : {}),
             ...(!location.coordinates && !location.placement ? { placement: { preferredBiomes: [] } } : {}) });
     };
-    if (!tierAllows(s.settings.aiTier, 'locationEnrich')) { release(); return; }
-    const provider = s.getActiveSummarizerEndpoint() ?? s.getActiveUtilityEndpoint() ?? s.getActiveStoryEndpoint();
+    if (!isBlockEnabled('locationEnrich', s.settings.aiTier, s.settings.moduleEnabled)) { release(); return; }
+    const provider = applyActiveSlotThinking(s.settings, 'summarizer', s.getActiveSummarizerEndpoint() ?? s.getActiveUtilityEndpoint() ?? s.getActiveStoryEndpoint());
     if (!provider) { release(); return; }
     const entry = s.locationLedger.find(l => l.id === entryId);
     if (!entry) return;

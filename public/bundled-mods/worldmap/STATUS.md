@@ -415,3 +415,48 @@ Playtest after reload:
 5. Inside a settlement, enter a room or district: only currentFeature should change. Remembering another town must not move the party.
 
 Limits: commit remains the existing next-send/exit lifecycle, not live streaming. Free-chat route departures require a known destination; arbitrary compass-direction exploration is not implemented here. Model compliance and narrative quality require live playtesting; malformed replies fail without moving, and older replies without a contract retain header compatibility. Existing saved custom rules are not overwritten.
+
+## Travel time: days or hours
+
+Edit world → Travel time switches what one travel step stands for. Routes,
+distances and leg counts do not change; only the clock and the wording do.
+In Hours, each press spends one hour of travel (the day rolls over after eight
+travelled hours, the same budget short passages use), the [TRAVEL] block reads
+"Hour N of M", Nearby ranges and director travel facts read in hours, and the
+map labels stops and estimates in hours. A journey keeps the unit it departed
+with; tunnels always travel in days. The setting lives on the campaign context
+(`travelUnit`) and reaches the mod read-only through `data.location`.
+Verified by `src/services/turn/__tests__/travelUnit.test.ts` and a Chromium
+journey in `e2e/worldMapTravel.spec.ts`.
+
+
+## Presentation polish — 2026-10-11
+
+Layout, wording and map look; no travel, routing or storage rule changed.
+
+- **Panels dock in two columns** (left: status, world setting, checkpoint,
+  sites; right: zoom, layers, route, roads, scale). They stack and scroll
+  instead of sliding under one another in a short window. The permanent fog
+  caption moved to the Fog toggle's tooltip; the terrain readout follows the
+  cursor and still ends with the cell coordinates for the Places panel.
+- **Wording:** the status line reads "Day 12 · Alder" / "On the road to Birch";
+  routes read "6 days · 48 km"; unnamed exploration points show as "Open ground
+  to the west" (the stored name is unchanged, `locationRecords.ts` relies on
+  it); uncertain routes read "uncharted route"; journal rows drop coordinates;
+  long local trips read "6 h 42 min".
+- **Map type:** names are set in Cinzel / EB Garamond (already loaded by the
+  host page) with a parchment halo instead of a box, by rank, and a placement
+  pass drops any name that would collide. Town names show at every zoom.
+  The party stands beside its town's icon instead of on it; route ends carry
+  a flag. The off-screen party arrow's distance is readable and in km.
+- **Terrain:** biome and coast boundaries use marching squares over shared
+  cell corners with world-space wobble, so staircases read as shorelines and
+  field margins; lone cells keep a rounded core. Beaches and surf follow the
+  smoothed coast; the sea is tinted by depth. Below 8 px per cell the ground
+  is flat colour. Fog is one smoothed texture (no seams, a circular sight
+  fade); explored-but-unseen ground is dimmed less (0.36, was 0.48).
+
+Verified: 5,588 unit tests, all 31 `worldMapTravel` Chromium scenarios and 6
+of 7 `worldMapTerrain` checks pass. The remaining terrain check ("every biome
+on screen is drawn in its own colour") fails identically on the previous
+commit: its classifier uses `field.js` colours, not the pixel palette.

@@ -21,10 +21,11 @@
 // WO-12b Corrections:
 //   1. Strict on-stage witness authorization — the allowed set is built from
 //      `onStageNpcIds` ONLY (not every non-archived ledger NPC). A witnessed
-//      scene passes only if at least one witness ID is in `onStageNpcIds`.
-//      `npcLedger` remains the ID-to-display-name lookup; it is NOT an
-//      authorization source. `witnessedBy` carries only the matching on-stage
-//      witness names, in the archive entry's witness order.
+//      scene passes only if at least one witness resolves to an NPC in
+//      `onStageNpcIds`. Witnesses are stored as names, so `npcLedger` resolves
+//      them (npc/witnessResolve.ts); it is NOT an authorization source.
+//      `witnessedBy` carries the ledger names of the matching on-stage
+//      witnesses, in the archive entry's witness order.
 //   2. Verbatim index snippets only — the sole snippet candidate is the
 //      trimmed `ArchiveIndexEntry.userSnippet` (capped at 200 chars).
 //      `SceneEvent.text` and other extracted/generated metadata are NOT
@@ -37,7 +38,8 @@
 import type { ArchiveChapter, ArchiveIndexEntry, NPCEntry } from '../../types';
 import type { TurnState } from '../turn/turnOrchestrator';
 import type { HostFacade } from '../turn/hostFacade';
-import { tierAllows } from '../turn/aiTier';
+import { isBlockEnabled } from '../turn/blockEnablement';
+import { createWitnessResolver } from '../npc/witnessResolve';
 
 export type SlottedRagSnippet = {
     sceneId: string;
@@ -66,12 +68,13 @@ const SNIPPET_MAX_CHARS = 200;
  *     authorization source — an off-stage but non-archived NPC does NOT
  *     authorize a flash.
  *   - A scene with no witnesses (broadcast) passes.
- *   - A scene with witnesses passes only if at least one witness ID is in
+ *   - A scene with witnesses passes only if at least one witness resolves
+ *     (name, alias, or id; see npc/witnessResolve.ts) to an NPC in
  *     `onStageNpcIds`. If no NPC is on stage, every witnessed scene is
  *     dropped; broadcast scenes still pass.
- *   - For a passing witnessed scene, `witnessedBy` contains ONLY the matching
- *     on-stage witness names, in the archive entry's witness order. Off-stage
- *     witnesses are NOT attributed in the rendered flash.
+ *   - For a passing witnessed scene, `witnessedBy` contains ONLY the ledger
+ *     names of the matching on-stage witnesses, in the archive entry's witness
+ *     order. Off-stage witnesses are NOT attributed in the rendered flash.
  *   - The filter only applies when some scene in the index carries witness
  *     data (mirrors `world.ts` guard — avoids filtering when no witness data
  *     exists, so broadcast-only indexes pass through unchanged).
@@ -130,12 +133,10 @@ export function buildSlottedRagSnippets(params: {
 
     // WO-12b Correction 1: the authorization set is `onStageNpcIds` ONLY.
     // `npcLedger` is NOT an authorization source — an off-stage but non-archived
-    // NPC does NOT authorize a flash. `npcLedger` remains the ID-to-display-name
-    // lookup for the rendered "witnessed by" attribution.
+    // NPC does NOT authorize a flash. `npcLedger` resolves the stored witness
+    // names to NPCs for the on-stage check and the "witnessed by" attribution.
     const onStageSet = new Set(onStageNpcIds);
-
-    // NPC id → name lookup for the "witnessed by" label.
-    const npcNameMap = new Map(npcLedger.map(n => [n.id, n.name]));
+    const resolveWitness = createWitnessResolver(npcLedger);
 
     // Only apply the witness filter if some scene in the index has witness data
     // (mirrors world.ts guard — avoids filtering when no witness data exists).
@@ -153,9 +154,9 @@ export function buildSlottedRagSnippets(params: {
 
         // WO-12b Correction 1: strict on-stage witness authorization.
         //   - Broadcast (no witnesses) passes.
-        //   - Witnessed scenes pass only if at least one witness ID is in
-        //     `onStageNpcIds`. If no NPC is on stage, every witnessed scene
-        //     is dropped; broadcast scenes still pass.
+        //   - Witnessed scenes pass only if at least one witness resolves to
+        //     an NPC in `onStageNpcIds`. If no NPC is on stage, every
+        //     witnessed scene is dropped; broadcast scenes still pass.
         //   - For a passing witnessed scene, `witnessedBy` carries ONLY the
         //     matching on-stage witness names, in archive entry witness order.
         let witnessedBy: string[] | 'all';
@@ -163,14 +164,14 @@ export function buildSlottedRagSnippets(params: {
             const witnesses = entry.witnesses;
             if (witnesses && witnesses.length > 0) {
                 // Keep only the on-stage witnesses, in archive entry order.
-                const onStageWitnessIds = witnesses.filter(w => onStageSet.has(w));
-                if (onStageWitnessIds.length === 0) continue; // no on-stage witness — drop
-                witnessedBy = onStageWitnessIds
-                    .map(w => npcNameMap.get(w) ?? w)
-                    .filter(Boolean);
-                // If every name resolved to empty via the lookup (unknown IDs),
-                // fall back to the raw IDs so the attribution is not silently empty.
-                if (witnessedBy.length === 0) witnessedBy = onStageWitnessIds.slice();
+                const onStageNames: string[] = [];
+                for (const w of witnesses) {
+                    for (const npc of resolveWitness(w)) {
+                        if (onStageSet.has(npc.id) && !onStageNames.includes(npc.name)) onStageNames.push(npc.name);
+                    }
+                }
+                if (onStageNames.length === 0) continue; // no on-stage witness — drop
+                witnessedBy = onStageNames;
             } else {
                 witnessedBy = 'all'; // broadcast
             }
@@ -219,7 +220,7 @@ export function gatherSlottedRag(
     },
     facade?: HostFacade,
 ): SlottedRagResult {
-    if (!tierAllows(facade?.config.aiTier ?? state.settings.aiTier, 'lodSlottedRag')) return { snippets: [] };
+    if (!isBlockEnabled('lodSlottedRag', facade?.config.aiTier ?? state.settings.aiTier, facade?.config.moduleEnabled ?? state.settings.moduleEnabled)) return { snippets: [] };
 
     const archiveIndex = facade?.data.archiveIndex ?? state.archiveIndex;
     const npcLedger = facade?.data.npcLedger ?? state.npcLedger;

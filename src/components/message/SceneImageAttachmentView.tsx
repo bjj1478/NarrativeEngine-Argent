@@ -188,7 +188,7 @@ export function SceneImageAttachmentView({ attachment, messageId }: SceneImageAt
             {/* Lightbox Modal */}
             {isLightboxOpen && attachment.imageUrl && (
                 <div
-                    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4 backdrop-blur-md animate-[fadeIn_0.15s_ease-out]"
+                    data-motion="overlay" className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4 backdrop-blur-md animate-[fadeIn_0.15s_ease-out]"
                     onClick={() => setIsLightboxOpen(false)}
                 >
                     <div

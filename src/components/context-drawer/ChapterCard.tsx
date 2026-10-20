@@ -302,7 +302,7 @@ export const ChapterCard = memo(function ChapterCard({
                                     </button>
                                     
                                     {showSplitInput && (
-                                        <div className="absolute bottom-full left-0 mb-2 p-2 bg-void-dark border border-border-bright rounded shadow-lg z-10 w-48">
+                                        <div data-motion="popover" className="absolute bottom-full left-0 mb-2 p-2 bg-void-dark border border-border-bright rounded shadow-lg z-10 w-48">
                                             <p className="text-[12px] uppercase font-bold text-text-muted mb-1">Split at Scene ID:</p>
                                             <div className="flex gap-1">
                                                 <input

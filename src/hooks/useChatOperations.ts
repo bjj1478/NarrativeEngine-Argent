@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../store/useAppStore';
+import { applyActiveSlotThinking } from '../store/slices/slotThinking';
 import { runTurn } from '../services/turn/turnOrchestrator';
 import { resolveGalleryRecall } from '../services/gallery/galleryIndex';
 import { formatAttachmentBlock } from '../services/vision/describeImage';
@@ -41,19 +42,9 @@ export function useChatOperations({
      *  empty-input guard — sending a picture with no words is a real message. */
     hasAttachment?: () => boolean;
 }) {
-    const context = useAppStore(s => s.context);
     const activeCampaignId = useAppStore(s => s.activeCampaignId);
     const deepArmed = useAppStore(s => s.deepArmed);
     const setDeepArmed = useAppStore(s => s.setDeepArmed);
-
-    const { settings, loreChunks, npcLedger, archiveIndex } = useAppStore(
-        useShallow(s => ({
-            settings: s.settings,
-            loreChunks: s.loreChunks,
-            npcLedger: s.npcLedger,
-            archiveIndex: s.archiveIndex,
-        }))
-    );
 
     const {
         setArchiveIndex, updateLastAssistant, updateLastAssistantMessage, updateContext, setCondensed,
@@ -232,8 +223,6 @@ ${textToUse}` : attachmentBlock)
         // turn's abort signal via `AbortSignal.any`.
         directorAbortRef.current = new AbortController();
 
-        const storeSnapshot = useAppStore.getState();
-
         // Swipe Generation v1 — commit any pending turn BEFORE the next turn's
         // gatherContext. The previous turn's post-turn work (archive append,
         // agency tick, arc tick, witness capture) must fire on the variant the
@@ -241,6 +230,12 @@ ${textToUse}` : attachmentBlock)
         // swipe result still streaming in the background finishes and fills its
         // slot (the onDone guard drops it silently once commit fired).
         await commitPendingTurn().catch(e => console.warn('[ChatArea] commit failed:', e));
+
+        // Read the store AFTER the commit. A snapshot taken before it built every turn
+        // from the state one commit behind: the new scene, NPC updates, on-stage cast,
+        // agency digest and scene stakes all reached the writer a turn late.
+        const storeSnapshot = useAppStore.getState();
+        const { settings, context, loreChunks, npcLedger, archiveIndex } = storeSnapshot;
 
         const storyProvider = storeSnapshot.getActiveStoryEndpoint();
         if (!storyProvider) return;
@@ -292,8 +287,10 @@ ${textToUse}` : attachmentBlock)
             armedOneShot: useArmedOneShot,
             absoluteCommand: useAbsoluteCommand,
             getFreshAuxiliaryProvider: () => {
-                const aux = useAppStore.getState().getActiveAuxiliaryEndpoint();
-                return aux?.modelName ? aux : useAppStore.getState().getActiveStoryEndpoint();
+                const live = useAppStore.getState();
+                const aux = live.getActiveAuxiliaryEndpoint();
+                // A story fallback is still doing the auxiliary job, so it takes the auxiliary slot's thinking.
+                return aux?.modelName ? aux : applyActiveSlotThinking(live.settings, 'auxiliary', live.getActiveStoryEndpoint());
             },
             nextTurnOocBrief: useAskGmBrief,
             directorSkipController: directorAbortRef.current,

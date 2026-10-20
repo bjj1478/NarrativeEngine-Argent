@@ -197,6 +197,13 @@ describe('buildPayload — scenario 1: minimal', () => {
         expect(result.messages[0].content).toContain('ROLE: Dynamic-Realism GM.');
     });
 
+    // Ported from mobile: desktop never asked for the tag (0 in ~1,200 scenes), so the
+    // fallback classifier ran before every Send.
+    it('the stable system message asks the GM for the scene-stakes tag', () => {
+        const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'Hello world' });
+        expect(result.messages[0].content).toContain('[[SCENE_STAKES: calm|tense|dangerous]]');
+    });
+
     it('the final user message contains the GM REMINDER literal', () => {
         const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'Hello world' });
         const lastMsg = result.messages[result.messages.length - 1];
@@ -391,51 +398,56 @@ describe('buildPayload — scenario 3: NPC tiered directive', () => {
     });
 });
 
-// ── Scenario 4: Perceptual archive filter ─────────────────────────────────────
-describe('buildPayload — scenario 4: perceptual archive filter', () => {
-    const activeNpc = makeNPC({ id: 'active_npc', name: 'Oswin', archived: false });
+// ── Scenario 4: Archive recall witness labels ─────────────────────────────────
+// Witness lists are stored as names. Recall used to drop scenes by comparing them
+// against NPC ids, which matched nothing and emptied recall; now every scene is
+// kept and labeled with the ledger names of its witnesses.
+describe('buildPayload — scenario 4: archive recall witness labels', () => {
+    const activeNpc = makeNPC({ id: 'active_npc', name: 'Oswin Hale', archived: false });
     const archivedNpc = makeNPC({ id: 'archived_npc', name: 'OldGhost', archived: true });
 
-    const witnessedScene = makeArchiveScene('001', 'Oswin saw the dragon fly over the tower.');
-    const unwitnessedScene = makeArchiveScene('002', 'A secret meeting no NPC witnessed.');
+    const oswinScene = makeArchiveScene('001', 'Oswin saw the dragon fly over the tower.');
+    const ghostScene = makeArchiveScene('002', 'A secret meeting only OldGhost attended.');
+    const strangerScene = makeArchiveScene('003', 'A stranger nobody knows watched the docks.');
 
     const archiveIndex: ArchiveIndexEntry[] = [
-        makeArchiveIndexEntry('001', ['active_npc']),   // witnessed by active NPC
-        makeArchiveIndexEntry('002', ['archived_npc']), // only witnessed by archived NPC
+        makeArchiveIndexEntry('001', ['Oswin']),            // short name for "Oswin Hale"
+        makeArchiveIndexEntry('002', ['OldGhost']),         // only an archived NPC
+        makeArchiveIndexEntry('003', ['Unknown Stranger']), // not in the ledger
     ];
 
-    it('trace shows perceptual filter removed unwitnessed scenes', () => {
-        const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'What do you recall?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [activeNpc, archivedNpc], archiveRecall: [witnessedScene, unwitnessedScene], recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: archiveIndex });
-        const filterTrace = (result.trace ?? []).find(
-            t => t.source === 'Archive Recall' && t.included === false && t.reason.includes('Perceptual filter removed')
-        );
-        expect(filterTrace).toBeDefined();
-    });
-
-    it('unwitnessed scene content is absent from assembled messages', () => {
-        const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'What do you recall?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [activeNpc, archivedNpc], archiveRecall: [witnessedScene, unwitnessedScene], recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: archiveIndex });
-        const allContent = result.messages
+    function recallContent(): string {
+        const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'What do you recall?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [activeNpc, archivedNpc], archiveRecall: [oswinScene, ghostScene, strangerScene], recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: archiveIndex });
+        return result.messages
             .map(m => (typeof m.content === 'string' ? m.content : ''))
             .join('\n');
-        expect(allContent).not.toContain('A secret meeting no NPC witnessed.');
-    });
+    }
 
-    it('witnessed scene content IS present in assembled messages', () => {
-        const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'What do you recall?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [activeNpc, archivedNpc], archiveRecall: [witnessedScene, unwitnessedScene], recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: archiveIndex });
-        const allContent = result.messages
-            .map(m => (typeof m.content === 'string' ? m.content : ''))
-            .join('\n');
+    it('keeps every recalled scene, whoever witnessed it', () => {
+        const allContent = recallContent();
         expect(allContent).toContain('Oswin saw the dragon fly over the tower.');
+        expect(allContent).toContain('A secret meeting only OldGhost attended.');
+        expect(allContent).toContain('A stranger nobody knows watched the docks.');
     });
 
-    it('scene with NO witnesses (broadcast) is always included', () => {
-        const broadcastScene = makeArchiveScene('003', 'The whole world heard the announcement.');
-        const broadcastIdx = makeArchiveIndexEntry('003', []); // empty witnesses = broadcast
+    it('labels each scene with the ledger names of its witnesses', () => {
+        const allContent = recallContent();
+        expect(allContent).toContain('[PAST SCENE — witnessed by Oswin Hale]\nOswin saw the dragon fly over the tower.');
+        expect(allContent).toContain('[PAST SCENE — witnessed by OldGhost]\nA secret meeting only OldGhost attended.');
+    });
+
+    it('a scene whose witnesses match no NPC gets a plain header', () => {
+        expect(recallContent()).toContain('[PAST SCENE]\nA stranger nobody knows watched the docks.');
+    });
+
+    it('scene with NO witnesses (broadcast) is included with a plain header', () => {
+        const broadcastScene = makeArchiveScene('004', 'The whole world heard the announcement.');
+        const broadcastIdx = makeArchiveIndexEntry('004', []); // empty witnesses = broadcast
         const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'What happened?', condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [activeNpc], archiveRecall: [broadcastScene], recommendedNPCNames: undefined, semanticFactText: undefined, archiveIndex: [broadcastIdx] });
         const allContent = result.messages
             .map(m => (typeof m.content === 'string' ? m.content : ''))
             .join('\n');
-        expect(allContent).toContain('The whole world heard the announcement.');
+        expect(allContent).toContain('[PAST SCENE]\nThe whole world heard the announcement.');
     });
 });
 

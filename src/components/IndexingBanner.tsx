@@ -24,7 +24,7 @@ function degradedLabel(health: VectorHealth | undefined): string | null {
     if (health.status === 'unavailable') {
         return 'Semantic memory is off: the vector database failed to open.';
     }
-    return `Embedding model changed — ${health.count} memories need re-indexing (Settings → Advanced → Re-index Now).`;
+    return `Memory index updated — ${health.count} memories need re-indexing (Settings → Advanced → Re-index Now).`;
 }
 
 export function IndexingBanner({ campaignId }: { campaignId: string | null }) {

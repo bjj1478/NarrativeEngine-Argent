@@ -1,30 +1,5 @@
 import type { PostTurnTrack, SequentialTrackContext } from '../types';
-
-const PRESENT_HEADER_RE = /👥\s*\[Present\]\s*(.+)/i;
-
-function parsePresentHeader(content: string): string[] | null {
-    const match = content.match(PRESENT_HEADER_RE);
-    if (!match) return null;
-    return match[1].split(/[,;]/).map(n => n.trim()).filter(Boolean);
-}
-
-function resolveNPCIds(
-    names: string[],
-    npcLedger: SequentialTrackContext['npcLedger'],
-): string[] {
-    const nameToId = new Map<string, string>();
-    for (const npc of npcLedger) {
-        const nameLower = npc.name.toLowerCase();
-        nameToId.set(nameLower, npc.id);
-        if (npc.aliases) {
-            npc.aliases.split(',').map(a => a.trim().toLowerCase()).filter(Boolean)
-                .forEach(a => nameToId.set(a, npc.id));
-        }
-    }
-    return names
-        .map(n => nameToId.get(n.toLowerCase()))
-        .filter((id): id is string => !!id);
-}
+import { parsePresentHeader, resolvePresentNpcs } from '../../../npc/presentHeader';
 
 export const onStageTrack: PostTurnTrack<SequentialTrackContext> = {
     id: 'track.on-stage',
@@ -36,10 +11,10 @@ export const onStageTrack: PostTurnTrack<SequentialTrackContext> = {
     callsModel: false,
     shouldRun: () => true,
     async run(ctx) {
-        const presentNames = parsePresentHeader(ctx.lastAssistantContent);
-        const onStageIds = presentNames && presentNames.length > 0
-            ? resolveNPCIds(presentNames, ctx.npcLedger)
-            : [];
+        // The shared 👥 parser accepts every header shape the rulesets use; the old
+        // exact `👥 [Present]` regex matched none of the owner's campaigns.
+        const presentNames = parsePresentHeader(ctx.lastAssistantContent) ?? [];
+        const onStageIds = resolvePresentNpcs(presentNames, ctx.npcLedger).map(npc => npc.id);
         ctx.onStageIds = onStageIds;
         ctx.callbacks.setOnStageNpcIds?.(onStageIds);
     },

@@ -43,7 +43,7 @@ const npc: NPCEntry = {
     personalityHex: { drive: 0, diligence: 0, boldness: -1, warmth: 0, empathy: 0, composure: 3 },
 };
 
-function makeContext(lastAssistantContent: string, aiTier: 'lite' | 'max' = 'max'): SequentialTrackContext {
+function makeContext(lastAssistantContent: string, aiTier: 'lite' | 'max' = 'max', moduleEnabled?: Record<string, boolean>): SequentialTrackContext {
     const callbacks = {
         addMessage: vi.fn(),
         updateContext: vi.fn(),
@@ -59,7 +59,7 @@ function makeContext(lastAssistantContent: string, aiTier: 'lite' | 'max' = 'max
     } as SequentialTrackContext['state'];
     const facade = {
         data: { npcLedger: [npc], context: {} },
-        config: { aiTier },
+        config: { aiTier, moduleEnabled },
         write: { updateNPC: vi.fn() },
     } as unknown as SequentialTrackContext['facade'];
 
@@ -111,6 +111,19 @@ describe('Stage B every-turn tracks', () => {
         expect(ctx.callbacks.setOnStageNpcIds).toHaveBeenCalledWith([]);
         expect(mockBuildReactionMenu).not.toHaveBeenCalled();
         expect(ctx.callbacks.updateNPC).not.toHaveBeenCalled();
+    });
+
+    it('Block View "off" for both the heartbeat and timeskip skips runAgencyTick on max', async () => {
+        const ctx = makeContext('The room is quiet.', 'max', { heartbeatTick: false, timeskipRun: false });
+        await settle(ctx);
+        expect(mockBumpOnStageActivity).toHaveBeenCalledTimes(1);
+        expect(mockRunAgencyTick).not.toHaveBeenCalled();
+    });
+
+    it('timeskip switched on alone still lets the tick in (it checks each path itself)', async () => {
+        const ctx = makeContext('The room is quiet.', 'lite', { timeskipRun: true });
+        await settle(ctx);
+        expect(mockRunAgencyTick).toHaveBeenCalledTimes(1);
     });
 
     it('keeps the unconditional activity bump while lite skips runAgencyTick', async () => {

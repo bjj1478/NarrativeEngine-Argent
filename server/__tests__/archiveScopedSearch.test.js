@@ -9,14 +9,15 @@ import path from 'path';
 const embedTextMock = vi.fn(async () => new Float32Array(32));
 vi.mock('../lib/embedder.js', () => ({
     embedText: embedTextMock,
-    buildArchiveText: vi.fn((entry) => `MOCK ${entry.sceneId}`),
+    embedQuery: embedTextMock,
+    buildScenePassages: vi.fn(() => ['MOCK passage']),
     buildLoreText: vi.fn(() => 'MOCK_LORE'),
     warmup: vi.fn(async () => {}),
     embedBatch: vi.fn(async () => []),
     getActiveDims: vi.fn(() => 32),
     getActiveModelId: vi.fn(() => 'mock'),
     isModelReady: vi.fn(() => true),
-    EMBEDDING_VERSION: 1,
+    EMBEDDING_VERSIONS: { scene: 2, lore: 1, rule: 1 },
 }));
 
 // Mock the vector store so DB init isn't required. The searchArchive mock
@@ -28,7 +29,7 @@ vi.mock('../lib/vectorStore.js', () => ({
     searchArchive: searchArchiveMock,
     searchLore: vi.fn(() => []),
     getEmbeddingStatus: vi.fn(() => ({ status: 'mock', loaded: true })),
-    EMBEDDING_VERSION: 1,
+    EMBEDDING_VERSIONS: { scene: 2, lore: 1, rule: 1 },
     getDb: vi.fn(() => null),
     deleteArchiveEmbedding: vi.fn(),
 }));
@@ -44,14 +45,15 @@ beforeEach(async () => {
 
     vi.doMock('../lib/embedder.js', () => ({
         embedText: embedTextMock,
-        buildArchiveText: vi.fn((entry) => `MOCK ${entry.sceneId}`),
+    embedQuery: embedTextMock,
+        buildScenePassages: vi.fn(() => ['MOCK passage']),
         buildLoreText: vi.fn(() => 'MOCK_LORE'),
         warmup: vi.fn(async () => {}),
         embedBatch: vi.fn(async () => []),
         getActiveDims: vi.fn(() => 32),
         getActiveModelId: vi.fn(() => 'mock'),
         isModelReady: vi.fn(() => true),
-        EMBEDDING_VERSION: 1,
+        EMBEDDING_VERSIONS: { scene: 2, lore: 1, rule: 1 },
     }));
     vi.doMock('../lib/vectorStore.js', () => ({
         storeArchiveEmbedding: vi.fn(),
@@ -59,7 +61,7 @@ beforeEach(async () => {
         searchArchive: searchArchiveMock,
         searchLore: vi.fn(() => []),
         getEmbeddingStatus: vi.fn(() => ({ status: 'mock', loaded: true })),
-        EMBEDDING_VERSION: 1,
+        EMBEDDING_VERSIONS: { scene: 2, lore: 1, rule: 1 },
         getDb: vi.fn(() => null),
         deleteArchiveEmbedding: vi.fn(),
     }));

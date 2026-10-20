@@ -3,7 +3,7 @@ import { API_BASE as API } from '../../lib/apiBase';
 export type BackfillStatus = {
     scenes: { total: number; current: number; stale: number };
     lore: { total: number; current: number; stale: number };
-    version: number;
+    versions: { scene: number; lore: number; rule: number };
 };
 
 export type BackfillResult = {

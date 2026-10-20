@@ -47,7 +47,8 @@ vi.mock('../../../llm/apiClient', () => ({
     },
 }));
 
-vi.mock('../../../archive-memory/importanceRater', () => ({
+vi.mock('../../../archive-memory/importanceRater', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../../archive-memory/importanceRater')>()),
     rateImportance: mocks.rateImportance,
 }));
 

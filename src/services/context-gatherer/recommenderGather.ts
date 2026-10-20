@@ -1,11 +1,13 @@
 import type { ArchiveChapter } from '../../types';
 import type { TurnState } from '../turn/turnOrchestrator';
 import { recommendContext } from '../turn/contextRecommender';
-import { tierAllows } from '../turn/aiTier';
+import { isBlockEnabled } from '../turn/blockEnablement';
 import { hasHostModelRole, type HostFacade } from '../turn/hostFacade';
 
 export type RecommenderResult = {
     recommendedNPCNames: string[] | undefined;
+    /** Lore chunk ids the recommender picked; lore selection fuses them in (loreRetriever.ts). */
+    recommendedLoreIds?: string[];
     inventoryCategories: string[] | undefined;
     profileFields: string[] | undefined;
 };
@@ -26,7 +28,7 @@ export async function gatherRecommender(
     const utilityEndpoint = facade ? undefined : state.getUtilityEndpoint?.();
     const utilityAvailable = facade ? hasHostModelRole(facade, 'utility') : Boolean(utilityEndpoint?.endpoint);
 
-    if (!utilityAvailable || !tierAllows(config?.aiTier ?? state.settings.aiTier, 'recommender')) {
+    if (!utilityAvailable || !isBlockEnabled('recommender', config?.aiTier ?? state.settings.aiTier, config?.moduleEnabled ?? state.settings.moduleEnabled)) {
         return { recommendedNPCNames: undefined, inventoryCategories: undefined, profileFields: undefined };
     }
 
@@ -57,12 +59,16 @@ export async function gatherRecommender(
             context.inventoryItems,
             context.characterProfileData,
             undefined,
-            facade ? (request: import('../turn/hostFacade').ModelRequest) => facade.model.call('utility', request) : undefined
+            facade ? (request: import('../turn/hostFacade').ModelRequest) => facade.model.call('utility', request) : undefined,
+            // Read through the block switch, not tierAllows: tierAllows ignores the
+            // Block View's explicit toggles, so a toggle read through it would do nothing.
+            isBlockEnabled('recommenderThinking', config?.aiTier ?? state.settings.aiTier, config?.moduleEnabled ?? state.settings.moduleEnabled),
         );
-        const { relevantNPCNames: recommendedNPCNames, inventoryCategories, profileFields } = result;
+        const { relevantNPCNames: recommendedNPCNames, inventoryCategories, profileFields, relevantLoreIds } = result;
         console.log(`[ContextGatherer] Recommender returned: ${recommendedNPCNames?.length || 0} NPCs, ${result.relevantLoreIds.length} lore, ${inventoryCategories?.length || 0} inv cats, ${profileFields?.length || 0} profile fields`);
         return {
             recommendedNPCNames: recommendedNPCNames ?? undefined,
+            recommendedLoreIds: relevantLoreIds,
             inventoryCategories: inventoryCategories ?? undefined,
             profileFields: profileFields ?? undefined,
         };

@@ -20,7 +20,6 @@ export function buildHistory(opts: {
      *  condensed portion stays dropped as before — nothing throws. */
     chapters?: ArchiveChapter[];
     archiveIndex?: ArchiveIndexEntry[];
-    onStageNpcIds?: string[];
     lodSummaryChapters?: number;
     lodImportanceBonus?: number;
 }): OpenAIMessage[] {
@@ -36,7 +35,6 @@ export function buildHistory(opts: {
         collector,
         chapters,
         archiveIndex,
-        onStageNpcIds,
         lodSummaryChapters,
         lodImportanceBonus,
     } = opts;
@@ -81,7 +79,6 @@ export function buildHistory(opts: {
         const lodResult = renderLodChapters({
             chapters,
             archiveIndex: archiveIndex ?? [],
-            onStageNpcIds: onStageNpcIds ?? [],
             condensedUpToIndex,
             messages: history,
             // Reserve the envelope cost from the renderer's allocation so the

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Hourglass, X } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { tierAllows } from '../services/turn/aiTier';
+import { isBlockEnabled } from '../services/turn/blockEnablement';
 import {
     TIMESKIP_UNITS,
     timeskipDuration,
@@ -24,13 +24,14 @@ import {
 export function SkipTimeButton({ onConfirm }: { onConfirm: (text: string) => void }) {
     const pipelinePhase = useAppStore(s => s.pipelinePhase);
     const aiTier = useAppStore(s => s.settings.aiTier);
+    const moduleEnabled = useAppStore(s => s.settings.moduleEnabled);
     const [modalOpen, setModalOpen] = useState(false);
 
     const isStreaming = pipelinePhase !== 'idle';
     // The simulation is gated on both blocks; without them a skip would advance the
     // calendar and silently simulate nothing. Say so on the button rather than
     // letting the press look like it worked.
-    const simulationEnabled = tierAllows(aiTier, 'timeskipRun') && tierAllows(aiTier, 'heartbeatTick');
+    const simulationEnabled = isBlockEnabled('timeskipRun', aiTier, moduleEnabled) && isBlockEnabled('heartbeatTick', aiTier, moduleEnabled);
 
     const title = simulationEnabled
         ? 'Skip ahead in time — advances the calendar and lets the world move on'

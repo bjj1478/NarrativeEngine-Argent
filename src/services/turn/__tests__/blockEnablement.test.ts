@@ -41,7 +41,7 @@ describe('WORKORDER-P5-01 — isBlockEnabled resolver', () => {
         });
 
         it('undefined tier falls back to the pro preset', () => {
-            expect(isBlockEnabled('planner', undefined, undefined)).toBe(true);
+            expect(isBlockEnabled('deepScan', undefined, undefined)).toBe(true);
             expect(isBlockEnabled('introEngine', undefined, undefined)).toBe(false);
         });
 
@@ -51,7 +51,7 @@ describe('WORKORDER-P5-01 — isBlockEnabled resolver', () => {
         });
 
         it('an unrelated explicit key does not affect a TierFeature id', () => {
-            expect(isBlockEnabled('planner', 'pro', { 'track.other': false })).toBe(true);
+            expect(isBlockEnabled('deepScan', 'pro', { 'track.other': false })).toBe(true);
         });
     });
 
@@ -81,8 +81,8 @@ describe('WORKORDER-P5-01 — isBlockEnabled resolver', () => {
             ['introEngine', 'pro', false],
             ['introEngine', 'max', true],
             ['planner', 'lite', false],
-            ['planner', 'pro', true],
-            ['planner', 'max', true],
+            ['planner', 'pro', false],
+            ['planner', 'max', false],
             ['arcTick', 'lite', false],
             ['arcTick', 'pro', true],
             ['arcTick', 'max', true],

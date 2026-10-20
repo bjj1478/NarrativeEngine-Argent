@@ -152,3 +152,56 @@ describe('thinking token reserve', () => {
         expect(body.max_tokens as number).toBeGreaterThan(500);
     });
 });
+describe('DeepSeek API thinking controls', () => {
+    const deepseekApi: EndpointConfig = {
+        endpoint: 'https://api.deepseek.com/v1',
+        apiKey: 'test-key',
+        modelName: 'deepseek-v4-flash',
+        apiFormat: 'openrouter',
+    };
+    // A DeepSeek model behind another host takes that host's controls.
+    const deepseekElsewhere: EndpointConfig = {
+        endpoint: 'https://nano-gpt.com/api/v1',
+        apiKey: 'test-key',
+        modelName: 'deepseek/deepseek-v4-pro:thinking',
+        apiFormat: 'openai',
+    };
+
+    it('disables thinking explicitly when the call asks for off, because DeepSeek thinks by default', () => {
+        const body = buildChatBody(deepseekApi, messages, { stream: false, max_tokens: 10, thinkingEffort: 'off' });
+        expect(body.thinking).toEqual({ type: 'disabled' });
+        expect(body.reasoning_effort).toBeUndefined();
+        expect(body.max_tokens).toBe(10);
+    });
+
+    it('disables thinking when the endpoint itself is set to off', () => {
+        const body = buildChatBody({ ...deepseekApi, thinkingEffort: 'off' }, messages, { stream: false, max_tokens: 300 });
+        expect(body.thinking).toEqual({ type: 'disabled' });
+    });
+
+    it('lets a call turn thinking off on an endpoint set to high', () => {
+        const body = buildChatBody({ ...deepseekApi, thinkingEffort: 'high' }, messages, { stream: false, max_tokens: 300, thinkingEffort: 'off' });
+        expect(body.thinking).toEqual({ type: 'disabled' });
+        expect(body.reasoning_effort).toBeUndefined();
+        expect(body.max_tokens).toBe(300);
+    });
+
+    it('leaves the provider default alone when no effort is configured', () => {
+        const body = buildChatBody(deepseekApi, messages, { stream: false, max_tokens: 300 });
+        expect(body.thinking).toBeUndefined();
+        expect(body.reasoning_effort).toBeUndefined();
+    });
+
+    it('sends DeepSeek\'s own max effort', () => {
+        const body = buildChatBody(deepseekApi, messages, { stream: true, thinkingEffort: 'max' });
+        expect(body.reasoning_effort).toBe('max');
+        expect(body.thinking).toBeUndefined();
+    });
+
+    it('does not send DeepSeek-only fields to another host serving a DeepSeek model', () => {
+        const off = buildChatBody(deepseekElsewhere, messages, { stream: false, max_tokens: 300, thinkingEffort: 'off' });
+        expect(off.thinking).toBeUndefined();
+        const max = buildChatBody(deepseekElsewhere, messages, { stream: false, thinkingEffort: 'max' });
+        expect(max.reasoning_effort).toBe('high');
+    });
+});

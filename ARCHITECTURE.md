@@ -238,7 +238,7 @@ mainApp/
 │   │   ├── vision/                 # describeImage, imageSource, visionRequest (multimodal image→prose)
 │   │   ├── scene-images/           # sceneImageContextGatherer (prompt-package composition)
 │   │   ├── tts/                    # kokoroBuffer, proseStripper, ttsClient, useTtsStatus
-│   │   ├── location/               # distance (DISTANCE_BANDS, day ranges), travelModes, travelModeMap
+│   │   ├── location/               # distance (DISTANCE_BANDS, day ranges), travelModes, travelUnit (days/hours), travelModeMap
 │   │   ├── saveFile/               # combinedSeal, chapterSummary, headerIndex, shared
 │   │   ├── background/             # backgroundManager (chat background image, idb-keyval)
 │   │   └── infrastructure/         # backgroundQueue, jsonExtract, tokenizer, settingsCrypto, assetService
@@ -330,7 +330,7 @@ mainApp/
 ├── build-server.mjs               # esbuild server → server.bundle.cjs for Electron ASAR
 ├── data/                           # (gitignored) campaigns/, backups/, embeddings.db, settings.json, apikeys.vault, caches
 ├── index.html                      # Vite entry (root div, /src/main.tsx)
-├── package.json                    # narrative-engine v2.0.0, type:module, 18 deps + 25 devDeps
+├── package.json                    # narrative-engine v2.0.1, type:module, 18 deps + 25 devDeps
 ├── vite.config.ts                  # Vite 8 + React + Tailwind 4 plugins; /api + /assets proxy → :3001; base './'
 ├── vitest.config.ts                # jsdom + setupFiles; includes src/** + server/__tests__/** (engine has own config)
 ├── playwright.config.ts            # e2e/: headless Chromium, baseURL :5173, webServer npm run dev

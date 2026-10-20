@@ -14,8 +14,9 @@ type ClaudeContentBlock = { type: 'text'; text: string; cache_control?: { type: 
 const OPENAI_EFFORT_MAP: Record<ThinkingEffort, string | undefined> = {
     off: undefined, low: 'low', medium: 'medium', high: 'high', max: 'high'
 };
+// DeepSeek's own API accepts `max` (verified 2026-10-01 against deepseek-v4-flash).
 const DEEPSEEK_EFFORT_MAP: Record<ThinkingEffort, string | undefined> = {
-    off: undefined, low: 'low', medium: 'medium', high: 'high', max: 'high'
+    off: undefined, low: 'low', medium: 'medium', high: 'high', max: 'max'
 };
 const CLAUDE_BUDGET_MAP: Record<ThinkingEffort, number | undefined> = {
     off: undefined, low: 1024, medium: 4096, high: 8192, max: 16384
@@ -378,7 +379,16 @@ export function buildChatBody(
         if (s.dry_allowed_length !== undefined) body.dry_allowed_length = s.dry_allowed_length;
     }
 
-    if (effort && effort !== 'off') {
+    // DeepSeek's own API, judged by host: DeepSeek models served elsewhere (NanoGPT,
+    // OpenRouter) take that host's controls, not these.
+    const isDeepSeekApi = !isOllama && (() => { try { return new URL(provider.endpoint.replace(/\/+$/, '')).hostname.includes('deepseek'); } catch { return false; } })();
+
+    if (effort === 'off' && isDeepSeekApi) {
+        // DeepSeek thinks by default (effort high), so leaving the field out is not
+        // "off": the reasoning is billed against max_tokens and a small answer budget
+        // comes back empty. Only an explicit disable turns it off.
+        body.thinking = { type: 'disabled' };
+    } else if (effort && effort !== 'off') {
         if (isOllama) {
             const ollamaThinkBudget: Record<ThinkingEffort, number | undefined> = {
                 off: undefined, low: 2048, medium: 2048, high: 8192, max: 8192
@@ -389,9 +399,7 @@ export function buildChatBody(
                 (body as Record<string, unknown>).options = { ...(body.options || {}), num_predict: thinkBudget };
             }
         } else {
-            const modelName = (provider.modelName || '').toLowerCase();
-            const isDeepSeek = modelName.includes('deepseek') || (() => { try { return new URL(provider.endpoint.replace(/\/+$/, '')).hostname.includes('deepseek'); } catch { return false; } })();
-            const effortMap = isDeepSeek ? DEEPSEEK_EFFORT_MAP : OPENAI_EFFORT_MAP;
+            const effortMap = isDeepSeekApi ? DEEPSEEK_EFFORT_MAP : OPENAI_EFFORT_MAP;
             const mapped = effortMap[effort];
             if (mapped !== undefined) {
                 body.reasoning_effort = mapped;

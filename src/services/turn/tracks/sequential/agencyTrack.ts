@@ -1,6 +1,6 @@
 import type { PostTurnTrack, SequentialTrackContext } from '../types';
 import type { TurnCallbacks } from '../../turnOrchestrator';
-import { tierAllows } from '../../aiTier';
+import { isBlockEnabled } from '../../blockEnablement';
 import { makeGuarded } from '../guarded';
 
 export const agencyTrack: PostTurnTrack<SequentialTrackContext> = {
@@ -22,7 +22,11 @@ export const agencyTrack: PostTurnTrack<SequentialTrackContext> = {
         try {
             const { runAgencyTick, bumpOnStageActivity } = await import('../../../npc/agency/agencyEngine');
             bumpOnStageActivity(ctx.state, ctx.facade ? { ...ctx.callbacks, updateNPC: ctx.facade.write.updateNPC } : ctx.callbacks, ctx.facade?.data.npcLedger ?? ctx.npcLedger);
-            if (tierAllows(ctx.state.settings.aiTier, 'heartbeatTick')) {
+            // Either switch lets the tick in; runAgencyTick checks each one for its own path
+            // (timeskip narration vs the heartbeat trickle).
+            const tier = ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier;
+            const moduleEnabled = ctx.facade?.config.moduleEnabled ?? ctx.state.settings.moduleEnabled;
+            if (isBlockEnabled('heartbeatTick', tier, moduleEnabled) || isBlockEnabled('timeskipRun', tier, moduleEnabled)) {
                 // Guard only addMessage — it's the only callback invoked from a
                 // backgroundQueue.push closure inside runAgencyTick (Timeskip-Narration,
                 // agencyEngine.ts:341). The synchronous updateContext/updateNPC calls in

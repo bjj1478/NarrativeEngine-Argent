@@ -2,6 +2,13 @@ import type { GameContext, CharacterIntroEntry, ChatMessage, EndpointConfig, Pro
 import { llmCall } from '../../utils/llmCall';
 import type { ModelRequest, ModelResponse } from '../turn/hostFacade';
 
+/** The intro roll's die. Ported from mobile (`mobileApp/src/services/engine/charIntroEngine.ts`),
+ *  which rolls 1–200 against a DC that starts at 196 and drops each quiet turn — the same scale
+ *  as the Encounter Engine. The first desktop port rolled a d20 against the same DCs, which would
+ *  have made introductions about ten times as frequent. */
+export const NPC_INTRO_DIE = 200;
+export const NPC_INTRO_DEFAULTS = { initialDC: 196, dcReduction: 2 } as const;
+
 export type CharIntroResult = {
     tag: string;
     newDC: number;
@@ -90,11 +97,11 @@ export async function rollCharacterIntroEngine(
 ): Promise<CharIntroResult> {
     const config = context.npcIntroConfig;
     if (!config || config.characters.length === 0 || context.npcIntroEngineActive === false) {
-        return { tag: '', newDC: context.npcIntroDC ?? config?.initialDC ?? 20 };
+        return { tag: '', newDC: context.npcIntroDC ?? config?.initialDC ?? NPC_INTRO_DEFAULTS.initialDC };
     }
 
     const currentDC = context.npcIntroDC ?? config.initialDC;
-    const roll = Math.floor(Math.random() * 20) + 1;
+    const roll = Math.floor(Math.random() * NPC_INTRO_DIE) + 1;
     
     if (roll < currentDC) {
         const decayed = Math.max(5, currentDC - config.dcReduction);

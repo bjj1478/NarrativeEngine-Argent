@@ -208,6 +208,9 @@ export interface ModLocation {
      */
     readonly elapsedTicks?: number;
     readonly travelMode?: GameContext['travelMode'];
+    /** What one travel leg stands for (days or hours). Written by the map
+     *  through `updateContext`; read back here. Absent = days. */
+    readonly travelUnit?: GameContext['travelUnit'];
 }
 
 /**
@@ -489,6 +492,7 @@ export interface ModLocationStateInput {
     /** Simulated elapsed ticks for this turn; `0`/absent on an ordinary turn. */
     readonly elapsedTicks?: number;
     readonly travelMode?: GameContext['travelMode'];
+    readonly travelUnit?: GameContext['travelUnit'];
 }
 
 export interface ModContextBuildOptions {
@@ -884,6 +888,7 @@ function buildModData(
         // skip belongs to the turn that requested it, never to a later one.
         elapsedTicks: locationState?.elapsedTicks ?? 0,
         travelMode: locationState?.travelMode ?? context.travelMode,
+        travelUnit: locationState?.travelUnit ?? context.travelUnit,
     });
     const chapters: readonly ModChapter[] = Object.freeze(
         (facadeData.chapters ?? []).map(projectChapter),

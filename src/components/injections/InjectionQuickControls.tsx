@@ -10,7 +10,7 @@ export function InjectionQuickControls() {
     const open = useAppStore(s => s.openInjectionModifier);
     const items = normalizeInjections(value);
     return (
-        <div className="px-3 pb-3">
+        <div data-motion="reveal" className="px-3 pb-3">
             {items.map(item => (
                 <label key={item.id} className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-2 hover:bg-terminal/5">
                     <input type="checkbox" role="switch" aria-label={`Enable ${item.name}`} checked={item.enabled}

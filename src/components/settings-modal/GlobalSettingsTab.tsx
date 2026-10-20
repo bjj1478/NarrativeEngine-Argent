@@ -4,7 +4,13 @@ import { useAppStore } from '../../store/useAppStore';
 import { VaultSection } from './VaultSection';
 import { LanguageSection } from './LanguageSection';
 import { BackgroundControl } from '../BackgroundControl';
+import type { ReadingAlign, ReadingFont, ReadingLeading, ReadingWidth } from '../../types';
+import {
+  READING_ALIGNS, READING_DEFAULTS, READING_FONTS, READING_LEADINGS, READING_WIDTHS, READING_SIZE_MAX, READING_SIZE_MIN,
+  clampReadingSize, normalizeReadingAlign, normalizeReadingFont, normalizeReadingLeading, normalizeReadingWidth,
+} from '../chat/readingPrefs';
 import { MAX_STORY_TIMEOUT_SECONDS, MIN_STORY_TIMEOUT_SECONDS, normalizeStoryTimeoutSeconds } from '../../services/llm/timeouts';
+import { computeLoreBudget, normalizeLoreDepth } from '../../services/lore/loreBudget';
 
 /**
  * The six groups this tab divides into, in the order the blocks already appear
@@ -261,43 +267,8 @@ export function GlobalSettingsTab() {
       <div data-ui="settings-section" data-group="memory" data-active={activeGroup === 'memory' ? 'true' : undefined} className="contents">
       <h4 data-ui="settings-group" className="hidden">Memory &amp; retrieval</h4>
 
-      {/* Deep Archive Search */}
-      <div className="flex items-center justify-between bg-void p-3 border border-border rounded">
-        <div>
-          <label className="block text-[11px] text-text-primary uppercase tracking-wider font-bold mb-1">
-            Deep Archive Search
-          </label>
-          <p className="text-[9px] text-text-dim max-w-[240px] leading-tight">
-            Enables AI-driven full-archive scan. Adds a "Deep Search" button to the toolbar.
-            Requires a utility AI endpoint. Adds ~1-2 min per turn when used.
-          </p>
-        </div>
-        <button
-          onClick={() => updateSettings({ deepContextSearch: !settings.deepContextSearch })}
-          className={`relative w-10 h-5 rounded-full transition-colors focus:outline-none ${settings.deepContextSearch ? 'bg-amber-500' : 'bg-border'}`}
-        >
-          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-surface transition-transform ${settings.deepContextSearch ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
-        </button>
-      </div>
-
-      {/* Archive Agent Planner */}
-      <div className="flex items-center justify-between bg-void p-3 border border-border rounded">
-        <div>
-          <label className="block text-[11px] text-text-primary uppercase tracking-wider font-bold mb-1">
-            Archive Agent Planner
-          </label>
-          <p className="text-[9px] text-text-dim max-w-[240px] leading-tight">
-            Enables an intelligent utility AI planner to rank archive scenes based on structured scene events before recall.
-            Requires a utility AI endpoint and structured events populated.
-          </p>
-        </div>
-        <button
-          onClick={() => updateSettings({ enableArchivePlanner: !settings.enableArchivePlanner })}
-          className={`relative w-10 h-5 rounded-full transition-colors focus:outline-none ${settings.enableArchivePlanner ? 'bg-terminal' : 'bg-border'}`}
-        >
-          <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-surface transition-transform ${settings.enableArchivePlanner ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
-        </button>
-      </div>
+      {/* Deep Archive Search and the Archive Planner are switched in Block View only
+          (their second switches here were removed 2026-10-05). */}
 
       {/* Retrieval algorithm (IDF+RRF vs classic) — kill-switch for the lore/rules ranker */}
       <div className="flex items-center justify-between bg-void p-3 border border-border rounded">
@@ -316,6 +287,39 @@ export function GlobalSettingsTab() {
         >
           <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-surface transition-transform ${(settings.retrievalAlgorithm ?? 'idf-rrf') === 'idf-rrf' ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
         </button>
+      </div>
+
+      {/* Lore Depth — lore RAG ceiling (share of context) and relevance-floor leniency */}
+      <div className="bg-void p-3 border border-border rounded space-y-2">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-[11px] text-text-primary uppercase tracking-wider font-bold">
+              Lore Depth
+            </label>
+            <span className="text-terminal font-bold font-mono bg-terminal/10 px-2 py-0.5 rounded text-[10px]">
+              ≤{computeLoreBudget(settings.contextLimit, normalizeLoreDepth(settings.loreDepth)).toLocaleString()} tok
+            </span>
+          </div>
+          <p className="text-[9px] text-text-dim leading-tight">
+            The most lore a turn may pull in, scaled to your context window. Only clearly relevant
+            entries are used, so quiet scenes use less. Lean: tight and strict. Balanced: default.
+            Deep: big lore files, more lenient matching.
+          </p>
+        </div>
+        <div className="flex border border-border overflow-hidden rounded">
+          {(['lean', 'balanced', 'deep'] as const).map(depth => (
+            <button
+              key={depth}
+              onClick={() => updateSettings({ loreDepth: depth })}
+              className={`flex-1 py-1.5 text-[10px] uppercase tracking-wider transition-colors focus:outline-none ${normalizeLoreDepth(settings.loreDepth) === depth
+                ? 'bg-terminal text-void font-bold'
+                : 'bg-void text-text-dim hover:text-text-primary'
+              }`}
+            >
+              {depth}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Indexing Speed — bulk-embed throughput vs CPU headroom during world imports */}
@@ -400,53 +404,22 @@ export function GlobalSettingsTab() {
           </button>
         </div>
 
-        {/* Utility AI Timeout Field */}
-        <div className="pt-2 border-t border-border/30">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[10px] text-text-dim uppercase tracking-wider">
-              Utility AI Timeout (Seconds)
-            </label>
-          </div>
-          <input
-            type="number"
-            min={5}
-            max={300}
-            step={5}
-            value={settings.utilityTimeoutSeconds ?? 45}
-            onChange={(e) => {
-              const v = parseInt(e.target.value);
-              if (!isNaN(v) && v > 0) updateSettings({ utilityTimeoutSeconds: v });
-            }}
-            className="w-full h-7 bg-surface border border-border rounded px-2 text-xs text-text font-mono focus:outline-none focus:border-terminal"
-          />
-        </div>
       </div>
 
       {/* Divergence Register */}
       <div className="md:col-span-2 bg-void p-3 border border-border rounded space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <label className="block text-[11px] text-text-primary uppercase tracking-wider font-bold mb-1">
-              Auto-Extract Divergences
-            </label>
-            <p className="text-[9px] text-text-dim max-w-[240px] leading-tight">
-              Automatically extract campaign facts (canon changes, NPC states, obligations) from each turn.
-              Importance gate: 7+ (use ⚡ for lower).
-            </p>
-          </div>
-          <button
-            onClick={() => updateSettings({ autoExtractDivergences: !settings.autoExtractDivergences })}
-            className={`relative w-10 h-5 rounded-full transition-colors focus:outline-none ${settings.autoExtractDivergences ? 'bg-amber-500' : 'bg-border'}`}
-          >
-            <div className={`absolute top-[2px] w-4 h-4 rounded-full bg-surface transition-transform ${settings.autoExtractDivergences ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
-          </button>
-        </div>
+        <label className="block text-[11px] text-text-primary uppercase tracking-wider font-bold">
+          Divergence Register
+        </label>
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-[10px] text-text-dim uppercase tracking-wider">
-              Divergence Token Budget
+              Divergence Warning Threshold
             </label>
           </div>
+          <p className="text-[9px] text-text-dim leading-tight mb-1">
+            Not a cap: the whole register is sent every turn. The meter in Memory turns amber past this many tokens.
+          </p>
           <input
             type="number"
             min={500}
@@ -638,7 +611,7 @@ export function GlobalSettingsTab() {
             {Math.round((settings.uiScale ?? 1) * 100)}%
           </span>
         </div>
-        <p className="text-[9px] text-text-dim leading-tight">Global zoom. 100% is the default. Changes apply immediately.</p>
+        <p className="text-[9px] text-text-dim leading-tight">Zooms the whole interface. 100% is the default. Story text has its own size below.</p>
         <div className="flex flex-wrap gap-1.5">
           {[0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3].map(v => (
             <button
@@ -649,6 +622,58 @@ export function GlobalSettingsTab() {
               {Math.round(v * 100)}%
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Story text — the reading column only, independent of UI Scale.
+          Same settings as the Aa button beside the story (readingPrefs.ts). */}
+      <div className="flex flex-col bg-void p-3 border border-border rounded space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] text-text-primary uppercase tracking-wider font-bold">Story Text</label>
+          <span className="text-terminal font-bold font-mono bg-terminal/10 px-2 py-0.5 rounded text-[10px]">
+            {clampReadingSize(settings.readingSize)}px
+          </span>
+        </div>
+        <p className="text-[9px] text-text-dim leading-tight">Font, size, line spacing, column width and alignment of the story. Also under the Aa button beside the story.</p>
+        {([
+          ['Font', READING_FONTS, normalizeReadingFont(settings.readingFont), (v: string) => updateSettings({ readingFont: v as ReadingFont })],
+          ['Line spacing', READING_LEADINGS, normalizeReadingLeading(settings.readingLeading), (v: string) => updateSettings({ readingLeading: v as ReadingLeading })],
+          ['Width', READING_WIDTHS, normalizeReadingWidth(settings.readingWidth), (v: string) => updateSettings({ readingWidth: v as ReadingWidth })],
+          ['Align', READING_ALIGNS, normalizeReadingAlign(settings.readingAlign), (v: string) => updateSettings({ readingAlign: v as ReadingAlign })],
+        ] as const).map(([label, options, current, set]) => (
+          <div key={label} className="flex items-center gap-3">
+            <span className="text-[10px] text-text-dim uppercase tracking-wider w-24 flex-shrink-0">{label}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {options.map(o => (
+                <button
+                  key={o.value}
+                  onClick={() => set(o.value)}
+                  className={`px-2 py-1 text-[10px] uppercase font-mono border rounded transition-colors focus:outline-none ${current === o.value ? 'bg-terminal text-void border-terminal' : 'bg-surface border-border text-text-dim hover:text-text-primary hover:border-text-dim'}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-text-dim uppercase tracking-wider w-24 flex-shrink-0">Size</span>
+          <input
+            type="range"
+            min={READING_SIZE_MIN}
+            max={READING_SIZE_MAX}
+            step={1}
+            value={clampReadingSize(settings.readingSize)}
+            onChange={(e) => updateSettings({ readingSize: clampReadingSize(Number(e.target.value)) })}
+            aria-label="Story text size"
+            className="flex-1 accent-terminal"
+          />
+          <button
+            onClick={() => updateSettings({ ...READING_DEFAULTS })}
+            className="px-2 py-1 text-[10px] uppercase font-mono border rounded bg-surface border-border text-text-dim hover:text-text-primary hover:border-text-dim focus:outline-none"
+          >
+            Reset
+          </button>
         </div>
       </div>
       </div>

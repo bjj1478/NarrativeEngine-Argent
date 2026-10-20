@@ -3,20 +3,25 @@ import { countTokens } from '../infrastructure/tokenizer';
 import { DEFAULT_RULES } from '../rules/defaultRules';
 import type { TraceCollector } from './traceCollector';
 
-// Thinking-mode detector. Resolves the active preset's storyAI slot via the
-// two-tier `storyAIProviderId` lookup, then the legacy inline `storyAI` field.
-// Returns true when the resolved provider has `thinkingEffort` set to anything
-// other than 'off' (or unset). This replaces the previous brittle regex over
-// model names (`/deepseek-r|qwq|qwen.*think|r1/i`) — every frontier model in
-// 2026 (GPT-5.x, Claude 4.x, Gemini 2.5, DeepSeek-R) supports thinking via a
-// request param, so the user's per-provider `thinkingEffort` dropdown is the
-// single source of truth. Exported so payloadBuilder.ts can gate the per-turn
+// Thinking-mode detector. Resolves the story level in the same order as the
+// role getters (see store/slices/slotThinking.ts): the active preset's Story
+// slot level first, then the story provider's deprecated provider-wide
+// `thinkingEffort`, then the legacy inline `storyAI` field. Returns true when
+// that level is anything other than 'off' (or unset). This replaces the
+// previous brittle regex over model names (`/deepseek-r|qwq|qwen.*think|r1/i`)
+// — every frontier model in 2026 (GPT-5.x, Claude 4.x, Gemini 2.5, DeepSeek-R)
+// supports thinking via a request param, so the Story slot's Thinking picker in
+// the Presets tab is the single source of truth. Reading the stored provider
+// alone would desync from what the request actually sends, because that value
+// no longer has a picker. Exported so payloadBuilder.ts can gate the per-turn
 // CoT invocation line on the same test without re-implementing the resolution.
 export function isThinkingEnabled(settings: AppSettings): boolean {
     const activePreset = settings.presets?.find((p) => p.id === settings.activePresetId);
     const storyProviderId: string | undefined = activePreset?.storyAIProviderId;
     const storyProvider = storyProviderId ? settings.providers?.find((p) => p.id === storyProviderId) : undefined;
-    const effort = storyProvider?.thinkingEffort ?? activePreset?.storyAI?.thinkingEffort;
+    const effort = activePreset?.slotThinking?.story
+        ?? storyProvider?.thinkingEffort
+        ?? activePreset?.storyAI?.thinkingEffort;
     return effort !== undefined && effort !== 'off';
 }
 
@@ -43,6 +48,13 @@ export function isThinkingEnabled(settings: AppSettings): boolean {
 // so the framework works for any provider: DeepSeek emits it in `reasoning_content`,
 // Claude in `thinking` blocks, GPT-5 in `reasoning` tokens, Gemini in `thinking_config`
 // parts, and legacy non-thinking models reason silently before the narrative.
+export const SCENE_STAKES_INSTRUCTION =
+    'On the LAST line of your response, output a scene-stakes tag:\n' +
+    '[[SCENE_STAKES: calm|tense|dangerous]]\n' +
+    'Rubric: calm = no immediate threat; tense = physical OR social/political threat looming;\n' +
+    'dangerous = active harm or imminent deadly/ruinous consequences. This tag is metadata —\n' +
+    'never reference it in your prose.';
+
 // Exported so builtins.ts's Block View documentation renders the real framework instead of a
 // hand-copied duplicate that can drift from what is actually sent.
 export const WRITER_COT = `[WRITER REASONING FRAMEWORK]
@@ -112,24 +124,19 @@ export function buildStable(opts: {
     // Scene stakes. The receive side already existed — parsed by `extractAndStripSceneStakes`,
     // stripped from the bubble in runGenerationStage, stored as `context.lastSceneStakes`, and
     // consumed by the [BEAT BUDGET] contribution and NPC agency — but nothing ever ASKED for
-    // the tag, so stakes came only from the utility-model classifier at commit (off on lite,
-    // where every scene then read 'calm'). Rubric verbatim from mobile's
+    // the tag (0 tags in ~1,200 archived scenes), so stakes came only from the utility-model
+    // classifier at commit (off on lite, where every scene then read 'calm'). The classifier
+    // stays as the fallback for a reply that omits the tag. Rubric verbatim from mobile's
     // payloadStableContent so the two apps classify a scene the same way.
     //
     // Deliberately OUTSIDE the thinking gate below: the tag is cheap output, not reasoning.
     // It is a constant, so it costs exactly one prompt-cache bust on first run — see the
     // PACING note above for why a VARYING string must never live in this block.
-    stableParts.push(
-        'On the LAST line of your response, output a scene-stakes tag:\n' +
-        '[[SCENE_STAKES: calm|tense|dangerous]]\n' +
-        'Rubric: calm = no immediate threat; tense = physical OR social/political threat looming;\n' +
-        'dangerous = active harm or imminent deadly/ruinous consequences. This tag is metadata —\n' +
-        'never reference it in your prose.'
-    );
+    stableParts.push(SCENE_STAKES_INSTRUCTION);
 
-    // Only inject when the active story provider has thinking mode enabled (any
-    // effort level except 'off'). The `thinkingEffort` dropdown on the provider
-    // is the single source of truth — model-name guessing is gone.
+    // Only inject when the active preset's Story slot has thinking enabled (any
+    // effort level except 'off'). The Story slot's Thinking picker is the single
+    // source of truth — model-name guessing is gone.
     if (isThinkingEnabled(settings)) {
         stableParts.push("IMPORTANT: If you use a 'thinking' or 'reasoning' block (or any internal reasoning), you MUST still provide the full narrative response AFTER it ends. Never end a turn with only reasoning.");
         stableParts.push(WRITER_COT);

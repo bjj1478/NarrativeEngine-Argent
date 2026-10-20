@@ -17,7 +17,7 @@ interface UnsavedChangesDialogProps {
  */
 export function UnsavedChangesDialog({ onSave, onDiscard, onCancel }: UnsavedChangesDialogProps) {
     return (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-void/80 backdrop-blur-sm p-4" onClick={onCancel}>
+        <div data-motion="overlay" className="absolute inset-0 z-20 flex items-center justify-center bg-void/80 backdrop-blur-sm p-4" onClick={onCancel}>
             <div className="w-full max-w-md bg-surface border border-border rounded-lg shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-2 text-terminal font-bold uppercase tracking-widest text-sm">
                     <AlertTriangle size={16} /> Unsaved Changes

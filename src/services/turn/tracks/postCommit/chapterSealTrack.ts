@@ -4,7 +4,7 @@ import type { SealModelCall } from '../../../saveFileEngine';
 import { backgroundQueue } from '../../../infrastructure/backgroundQueue';
 import { toast } from '../../../../components/Toast';
 import { EMPTY_REGISTER } from '../../../campaign-state/divergenceRegister';
-import { tierAllows } from '../../aiTier';
+import { isBlockEnabled } from '../../blockEnablement';
 import { hasHostModelRole } from '../../hostFacade';
 import { emitCoreEvent } from '../../../mods/events';
 import { runCombinedSeal } from '../../postTurnPipeline';
@@ -69,7 +69,7 @@ export const chapterSealTrack: PostTurnTrack<PostCommitTrackContext> = {
             const sealModelCall: SealModelCall | undefined = ctx.facade && hasHostModelRole(ctx.facade, 'story')
                 ? (request) => ctx.facade!.model.call('story', request).then(result => result.content)
                 : undefined;
-            if ((sealProvider || sealModelCall) && tierAllows(ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, 'sealChapter')) {
+            if ((sealProvider || sealModelCall) && isBlockEnabled('sealChapter', ctx.facade?.config.aiTier ?? ctx.state.settings.aiTier, ctx.facade?.config.moduleEnabled ?? ctx.state.settings.moduleEnabled)) {
                 await runCombinedSeal(
                     sealProvider,
                     sealResult.sealedChapter,
@@ -84,6 +84,10 @@ export const chapterSealTrack: PostTurnTrack<PostCommitTrackContext> = {
                         contextLimit: ctx.facade?.config.contextLimit ?? ctx.state.settings.contextLimit ?? 4096,
                         divergenceRegister: ctx.facade?.data.divergenceRegister ?? ctx.state.divergenceRegister ?? EMPTY_REGISTER,
                     },
+                    // Under the facade sealProvider is undefined and this is the only model path.
+                    // It was dropped in c8a4539 (2026-08-10), so every auto-seal threw before
+                    // writing a summary while the "auto-sealed" toast still showed.
+                    sealModelCall,
                 );
             }
         }).catch(err => console.warn('[Auto-Seal] Failed:', err));
