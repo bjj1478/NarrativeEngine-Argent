@@ -126,11 +126,16 @@ const budget = (spec: FixedLength, flavour = ''): string =>
     'range — under-running it is correct. This overrides any length or paragraph guidance in the rules.]';
 
 /** Stakes flavour, used only by 'flexible'. A fixed setting is a deliberate instruction and
- *  must not be talked out of its length by the scene. */
+ *  must not be talked out of its length by the scene.
+ *
+ *  The stakes are the PREVIOUS turn's tag, so tense/dangerous must leave the scene a way down:
+ *  without the de-escalation clause, "never resolve the danger" keeps the scene tagged
+ *  dangerous, which re-sends the same line next turn — a ratchet the player can't walk out of. */
+const DE_ESCALATE = 'If the player defuses, complies, retreats, or walks away, that choice is the resolution — let the pressure ease and the scene settle rather than renewing it.';
 const FLEXIBLE: Record<SceneStakes, string> = {
     calm: budget('medium', 'The scene is calm, so it may breathe.'),
-    tense: budget('short', 'The scene is tense: end the turn the moment a decision faces the player and hand the beat back rather than resolving it for them.'),
-    dangerous: budget('short', 'The scene is dangerous: keep it close and physical, end on the moment that demands a response, and never resolve the danger on the player\'s behalf.'),
+    tense: budget('short', `The scene is tense: end the turn the moment a decision faces the player and hand the beat back rather than resolving it for them. ${DE_ESCALATE}`),
+    dangerous: budget('short', `The scene is dangerous: keep it close and physical, end on the moment that demands a response, and never resolve the danger on the player's behalf. ${DE_ESCALATE}`),
 };
 
 /** Flexible only reaches its longest budget on a time skip — the one case where a reply has

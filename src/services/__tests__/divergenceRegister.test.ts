@@ -347,6 +347,21 @@ describe('divergenceRegister v2', () => {
             });
             expect(getDivergenceSceneIds(reg)).toEqual(new Set(['014', '018']));
         });
+
+        it('skips superseded, retracted, disabled, and toggled-off facts', () => {
+            const reg = makeRegister({
+                entries: [
+                    makeEntry({ sceneRef: '010' }),
+                    makeEntry({ sceneRef: '011', status: 'superseded' }),
+                    makeEntry({ sceneRef: '012', status: 'retracted' }),
+                    makeEntry({ sceneRef: '013', enabled: false }),
+                    makeEntry({ sceneRef: '014', chapterId: 'CH_OFF' }),
+                    makeEntry({ sceneRef: '015', chapterId: 'CH_OFF', pinned: true }),
+                ],
+                chapterToggles: { CH_OFF: false },
+            });
+            expect(getDivergenceSceneIds(reg)).toEqual(new Set(['010', '015']));
+        });
     });
 
     describe('migrateV1ToV2', () => {

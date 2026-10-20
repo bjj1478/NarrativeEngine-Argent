@@ -16,6 +16,9 @@ import { computeDynamicMax, PLANNER_RELEVANCE_BOOST, type RecallDepth } from './
  * content; recallArchiveScenes is the search+fetch convenience used pre-payload.
  */
 
+/** Divergence scenes force-surfaced without matching this turn (most recent first). */
+export const MAX_UNMATCHED_DIVERGENCE_SCENES = 2;
+
 /**
  * Search the archive index with hybrid retrieval: an IDF-weighted keyword ranker fused with
  * the server's embedding ranker via RRF. Divergence scenes are force-surfaced. Returns the
@@ -112,7 +115,9 @@ export function retrieveArchiveMemory(
     // ─── Divergence front-loading ───
     // Divergence scenes (where the story left canon) must surface for continuity even when
     // they don't match the current turn's keywords or embeddings. Matched ones keep their
-    // fused order; unmatched ones are injected after, by recency.
+    // fused order; unmatched ones are injected after, by recency — capped, so a cluster of
+    // fact-heavy scenes from one past thread can't occupy the recall slots every turn.
+    // The register's [ESTABLISHED FACTS] block already carries those facts.
     let ordered = fused;
     if (divergenceSceneIds && divergenceSceneIds.size > 0) {
         const fusedSet = new Set(fused);
@@ -124,7 +129,8 @@ export function retrieveArchiveMemory(
             const matchedDiv = fused.filter(id => divSet.has(id));
             const unmatchedDiv = divInScope
                 .filter(id => !fusedSet.has(id))
-                .sort((a, b) => safeSceneNum(b) - safeSceneNum(a));
+                .sort((a, b) => safeSceneNum(b) - safeSceneNum(a))
+                .slice(0, MAX_UNMATCHED_DIVERGENCE_SCENES);
             const rest = fused.filter(id => !divSet.has(id));
             ordered = [...matchedDiv, ...unmatchedDiv, ...rest];
         }

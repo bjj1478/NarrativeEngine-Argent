@@ -4,6 +4,7 @@ import {
     computeArchiveIdf,
     clearArchiveIdfCache,
 } from '../archiveMemory';
+import { MAX_UNMATCHED_DIVERGENCE_SCENES } from '../archive-memory/recall';
 import type { ArchiveIndexEntry } from '../../types';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────
@@ -209,6 +210,39 @@ describe('retrieveArchiveMemory — divergence front-loading', () => {
             new Set(['DIV']), // divergence scene
         );
         expect(result[0]).toBe('DIV');
+    });
+
+    it('caps unmatched divergence scenes at the most recent MAX_UNMATCHED_DIVERGENCE_SCENES', () => {
+        const index = [
+            makeEntry({ sceneId: '001', keywordStrengths: { topic: 5 } }),
+            makeEntry({ sceneId: '010', keywordStrengths: { offtopic: 5 } }),
+            makeEntry({ sceneId: '011', keywordStrengths: { offtopic: 5 } }),
+            makeEntry({ sceneId: '012', keywordStrengths: { offtopic: 5 } }),
+            makeEntry({ sceneId: '013', keywordStrengths: { offtopic: 5 } }),
+        ];
+        const result = retrieveArchiveMemory(
+            index, 'topic', [], undefined, undefined,
+            undefined, undefined, undefined,
+            undefined,
+            new Set(['010', '011', '012', '013']),
+        );
+        expect(MAX_UNMATCHED_DIVERGENCE_SCENES).toBe(2);
+        expect(result.slice(0, 2)).toEqual(['013', '012']);
+        expect(result).not.toContain('010');
+        expect(result).not.toContain('011');
+        expect(result).toContain('001');
+    });
+
+    it('does not cap divergence scenes that match the turn', () => {
+        const index = ['010', '011', '012', '013'].map(sceneId =>
+            makeEntry({ sceneId, keywordStrengths: { topic: 5 } }));
+        const result = retrieveArchiveMemory(
+            index, 'topic', [], undefined, undefined,
+            undefined, undefined, undefined,
+            undefined,
+            new Set(['010', '011', '012', '013']),
+        );
+        expect(new Set(result)).toEqual(new Set(['010', '011', '012', '013']));
     });
 });
 

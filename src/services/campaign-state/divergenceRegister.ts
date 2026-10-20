@@ -162,6 +162,18 @@ export function mergeLifecycleEntries(
     };
 }
 
+/** True when a fact still shapes the story: enabled, not superseded/retracted, and not
+ *  switched off by its chapter or category toggle (pinned facts ignore the toggles). */
+export function isEntryInPlay(register: DivergenceRegister, e: DivergenceEntry): boolean {
+    if (e.enabled === false) return false;
+    if (!isFactActive(e)) return false;
+    if (e.pinned) return true;
+    if (register.chapterToggles[e.chapterId] === false) return false;
+    const catToggles = register.categoryToggles[e.chapterId];
+    if (catToggles && catToggles[e.category] === false) return false;
+    return true;
+}
+
 export function renderRegisterForPayload(
     register: DivergenceRegister,
     chapters?: import('../../types').ArchiveChapter[],
@@ -185,14 +197,7 @@ export function renderRegisterForPayload(
         // instead. "Is knownBy defined" is a static fact property → cast-independent →
         // cache-safe: the cached block stays byte-identical when only the cast changes.
         if (publicOnly && e.knownBy !== undefined) return false;
-        if (e.enabled === false) return false;
-        if (!isFactActive(e)) return false;
-        if (e.pinned) return true;
-        const chapterOn = register.chapterToggles[e.chapterId] !== false;
-        if (!chapterOn) return false;
-        const catToggles = register.categoryToggles[e.chapterId];
-        if (catToggles && catToggles[e.category] === false) return false;
-        return true;
+        return isEntryInPlay(register, e);
     });
 
     if (activeEntries.length === 0) return '';
@@ -304,8 +309,10 @@ export function countRegisterTokens(register: DivergenceRegister): number {
 
 export function getDivergenceSceneIds(register: DivergenceRegister): Set<string> {
     const ids = new Set<string>();
+    // Only facts still in play pull their scene forward — a superseded, retracted, or
+    // toggled-off fact must not keep re-surfacing the scene it came from.
     for (const e of register.entries) {
-        ids.add(e.sceneRef);
+        if (isEntryInPlay(register, e)) ids.add(e.sceneRef);
     }
     return ids;
 }
