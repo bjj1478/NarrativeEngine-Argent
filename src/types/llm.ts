@@ -43,6 +43,9 @@ export type ReadingAlign = 'left' | 'center' | 'right';
 
 export type ThinkingEffort = 'off' | 'low' | 'medium' | 'high' | 'max';
 
+/** Processing tier on hosts that sell one (NanoGPT, OpenRouter). Unset is the host default. */
+export type ServiceTier = 'flex' | 'priority';
+
 /** Preset slots that carry their own thinking level. Image generation has no thinking. */
 export type ThinkingSlot = 'story' | 'summarizer' | 'utility' | 'auxiliary' | 'vision';
 
@@ -59,6 +62,11 @@ export type EndpointConfig = {
      * and the thinking reserve stays conservative (see WORKORDER-thinking-token-floor §3.2).
      * This is an OUTPUT ceiling, not a context window; they are different and much different sizes. */
     maxOutputTokens?: number;
+    /** NanoGPT / OpenRouter only: 'flex' is cheaper and slower, 'priority' faster
+     *  and dearer. Ignored on other hosts. */
+    serviceTier?: ServiceTier;
+    /** See `LLMProvider.customBody`. */
+    customBody?: string;
 };
 
 export type SamplingConfig = {
@@ -99,6 +107,13 @@ export type LLMProvider = {
      * and the thinking reserve stays conservative (see WORKORDER-thinking-token-floor §3.2).
      * This is an OUTPUT ceiling, not a context window; they are different and much different sizes. */
     maxOutputTokens?: number;
+    /** NanoGPT / OpenRouter only: 'flex' is cheaper and slower, 'priority' faster
+     *  and dearer. Ignored on other hosts. */
+    serviceTier?: ServiceTier;
+    /** JSON object text merged into every chat request body, last (like SillyTavern's
+     *  additional parameters). A `null` value removes that field. Kept as text so a
+     *  half-typed draft survives; text that does not parse to an object is ignored. */
+    customBody?: string;
     /** Present only when apiFormat === 'comfyui'. Native ComfyUI image-generation config. */
     comfyUi?: ComfyUiSettings;
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildChatBody } from '../llmApiHelper';
+import { buildChatBody, parseCustomBody } from '../llmApiHelper';
 import { buildPayload } from '../../services/payload/payloadBuilder';
 import type { EndpointConfig, GameContext, AppSettings, ChatMessage, ArchiveChapter, ArchiveIndexEntry } from '../../types';
 
@@ -381,5 +381,66 @@ describe('WO-09c — Claude wire preserves history breakpoints', () => {
             expect(lodSystemBlock).toBeDefined();
             expect(breakpointConvIdx).toBeGreaterThan(-1);
         });
+    });
+});
+describe('service tier', () => {
+    const messages = [{ role: 'user' as const, content: 'Hello' }];
+    const nano: EndpointConfig = { endpoint: 'https://nano-gpt.com/api/v1', apiKey: 'k', modelName: 'openai/gpt-5.5', apiFormat: 'openai' };
+    const router: EndpointConfig = { endpoint: 'https://openrouter.ai/api/v1', apiKey: 'k', modelName: 'openai/gpt-5.5', apiFormat: 'openrouter' };
+
+    it('sends nothing when unset', () => {
+        expect(buildChatBody(nano, messages).service_tier).toBeUndefined();
+        expect(buildChatBody(router, messages).service_tier).toBeUndefined();
+    });
+
+    it('sends flex and fast to NanoGPT', () => {
+        expect(buildChatBody({ ...nano, serviceTier: 'flex' }, messages).service_tier).toBe('flex');
+        expect(buildChatBody({ ...nano, serviceTier: 'priority' }, messages).service_tier).toBe('fast');
+    });
+
+    it('sends flex and priority to OpenRouter, in either API format', () => {
+        expect(buildChatBody({ ...router, serviceTier: 'flex' }, messages).service_tier).toBe('flex');
+        expect(buildChatBody({ ...router, apiFormat: 'openai', serviceTier: 'priority' }, messages).service_tier).toBe('priority');
+    });
+
+    it('sends nothing to other hosts or formats', () => {
+        expect(buildChatBody({ ...nano, endpoint: 'https://api.openai.com/v1', serviceTier: 'flex' }, messages).service_tier).toBeUndefined();
+        expect(buildChatBody({ ...router, apiFormat: 'claude', serviceTier: 'flex' }, messages).service_tier).toBeUndefined();
+    });
+});
+
+describe('custom body', () => {
+    const messages = [{ role: 'user' as const, content: 'Hello' }];
+    const base: EndpointConfig = { endpoint: 'https://openrouter.ai/api/v1', apiKey: 'k', modelName: 'm', apiFormat: 'openai' };
+
+    it('adds and overrides fields', () => {
+        const body = buildChatBody({ ...base, customBody: '{"top_a": 0.2, "model": "other", "provider": {"order": ["A"]}}' }, messages, { temperature: 0.7 });
+        expect(body.top_a).toBe(0.2);
+        expect(body.model).toBe('other');
+        expect(body.provider).toEqual({ order: ['A'] });
+        expect(body.temperature).toBe(0.7);
+    });
+
+    it('removes fields set to null', () => {
+        const body = buildChatBody({ ...base, customBody: '{"temperature": null}' }, messages, { temperature: 0.7 });
+        expect('temperature' in body).toBe(false);
+    });
+
+    it('keeps messages and stream', () => {
+        const body = buildChatBody({ ...base, customBody: '{"messages": [], "stream": true}' }, messages, { stream: false });
+        expect(body.messages).toHaveLength(1);
+        expect(body.stream).toBe(false);
+    });
+
+    it('applies to other formats too', () => {
+        const body = buildChatBody({ ...base, endpoint: 'https://api.anthropic.com/v1', apiFormat: 'claude', customBody: '{"top_k": 5}' }, messages);
+        expect(body.top_k).toBe(5);
+    });
+
+    it('ignores text that is not a JSON object', () => {
+        expect(buildChatBody({ ...base, customBody: '{"top_a": ' }, messages).top_a).toBeUndefined();
+        expect(buildChatBody({ ...base, customBody: '[1, 2]' }, messages)).not.toHaveProperty('0');
+        expect(parseCustomBody('[1]')).toHaveProperty('error');
+        expect(parseCustomBody('  ')).toEqual({ fields: {} });
     });
 });

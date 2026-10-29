@@ -56,6 +56,34 @@ export function getApiFormat(provider: AnyProvider): ApiFormat {
     return (provider as EndpointConfig).apiFormat || 'openai';
 }
 
+/** The host that sells service tiers behind this endpoint, if any. */
+export function serviceTierHostOf(endpoint: string): 'nanogpt' | 'openrouter' | undefined {
+    try {
+        const { hostname } = new URL(endpoint.trim());
+        if (hostname === 'nano-gpt.com' || hostname.endsWith('.nano-gpt.com')) return 'nanogpt';
+        if (hostname === 'openrouter.ai' || hostname.endsWith('.openrouter.ai')) return 'openrouter';
+    } catch { /* invalid URL */ }
+    return undefined;
+}
+
+/** Whether this provider can take a service tier: an OpenAI-style body on NanoGPT or OpenRouter. */
+export function supportsServiceTier(provider: AnyProvider): boolean {
+    const format = getApiFormat(provider);
+    return (format === 'openai' || format === 'openrouter') && serviceTierHostOf(provider.endpoint) !== undefined;
+}
+
+/**
+ * The `service_tier` value for this provider, or undefined to send none.
+ * NanoGPT calls priority `fast` (`priority` is its legacy alias); OpenRouter
+ * calls it `priority`. Both route a tiered request only to providers that offer it.
+ */
+export function serviceTierFor(provider: AnyProvider): string | undefined {
+    const tier = (provider as EndpointConfig).serviceTier;
+    if (!tier || !supportsServiceTier(provider)) return undefined;
+    if (serviceTierHostOf(provider.endpoint) === 'nanogpt') return tier === 'priority' ? 'fast' : 'flex';
+    return tier;
+}
+
 function isBareHost(url: string): boolean {
     try {
         return new URL(url).pathname.replace(/\/+$/, '') === '';
@@ -267,10 +295,62 @@ function transformGeminiTools(tools: unknown[]): unknown[] {
     return [{ functionDeclarations: declarations }];
 }
 
+/** Fields the app reads the reply by; a custom body may not change them. */
+const PROTECTED_BODY_FIELDS = new Set(['messages', 'contents', 'stream']);
+
+/**
+ * Parses a provider's custom body text. Returns the object, `{}` when blank,
+ * or an error message when the text is not a JSON object.
+ */
+export function parseCustomBody(text: string | undefined): { fields: Record<string, unknown> } | { error: string } {
+    if (!text || !text.trim()) return { fields: {} };
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(text);
+    } catch (err) {
+        return { error: err instanceof Error ? err.message : 'Invalid JSON' };
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { error: 'Must be a JSON object, like {"top_a": 0.2}' };
+    }
+    return { fields: parsed as Record<string, unknown> };
+}
+
+/** Merges a custom body over the built one: `null` removes a field, protected fields are kept. */
+export function mergeCustomBody<T extends object>(body: T, customBody: string | undefined, protectedFields: ReadonlySet<string>): T {
+    const parsed = parseCustomBody(customBody);
+    if ('error' in parsed) {
+        console.warn(`[llmApiHelper] Custom body ignored: ${parsed.error}`);
+        return body;
+    }
+    const target = body as Record<string, unknown>;
+    for (const [key, value] of Object.entries(parsed.fields)) {
+        if (protectedFields.has(key)) continue;
+        if (value === null) delete target[key];
+        else target[key] = value;
+    }
+    return body;
+}
+
+function applyCustomBody(provider: AnyProvider, body: Record<string, unknown>): Record<string, unknown> {
+    return mergeCustomBody(body, (provider as EndpointConfig).customBody, PROTECTED_BODY_FIELDS);
+}
+
+type ChatBodyMessage = { role: string; content: string | null; name?: string; tool_calls?: unknown[]; tool_call_id?: string; reasoning_content?: string; cache_control?: { type: 'ephemeral' } };
+type ChatBodyOptions = { stream?: boolean; max_tokens?: number; temperature?: number; tools?: unknown[]; sampling?: SamplingConfig; thinkingEffort?: ThinkingEffort };
+
 export function buildChatBody(
     provider: AnyProvider,
-    messages: { role: string; content: string | null; name?: string; tool_calls?: unknown[]; tool_call_id?: string; reasoning_content?: string; cache_control?: { type: 'ephemeral' } }[],
-    options?: { stream?: boolean; max_tokens?: number; temperature?: number; tools?: unknown[]; sampling?: SamplingConfig; thinkingEffort?: ThinkingEffort }
+    messages: ChatBodyMessage[],
+    options?: ChatBodyOptions
+): Record<string, unknown> {
+    return applyCustomBody(provider, buildBaseChatBody(provider, messages, options));
+}
+
+function buildBaseChatBody(
+    provider: AnyProvider,
+    messages: ChatBodyMessage[],
+    options?: ChatBodyOptions
 ): Record<string, unknown> {
     const format = getApiFormat(provider);
     const stream = options?.stream ?? false;
@@ -410,6 +490,9 @@ export function buildChatBody(
     if (!isOllama && options?.tools && options.tools.length > 0) {
         body.tools = options.tools;
     }
+
+    const serviceTier = serviceTierFor(provider);
+    if (serviceTier) body.service_tier = serviceTier;
 
     return body;
 }
