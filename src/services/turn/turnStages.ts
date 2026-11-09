@@ -237,13 +237,18 @@ export async function runIntroEngineStage(
     const npcLedger = data?.npcLedger ?? state.npcLedger;
     const provider = facade ? undefined : state.provider;
     if (!context.npcIntroEngineActive || !isBlockEnabled('introEngine', config?.aiTier ?? settings.aiTier, settings.moduleEnabled)) return;
-    const seenNpcNames = new Set((npcLedger ?? []).map((n: NPCEntry) => n.name.toLowerCase()));
+    // Only NPCs we have actually met on stage are excluded from the intro pool. `populated` is
+    // the ledger's "met" marker (npcTrack stamps it on first detection); lore-imported NPCs land
+    // in the ledger unpopulated, which is exactly who this engine exists to walk on.
+    const metNpcNames = new Set(
+        (npcLedger ?? []).filter((n: NPCEntry) => n.populated).map((n: NPCEntry) => n.name.toLowerCase()),
+    );
     try {
         const auxProvider = facade ? undefined : state.getFreshAuxiliaryProvider?.() ?? provider;
         const { rollCharacterIntroEngine } = await import('../npc-generation/charIntroEngine');
         const introResult = await rollCharacterIntroEngine(
             context,
-            seenNpcNames,
+            metNpcNames,
             messages,
             auxProvider,
             facade ? (request: import('./hostFacade').ModelRequest) => facade.model.call('auxiliary', request) : undefined

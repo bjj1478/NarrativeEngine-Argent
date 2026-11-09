@@ -88,9 +88,21 @@ function weightedRandomPick(entries: CharacterIntroEntry[], weights: Map<string,
     return entries[entries.length - 1] ?? null;
 }
 
+/**
+ * Rolls the appearance die and, on a hit, returns an `[INTRODUCE CHARACTER: Name]` tag for one
+ * pooled character the player has not met yet.
+ *
+ * `metNpcNames` is the set of ledger NPCs with `populated: true` — the codebase's marker for
+ * "has actually been on stage" (`npcTrack` stamps it the first turn an NPC is detected in
+ * narration; `buildProximityRoster` gates the offstage agency tick on the same flag). It used to
+ * be every name in the ledger, which made the engine impossible to fire on desktop: the only way
+ * to fill the pool is the Engines-tab dropdown, which lists ledger NPCs, and `campaignInit`
+ * imports every lore CHARACTER into the ledger at import time — so every candidate you could
+ * add was already excluded.
+ */
 export async function rollCharacterIntroEngine(
     context: GameContext,
-    seenNpcNames: Set<string>,
+    metNpcNames: Set<string>,
     messages: ChatMessage[],
     utilityProvider?: EndpointConfig | ProviderConfig,
     modelCall?: (request: ModelRequest) => Promise<ModelResponse>,
@@ -108,7 +120,7 @@ export async function rollCharacterIntroEngine(
         return { tag: '', newDC: decayed };
     }
 
-    const candidates = config.characters.filter(c => !seenNpcNames.has(c.name.toLowerCase()));
+    const candidates = config.characters.filter(c => !metNpcNames.has(c.name.toLowerCase()));
     if (candidates.length === 0) {
         return { tag: '', newDC: currentDC };
     }

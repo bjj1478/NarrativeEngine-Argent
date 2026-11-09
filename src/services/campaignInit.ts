@@ -1,4 +1,4 @@
-import type { GameContext, LootTree } from '../types';
+import type { GameContext, LootTree, CharacterIntroEntry } from '../types';
 import {
     saveLoreChunks, getNPCLedger, saveNPCLedger,
     loadCampaignState, saveCampaignState,
@@ -6,6 +6,7 @@ import {
 import { chunkLoreFile } from './lore/loreChunker';
 import { extractEngineSeeds } from './lore/loreEngineSeeder';
 import { parseNPCsFromLore } from './lore/loreNPCParser';
+import { parseIntroFlagsFromLore } from './lore/loreIntroFlags';
 import { parseLocationsFromLoreDetailed } from './lore/loreLocationParser';
 import { locationTableDescriptor, loadLocationTable } from './tables/locationTable';
 import { genericSave } from './tables/genericAccessor';
@@ -19,6 +20,7 @@ import { dedupeNPCLedger } from '../store/slices/campaignSlice';
 import { loadLootTree } from './lore/lootTreeLoader';
 import { buildDefaultDiceSystem } from '../types';
 import { readWorldFile, type WorldImport } from './lore/worldCard';
+import { NPC_INTRO_DEFAULTS } from './npc-generation/charIntroEngine';
 
 
 export const DEFAULT_CONTEXT = {
@@ -52,6 +54,7 @@ export async function initializeCampaignState(params: {
     const { campaignId, loreFile, rulesFile, lootFile } = params;
 
     let seeds: ReturnType<typeof extractEngineSeeds> | null = null;
+    let introEntries: CharacterIntroEntry[] = [];
     if (loreFile) {
         const importedWorld = params.preparedWorld ?? (/\.(png|json)$/i.test(loreFile.name) ? await readWorldFile(loreFile) : null);
         const loreText = importedWorld ? '' : await loreFile.text();
@@ -108,6 +111,7 @@ export async function initializeCampaignState(params: {
             }
 
             seeds = extractEngineSeeds(chunks);
+            introEntries = parseIntroFlagsFromLore(chunks);
         }
     }
 
@@ -147,6 +151,20 @@ export async function initializeCampaignState(params: {
                 why: seeds.worldWhy.length > 0 ? seeds.worldWhy : [...DEFAULT_WORLD_WHY],
                 what: seeds.worldWhat.length > 0 ? seeds.worldWhat : [...DEFAULT_WORLD_WHAT],
             };
+        }
+        if (introEntries.length > 0) {
+            // Top up rather than clobber, the way the location table does on re-import: a pool
+            // the player curated in the Engines tab survives importing the world again.
+            const existingPool = ctx.npcIntroConfig?.characters ?? [];
+            const pooled = new Set(existingPool.map(c => c.name.toLowerCase()));
+            const additions = introEntries.filter(e => !pooled.has(e.name.toLowerCase()));
+            if (additions.length > 0) {
+                ctx.npcIntroConfig = {
+                    initialDC: ctx.npcIntroConfig?.initialDC ?? NPC_INTRO_DEFAULTS.initialDC,
+                    dcReduction: ctx.npcIntroConfig?.dcReduction ?? NPC_INTRO_DEFAULTS.dcReduction,
+                    characters: [...existingPool, ...additions],
+                };
+            }
         }
         await saveCampaignState(campaignId, {
             context: { ...DEFAULT_CONTEXT, ...ctx }, messages: existingState?.messages ?? [],

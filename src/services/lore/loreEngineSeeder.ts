@@ -1,4 +1,5 @@
 import type { LoreChunk, EngineSeed } from '../../types';
+import { chunkHeaderName } from './loreHeaderName';
 
 export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
     const seed: EngineSeed = {
@@ -26,7 +27,7 @@ export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
         
         // --- WHO (Factions, Orgs, Key Figures) ---
         if (chunk.category === 'faction') {
-            const name = chunk.header.replace(/\[CHUNK:\s*[A-Z_]+[—\-\s]*\]/i, '').split(/[—–-]/)[0].trim();
+            const name = chunkHeaderName(chunk.header);
             if (name) whoSet.add(name);
             
             // Extract leader if present
@@ -38,7 +39,7 @@ export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
 
         // --- WHERE (Locations) ---
         if (chunk.category === 'location') {
-            const name = chunk.header.replace(/\[CHUNK:\s*[A-Z_]+[—\-\s]*\]/i, '').split(/[—–-]/)[0].trim();
+            const name = chunkHeaderName(chunk.header);
             if (name) whereSet.add(`in or around ${name}`);
         } else if (chunk.category === 'world_overview') {
             // grab capitalized proper nouns that might be places
@@ -64,7 +65,7 @@ export function extractEngineSeeds(chunks: LoreChunk[]): EngineSeed {
                 whatSet.add(summaryLine.toLowerCase());
             }
             if (chunk.header.toLowerCase().includes('arc')) {
-                const name = chunk.header.replace(/\[CHUNK:\s*[A-Z_]+[—\-\s]*\]/i, '').trim();
+                const name = chunkHeaderName(chunk.header);
                 whatSet.add(`initiated ${name}`);
             }
         }

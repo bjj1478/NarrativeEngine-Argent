@@ -30,7 +30,10 @@ describe('rollCharacterIntroEngine — the roll', () => {
         expect((await rollCharacterIntroEngine(context(20), new Set(), [])).tag).toBe('[INTRODUCE CHARACTER: Therese Soll]');
     });
 
-    it('skips a candidate already in the ledger', async () => {
+    // The set is the names we have already MET on stage, not every name in the ledger.
+    // `runIntroEngineStage` builds it from ledger entries with `populated: true`; see
+    // `turn/__tests__/introEngineStage.test.ts` for why that distinction matters.
+    it('skips a candidate we have already met', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(rollOf(200));
         expect((await rollCharacterIntroEngine(context(), new Set(['therese soll']), [])).tag).toBe('');
     });

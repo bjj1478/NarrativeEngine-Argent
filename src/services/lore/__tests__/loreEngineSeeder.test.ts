@@ -54,6 +54,20 @@ describe('extractEngineSeeds — WHO (factions + leaders)', () => {
         // .split(/[—–-]/)[0].trim() -> "The Crimson Hand"
         expect(extractEngineSeeds([c]).worldWho).toEqual(['The Crimson Hand']);
     });
+    // The format every real lore file actually uses. The seeder's old inline regex only
+    // handled the bracketed dialect above, so these headers seeded the literal word "FACTION".
+    it('a `FACTION -- Name` header seeds the name, not the type token', () => {
+        const c = chunk({
+            category: 'faction',
+            header: 'FACTION -- The Aes Sedai of the White Tower',
+            content: 'body',
+        });
+        expect(extractEngineSeeds([c]).worldWho).toEqual(['The Aes Sedai of the White Tower']);
+    });
+    it('the same with an em dash', () => {
+        const c = chunk({ category: 'faction', header: 'FACTION — The Warders', content: 'body' });
+        expect(extractEngineSeeds([c]).worldWho).toEqual(['The Warders']);
+    });
     it('**Key Members:** line splits on comma and trims each into worldWho', () => {
         const c = chunk({
             category: 'faction',
@@ -87,6 +101,18 @@ describe('extractEngineSeeds — WHERE (locations + overview proper nouns)', () 
     it('location chunk adds "in or around <name>" where name is the header (dash-split first part)', () => {
         const c = chunk({ category: 'location', header: 'Harbor District', content: 'body' });
         expect(extractEngineSeeds([c]).worldWhere).toEqual(['in or around Harbor District']);
+    });
+    it('a `LOCATION -- Name` header seeds the name, not "in or around LOCATION"', () => {
+        const c = chunk({
+            category: 'location',
+            header: "LOCATION -- Emond's Field and the Two Rivers",
+            content: 'body',
+        });
+        expect(extractEngineSeeds([c]).worldWhere).toEqual(["in or around Emond's Field and the Two Rivers"]);
+    });
+    it('the same with an em dash', () => {
+        const c = chunk({ category: 'location', header: 'LOCATION — Baerlon', content: 'body' });
+        expect(extractEngineSeeds([c]).worldWhere).toEqual(['in or around Baerlon']);
     });
     it('world_overview chunk extracts "in <Place>" proper-noun phrases', () => {
         const c = chunk({
@@ -144,6 +170,15 @@ describe('extractEngineSeeds — WHAT (event summaries + arc headers)', () => {
         // header.replace(...) -> "The Great War", trim -> "The Great War"
         // -> "initiated The Great War"
         expect(extractEngineSeeds([c]).worldWhat).toEqual(['initiated The Great War']);
+    });
+    it('an `EVENT -- ... Arc` header strips the type token too', () => {
+        const c = chunk({
+            category: 'event',
+            header: 'EVENT -- The Breaking Arc',
+            content: 'body',
+            summary: undefined,
+        });
+        expect(extractEngineSeeds([c]).worldWhat).toEqual(['initiated The Breaking Arc']);
     });
 });
 
