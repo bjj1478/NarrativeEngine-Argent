@@ -57,14 +57,32 @@ export const SCENE_STAKES_INSTRUCTION =
 
 // Exported so builtins.ts's Block View documentation renders the real framework instead of a
 // hand-copied duplicate that can drift from what is actually sent.
-export const WRITER_COT = `[WRITER REASONING FRAMEWORK]
+/**
+ * Step 5's beat quota depends on whether the Response Length block (`writer.length`) is on.
+ *
+ * With it ON, the [BEAT BUDGET] line ships below the cache boundary and carries the number,
+ * so Step 5 defers to it. With it OFF no such line is sent, and a Step 5 that still pointed
+ * at one would tell the writer to match a line that is not there — leaving the turn with no
+ * beat guidance at all. The off branch therefore carries its own quota: the flat figure this
+ * framework used before the Response Length contribution existed.
+ */
+const STEP_5_WITH_BUDGET = 'draft exactly as many beats as the [BEAT BUDGET] line allows, and no more.';
+const STEP_5_NO_BUDGET = 'draft 5-8 beats.';
+
+const writerCot = (step5: string): string => `[WRITER REASONING FRAMEWORK]
 Work through these steps in your internal reasoning before writing the narrative. Never show the steps in the narrative output. Always produce the full narrative response after your reasoning ends.
 Step 1 — Deconstruct: break the player's input into discrete intents. Judge each against the rules and MC boundaries. Impossible or implausible demands are narrated as attempts with consequences, not successes.
 Step 2 - Director Brief: if a [DIRECTOR BRIEF] block is present, honor its MANDATORY world-law or fair-adjudication corrections and any compatible SUGGESTION. It does not schedule drama or dictate every character's reaction.
 Step 3 - On-stage minds: first state the player's visible action and result without moral interpretation. For each character in [ACTIVE NPC CONTEXT], consider their current goal and emotional state, what they know and do not know (check [FACTS KNOWN TO ON-STAGE CHARACTERS]), their disposition and competence, and their relationship to the player. Then choose a proportionate response: speech, action, observation, help, challenge, humour, silence, withdrawal, or a shared crowd response. Characters may converge when the same event gives them the same reason to react; they may differ when their perspectives differ. Do not force either. A boundary produces push-back only when the concrete action actually crosses it; never infer a larger injury, hostile intent, or moral failing merely to make drama.
 Step 4 — Engine truth: honor [DICE OUTCOMES] exactly as resolved — never soften failures or upgrade successes. Check each on-stage character against their signature kit. Check [LOCATION] logistics: travel time, weather, era-appropriate technology.
-Step 5 - Beat map: draft exactly as many beats as the [BEAT BUDGET] line allows, and no more. Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.
+Step 5 - Beat map: ${step5} Include every MANDATORY directive from Step 2 and the reactions that actually follow from Step 3. Give the player a playable opening - a response, consequence, piece of information, offer, challenge, or changed situation - rather than forcing a twist, argument, or lesson.
 Step 6 — Final audit: the player's action drives the scene; reactions are grounded in what each character observed and values; no unearned NPC chorus or retroactive moralisation; no cliches or purple prose. Then write the scene.`;
+
+/** The framework as sent when the Response Length block is enabled (the default). Exported
+ *  unchanged so builtins.ts's Block View documentation keeps rendering the real text. */
+export const WRITER_COT = writerCot(STEP_5_WITH_BUDGET);
+/** The framework as sent when the Response Length block is switched off. */
+export const WRITER_COT_NO_BUDGET = writerCot(STEP_5_NO_BUDGET);
 
 export function buildStable(opts: {
     settings: AppSettings;
@@ -74,6 +92,15 @@ export function buildStable(opts: {
     rulesBudget: number;
     budgetStable: number;
     collector: TraceCollector;
+    /**
+     * Whether the Response Length block (`writer.length`) is enabled, which decides which
+     * Step 5 the reasoning framework carries. Resolved by the caller rather than here:
+     * `isBlockEnabled` lives in services/turn/blockEnablement, which imports builtins, which
+     * imports this module — importing it here would close that cycle and put WRITER_COT in
+     * the temporal dead zone on whichever side loads first. Absent reads as enabled, matching
+     * the "absent means enabled" convention the contribution registry uses.
+     */
+    beatBudgetEnabled?: boolean;
 }): { stableContent: string; stableTokens: number; retrievedRulesContent?: string } {
     const { settings, context, relevantRules, rulesManifest, rulesBudget, budgetStable, collector } = opts;
 
@@ -139,7 +166,7 @@ export function buildStable(opts: {
     // source of truth — model-name guessing is gone.
     if (isThinkingEnabled(settings)) {
         stableParts.push("IMPORTANT: If you use a 'thinking' or 'reasoning' block (or any internal reasoning), you MUST still provide the full narrative response AFTER it ends. Never end a turn with only reasoning.");
-        stableParts.push(WRITER_COT);
+        stableParts.push(opts.beatBudgetEnabled === false ? WRITER_COT_NO_BUDGET : WRITER_COT);
     }
 
     const stableContent = stableParts.join('\n\n');

@@ -14,7 +14,7 @@ import { saveCampaignState } from '../../store/campaignStore';
 import { API_BASE } from '../../lib/apiBase';
 import { buildHostFacade, hasHostModelRole } from './hostFacade';
 import { emitCoreEvent, emitCoreEventLazy } from '../mods/events';
-import { beatBudgetLine } from '../payload/contributions/builtins';
+import { beatBudgetLine, BUILTIN_IDS } from '../payload/contributions/builtins';
 import { detectTimeskip } from '../npc/agency/agencyTimeskipRun';
 
 // ── In-memory snapshot ─────────────────────────────────────────────────
@@ -100,7 +100,13 @@ export function getCachedSwipePayload(): OpenAIMessage[] | null {
  */
 export function getSwipeLengthOverride(): string | undefined {
     if (!pendingSnapshot) return undefined;
-    const current = useAppStore.getState().settings.responseLength ?? 'flexible';
+    const settings = useAppStore.getState().settings;
+    // An override is itself a [BEAT BUDGET] line, so it has to respect the block's switch.
+    // With Response Length off the turn shipped no budget at all, and sending one here would
+    // put back the very thing the player switched off - while the swipe wording announces it
+    // as "replacing the earlier [BEAT BUDGET] line" that was never sent.
+    if (!isBlockEnabled(BUILTIN_IDS.responseLength, settings.aiTier, settings.moduleEnabled)) return undefined;
+    const current = settings.responseLength ?? 'flexible';
     const sent = pendingSnapshot.turnState.settings.responseLength ?? 'flexible';
     if (current === sent) return undefined;
     const stakes = pendingSnapshot.turnState.getFreshContext().lastSceneStakes;

@@ -14,7 +14,7 @@ vi.mock('../../chatEngine', () => ({
 import { useAppStore } from '../../../store/useAppStore';
 import { capturePendingTurnSnapshot, clearPendingTurnSnapshot, getSwipeLengthOverride } from '../pendingCommit';
 import { generateSwipeVariant } from '../swipeGeneration';
-import { beatBudgetLine } from '../../payload/contributions/builtins';
+import { beatBudgetLine, BUILTIN_IDS } from '../../payload/contributions/builtins';
 
 const snapshotWith = (sent: AppSettings['responseLength'], lastSceneStakes?: GameContext['lastSceneStakes'], displayInput = 'I wait.') => {
     const state = {
@@ -30,8 +30,20 @@ const snapshotWith = (sent: AppSettings['responseLength'], lastSceneStakes?: Gam
 const setCurrent = (responseLength: AppSettings['responseLength']) =>
     useAppStore.setState({ settings: { ...useAppStore.getState().settings, responseLength } });
 
+const setBlockEnabled = (enabled: boolean) =>
+    useAppStore.setState({
+        settings: {
+            ...useAppStore.getState().settings,
+            moduleEnabled: enabled ? {} : { [BUILTIN_IDS.responseLength]: false },
+        },
+    });
+
 describe('getSwipeLengthOverride', () => {
-    afterEach(() => clearPendingTurnSnapshot());
+    afterEach(() => {
+        clearPendingTurnSnapshot();
+        // The store is shared across tests; an explicit `false` would otherwise leak.
+        setBlockEnabled(true);
+    });
 
     it('is undefined with no pending turn', () => {
         setCurrent('short');
@@ -54,6 +66,19 @@ describe('getSwipeLengthOverride', () => {
         snapshotWith('long');
         setCurrent('short');
         expect(getSwipeLengthOverride()).toBe(beatBudgetLine('short', undefined));
+    });
+
+    // The block's switch has to win here too. With Response Length off the turn shipped no
+    // [BEAT BUDGET] line at all, so an override would put the budget back and announce it as
+    // "replacing the earlier [BEAT BUDGET] line" that was never sent. The dropdown stays
+    // visible while the block is off, so this is reachable by just using it.
+    it('is undefined when the Response Length block is off, even after a dropdown change', () => {
+        snapshotWith('long');
+        setCurrent('short');
+        expect(getSwipeLengthOverride()).toBe(beatBudgetLine('short', undefined));
+
+        setBlockEnabled(false);
+        expect(getSwipeLengthOverride()).toBeUndefined();
     });
 
     // `useChatOperations` wires getFreshContext to `useAppStore.getState().context`, so the

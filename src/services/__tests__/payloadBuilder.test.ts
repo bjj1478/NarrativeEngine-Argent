@@ -712,6 +712,39 @@ describe('buildPayload — scenario 8: thinking mode and tool mode', () => {
         expect(firstSystem.content as string).toContain('Step 6 — Final audit');
     });
 
+    // Step 5's beat quota tracks the Response Length block, because the number lives in the
+    // [BEAT BUDGET] line that block emits. The two must never disagree: a Step 5 pointing at
+    // a line that was not sent leaves the turn with no beat guidance at all, and a Step 5
+    // carrying its own figure while the budget ships would fight it.
+    const thinkingSettings = (moduleEnabled?: Record<string, boolean>) => ({
+        ...baseSettings(),
+        activePresetId: 'preset_reasoning',
+        providers: [{ id: 'prov_reasoning', modelName: 'anything', thinkingEffort: 'medium' }],
+        presets: [{ id: 'preset_reasoning', storyAIProviderId: 'prov_reasoning' }],
+        ...(moduleEnabled ? { moduleEnabled } : {}),
+    } as unknown as AppSettings);
+
+    it('Step 5 defers to the [BEAT BUDGET] line while the Response Length block is on', () => {
+        const result = buildPayload({ settings: thinkingSettings(), context: baseContext(), history: [], userMessage: 'Hello' });
+        const firstSystem = result.messages[0].content as string;
+        expect(firstSystem).toContain('as many beats as the [BEAT BUDGET] line allows');
+        expect(firstSystem).not.toContain('draft 5-8 beats');
+        // and the line it points at is actually sent
+        expect(result.messages.some(m => String(m.content).includes('[BEAT BUDGET:'))).toBe(true);
+    });
+
+    it('Step 5 carries its own quota when the Response Length block is off', () => {
+        const result = buildPayload({
+            settings: thinkingSettings({ 'writer.length': false }),
+            context: baseContext(), history: [], userMessage: 'Hello',
+        });
+        const firstSystem = result.messages[0].content as string;
+        expect(firstSystem).toContain('draft 5-8 beats');
+        expect(firstSystem).not.toContain('[BEAT BUDGET]');
+        // no dangling reference anywhere in the payload
+        expect(result.messages.some(m => String(m.content).includes('[BEAT BUDGET'))).toBe(false);
+    });
+
     it('WRITER_COT absent from stable content when thinkingEffort is off (even for reasoning-capable model names)', () => {
         const normalSettings = {
             ...baseSettings(),

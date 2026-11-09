@@ -97,9 +97,13 @@ export interface FinalUserModuleInput {
  * `context.lastSceneStakes`, parsed in sceneStakesTag.ts) and whether the player's message
  * skips time.
  *
- * This replaced the flat "draft 5-8 beats" quota in WRITER_COT and the paragraph scales the
+ * This supersedes the flat "draft 5-8 beats" quota in WRITER_COT and the paragraph scales the
  * rulesets used to carry. It lives here, below the cache boundary, rather than in the stable
  * CoT — see the PACING note in stable.ts for why a per-turn VARYING string must never move up.
+ *
+ * Switching this block off is a supported way to run the ruleset's own pacing (GM OS v5 counts
+ * developments, not words). Step 5 of the framework then falls back to the old flat quota
+ * instead of pointing at a line that is no longer sent — see WRITER_COT_NO_BUDGET in stable.ts.
  *
  * Lengths are stated in WORDS, not tokens. A model cannot count its own tokens, so a token
  * budget reads as a vague hint and is routinely overshot. The ranges are tuned directly in

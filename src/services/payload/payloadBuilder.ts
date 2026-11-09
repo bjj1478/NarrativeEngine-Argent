@@ -186,7 +186,11 @@ export function buildPayload(options: BuildPayloadOptions): { messages: OpenAIMe
     const worldBudget = budgetMap.get('world');
     const volatileBudget = budgetMap.get('volatile');
     const npcFloor = budgetMap.get('npc');
-    const { stableContent, stableTokens, retrievedRulesContent } = buildStable({ settings, context, relevantRules, rulesManifest, rulesBudget, budgetStable: stableBudget, collector });
+    // Resolved here, not inside buildStable: `isBlockEnabled` lives behind an import chain
+    // that leads back to this module's own contribution registry, so asking for it from
+    // stable.ts would close a cycle. See the `beatBudgetEnabled` doc comment there.
+    const beatBudgetEnabled = isBlockEnabled(BUILTIN_IDS.responseLength, settings.aiTier, settings.moduleEnabled);
+    const { stableContent, stableTokens, retrievedRulesContent } = buildStable({ settings, context, relevantRules, rulesManifest, rulesBudget, budgetStable: stableBudget, collector, beatBudgetEnabled });
     const { worldContent, currentWorldTokens, divergenceContent, divergenceTokens, plannerEventTypes: resolvedEventTypes, relationsBlock } = buildWorld({ history, userMessage, condensedUpToIndex, relevantLore, npcLedger, archiveRecall, recommendedNPCNames, semanticFactText, archiveIndex, timelineEvents, deepContextSummary, divergenceRegister, chapters, onStageNpcIds, loreRaw: context.loreRaw, agencyDigest: context.agencyDigest, arcDigest: context.arcDigest, budgetWorld: worldBudget, npcBudgetFloor: npcFloor, plannerEventTypes, matureMode: settings.matureMode, collector, elevatedScenes, slottedRagSnippets, relationshipMemoryEnabled: context.relationshipMemory === true });
     const { volatileContent, volatileTokens } = buildVolatile({ context, inventoryCategories, profileFields, budgetVolatile: volatileBudget, collector, plannerEventTypes: resolvedEventTypes, userMessage, history, npcLedger, locationLedger, directorWorldFacts, directorBrief });
     // Phase 7.5 — subsystem segments. `buildPayload` hands each one its budget
