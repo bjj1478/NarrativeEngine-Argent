@@ -295,7 +295,16 @@ export function handleDiceTool(
 
     const { total, breakdown, sides } = parseAndRoll(args.dice ?? '1d20');
 
-    // Look up the DieType by face count for tier mapping
+    // KNOWN LIMITATION (deliberately unfixed): face count cannot pick between the percentile
+    // ratings. BAD / DECENT / GOOD / GREAT / WORLD-CLASS / TRIVIAL are all 100-faced, so this
+    // `find` always returns the FIRST of them — dt_bad — and `args.category`, which the model
+    // does supply, is never consulted. Every tool-mode check is therefore graded as BAD.
+    //
+    // Unreachable while pool mode is on (`diceFairnessActive: true`, the default), which rolls
+    // each category against its own rating in `rollDiceFairnessGeneralized`. The fix is to
+    // resolve `args.category` against `diceSystem.categories` and fall back to DEFAULT_RATING_ID
+    // rather than `dieTypes[0]` — the same "fell through to the weakest die" hazard already
+    // guarded in DiceRollModal.tsx and EnginesTab.tsx. This is the last place it survives.
     let tier: string | null = null;
     if (ctx.diceSystem) {
         const dieType: DieType | undefined = ctx.diceSystem.dieTypes.find(d => d.faces === sides);

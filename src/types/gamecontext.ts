@@ -432,6 +432,12 @@ const DEFAULT_RATINGS: { id: string; name: string; threshold: number }[] = [
     { id: 'dt_good', name: 'GOOD', threshold: 40 },
     { id: 'dt_great', name: 'GREAT', threshold: 60 },
     { id: 'dt_world_class', name: 'WORLD-CLASS', threshold: 80 },
+    // Mundane's rating. Appended LAST on purpose: the list is ordered worst-to-best and several
+    // call sites still fall back to `dieTypes[0]` as "the weakest die", so TRIVIAL must not take
+    // the front. At 95 a trivial action misses 5% of the time (96-98 Failure, 99 and 100 Fumble),
+    // which replaces the old hardcoded `MUNDANE=(Narrative Boon)` free pass with something that
+    // can still go wrong occasionally.
+    { id: 'dt_trivial', name: 'TRIVIAL', threshold: 95 },
 ];
 
 /** The rating every default category starts on. */
@@ -545,19 +551,40 @@ export function buildLegacyDieTypes(): DieType[] {
     ];
 }
 
-const DEFAULT_CATEGORY_NAMES = ['Combat', 'Perception', 'Stealth', 'Social', 'Movement', 'Knowledge'];
+const DEFAULT_CATEGORY_NAMES = ['Combat', 'Perception', 'Stealth', 'Social', 'Movement', 'Knowledge', 'Mundane'];
 
-function defaultCategories(dieTypeId: string): DiceCategory[] {
-    return DEFAULT_CATEGORY_NAMES.map((name, i) => ({ id: `cat_default_${i}`, name, dieTypeId }));
+/**
+ * Categories that start on something other than the system's default rating.
+ *
+ * Only an override: TRIVIAL is an ordinary rating, selectable for any category in the Engines
+ * tab, and nothing stops a campaign moving Mundane off it.
+ */
+const CATEGORY_RATING_OVERRIDES: Record<string, string> = { Mundane: 'dt_trivial' };
+
+/**
+ * `dieTypes` is not decoration: `buildLegacyDiceSystem` calls this too, and `dt_trivial` does not
+ * exist in the legacy polyhedral set. An unresolvable override would leave a dangling `dieTypeId`
+ * that `rollDiceFairnessGeneralized` silently skips, dropping the category from the tag. So the
+ * override applies only when the die is actually present; legacy campaigns put Mundane on d20,
+ * which is what their hardcoded `MUNDANE=(Narrative Boon)` string effectively did.
+ */
+function defaultCategories(dieTypeId: string, dieTypes: DieType[]): DiceCategory[] {
+    return DEFAULT_CATEGORY_NAMES.map((name, i) => {
+        const override = CATEGORY_RATING_OVERRIDES[name];
+        const usable = override && dieTypes.some(d => d.id === override);
+        return { id: `cat_default_${i}`, name, dieTypeId: usable ? override : dieTypeId };
+    });
 }
 
 export function buildDefaultDiceSystem(): DiceSystemConfig {
-    return { dieTypes: buildDefaultDieTypes(), categories: defaultCategories(DEFAULT_RATING_ID) };
+    const dieTypes = buildDefaultDieTypes();
+    return { dieTypes, categories: defaultCategories(DEFAULT_RATING_ID, dieTypes) };
 }
 
 /** The pre-percentile default, for saves that predate `diceSystem`. */
 export function buildLegacyDiceSystem(): DiceSystemConfig {
-    return { dieTypes: buildLegacyDieTypes(), categories: defaultCategories('dt_d20') };
+    const dieTypes = buildLegacyDieTypes();
+    return { dieTypes, categories: defaultCategories('dt_d20', dieTypes) };
 }
 
 /**

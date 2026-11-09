@@ -1,5 +1,5 @@
 /**
- * The default dice system is a Delta Green style percentile ladder: five skill
+ * The default dice system is a Delta Green style percentile ladder: six skill
  * ratings, all d100, differing only in where the success threshold sits.
  *
  * Two things are worth locking down. First that every generated table is a
@@ -20,22 +20,44 @@ import {
 import { validateBands, mapTier } from '@narrative/engine';
 
 const RATINGS: Record<string, number> = {
-    BAD: 10, DECENT: 20, GOOD: 40, GREAT: 60, 'WORLD-CLASS': 80,
+    BAD: 10, DECENT: 20, GOOD: 40, GREAT: 60, 'WORLD-CLASS': 80, TRIVIAL: 95,
 };
 
 describe('default dice system — the percentile ladder', () => {
-    it('ships exactly the five skill ratings, all d100', () => {
+    it('ships exactly the six skill ratings, all d100, worst to best', () => {
         const sys = buildDefaultDiceSystem();
-        expect(sys.dieTypes.map(d => d.name)).toEqual(['BAD', 'DECENT', 'GOOD', 'GREAT', 'WORLD-CLASS']);
+        expect(sys.dieTypes.map(d => d.name))
+            .toEqual(['BAD', 'DECENT', 'GOOD', 'GREAT', 'WORLD-CLASS', 'TRIVIAL']);
         for (const d of sys.dieTypes) expect(d.faces).toBe(100);
     });
 
-    it('starts every category on DECENT', () => {
+    // Order is load-bearing: several call sites fall back to `dieTypes[0]` as "the weakest die",
+    // so appending TRIVIAL must not have moved BAD off the front.
+    it('keeps BAD first so the weakest-die fallbacks still mean BAD', () => {
+        expect(buildDefaultDiceSystem().dieTypes[0].name).toBe('BAD');
+    });
+
+    it('starts every category on DECENT, except Mundane', () => {
         const sys = buildDefaultDiceSystem();
         expect(sys.categories.map(c => c.name))
-            .toEqual(['Combat', 'Perception', 'Stealth', 'Social', 'Movement', 'Knowledge']);
-        for (const c of sys.categories) expect(c.dieTypeId).toBe(DEFAULT_RATING_ID);
+            .toEqual(['Combat', 'Perception', 'Stealth', 'Social', 'Movement', 'Knowledge', 'Mundane']);
+        for (const c of sys.categories.filter(c => c.name !== 'Mundane')) {
+            expect(c.dieTypeId).toBe(DEFAULT_RATING_ID);
+        }
         expect(sys.dieTypes.find(d => d.id === DEFAULT_RATING_ID)?.name).toBe('DECENT');
+    });
+
+    // Mundane replaces the legacy pool's hardcoded `MUNDANE=(Narrative Boon)` free pass. TRIVIAL
+    // is its own rating rather than a stretched WORLD-CLASS, which would still miss ~20%.
+    it('puts Mundane on TRIVIAL, so trivial actions almost always succeed', () => {
+        const sys = buildDefaultDiceSystem();
+        const mundane = sys.categories.find(c => c.name === 'Mundane')!;
+        const die = sys.dieTypes.find(d => d.id === mundane.dieTypeId)!;
+        expect(die.name).toBe('TRIVIAL');
+        // 1..95 succeed, 96..100 do not: a 5% miss rate, 2% of it a Fumble.
+        expect(mapTier(95, die)).toBe('Success');
+        expect(mapTier(96, die)).toBe('Failure');
+        expect(mapTier(99, die)).toBe('Fumble');
     });
 
     it('every rating tiles 1..100 with no gap or overlap', () => {
@@ -87,6 +109,16 @@ describe('legacy saves keep the system they were played on', () => {
         const out = migrateLegacyContext({ diceSystem: mine } as Partial<GameContext>);
         expect(out.diceSystem).toBe(mine);
         expect(out.diceSystem!.categories[0].dieTypeId).toBe('dt_world_class');
+    });
+
+    // The override is guarded on the die actually existing. `dt_trivial` is not in the legacy
+    // polyhedral set, and an unresolvable dieTypeId would make rollDiceFairnessGeneralized skip
+    // the category entirely — Mundane would vanish from the tag for legacy campaigns.
+    it('puts legacy Mundane on d20, since TRIVIAL does not exist in that set', () => {
+        const sys = buildLegacyDiceSystem();
+        const mundane = sys.categories.find(c => c.name === 'Mundane')!;
+        expect(mundane.dieTypeId).toBe('dt_d20');
+        expect(sys.dieTypes.some(d => d.id === mundane.dieTypeId)).toBe(true);
     });
 
     it('a save with only a legacy diceConfig lands on d20, not the new ladder', () => {
