@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { buildPayload } from '../payload/payloadBuilder';
 import { DEFAULT_RULES } from '../rules/defaultRules';
@@ -62,7 +63,7 @@ describe('buildPayload — default rules fallback', () => {
         const result = buildPayload({ settings: baseSettings(), context: ctx, history: [], userMessage: 'I look around' });
         const firstSystem = result.messages.find(m => m.role === 'system');
         expect(firstSystem).toBeDefined();
-        expect(firstSystem!.content).toContain('ROLE: Dynamic-Realism GM.');
+        expect(firstSystem!.content).toContain('ROLE: GM of a believable world');
     });
 
     it('uses user-provided rulesRaw instead of DEFAULT_RULES', () => {
@@ -76,13 +77,18 @@ describe('buildPayload — default rules fallback', () => {
     });
 
     it('DEFAULT_RULES contains all expected sections', () => {
-        expect(DEFAULT_RULES).toContain('### Output Format');
-        expect(DEFAULT_RULES).toContain('### NPC Engine');
-        expect(DEFAULT_RULES).toContain('### Name Generation');
-        expect(DEFAULT_RULES).toContain('### Lore Handling');
-        expect(DEFAULT_RULES).toContain('### Action Resolution');
-        expect(DEFAULT_RULES).toContain('### Event Protocol');
-        expect(DEFAULT_RULES).toContain('### World Pressures');
+        expect(DEFAULT_RULES).toContain('### Kernel Directives');
+        expect(DEFAULT_RULES).toContain('### Engine Tags');
+        expect(DEFAULT_RULES).toContain('### NPC Minds');
+        expect(DEFAULT_RULES).toContain('### Location Header');
+        expect(DEFAULT_RULES).toContain('### Naming Rules');
+        expect(DEFAULT_RULES).toContain('### Canon Bounds');
+        expect(DEFAULT_RULES).toContain('### Scene Craft');
+    });
+
+    it('DEFAULT_RULES matches the shipped v5 ruleset file', () => {
+        const shipped = readFileSync('Example_Setup/Ruleset/AI_GM_OS_v5.0 - Immersive Mode.md', 'utf8');
+        expect(DEFAULT_RULES).toBe(shipped.replace(/\r\n/g, '\n').trimEnd());
     });
 });
 
@@ -121,13 +127,10 @@ function makeNPC(overrides: Partial<NPCEntry>): NPCEntry {
         appearance: '',
         faction: '',
         storyRelevance: '',
-        disposition: 'neutral',
         status: 'alive',
-        goals: '',
         voice: '',
         personality: '',
         exampleOutput: '',
-        affinity: 0,
         archived: false,
         ...overrides,
     };
@@ -194,7 +197,7 @@ describe('buildPayload — scenario 1: minimal', () => {
         expect(result.messages.length).toBeGreaterThanOrEqual(2);
         expect(result.messages[0].role).toBe('system');
         // rules text is in the first system message
-        expect(result.messages[0].content).toContain('ROLE: Dynamic-Realism GM.');
+        expect(result.messages[0].content).toContain('ROLE: GM of a believable world');
     });
 
     // Ported from mobile: desktop never asked for the tag (0 in ~1,200 scenes), so the
@@ -301,6 +304,24 @@ describe('buildPayload — scenario 2: full world context', () => {
         expect(allContent).toContain('[ARCHIVE RECALL');
     });
 
+    it('lists scenes recalled in brief after the verbatim ones, with who witnessed them', () => {
+        const recall = [
+            { sceneId: '010', content: 'Grey and Rin fight bandits at the ford; Rin is wounded.', tokens: 20, form: 'short' as const },
+            { sceneId: '020', content: 'FULL SCENE TEXT', tokens: 5, form: 'full' as const },
+        ];
+        const archiveIndex = [
+            { sceneId: '010', timestamp: 1, keywords: [], npcsMentioned: [], witnesses: ['Rin Holmes'], userSnippet: '' },
+            { sceneId: '020', timestamp: 2, keywords: [], npcsMentioned: [], witnesses: [], userSnippet: '' },
+        ];
+        const npcLedger = [{ id: 'npc-rin', name: 'Rin Holmes' }] as unknown as Parameters<typeof buildPayload>[0]['npcLedger'];
+        const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: userMsg, condensedUpToIndex: undefined, relevantLore: undefined, npcLedger, archiveRecall: recall, archiveIndex });
+        const allContent = result.messages.map(m => m.content as string).join('\n');
+
+        const block = allContent.slice(allContent.indexOf('[ARCHIVE RECALL'), allContent.indexOf('[END ARCHIVE RECALL]'));
+        expect(block.indexOf('FULL SCENE TEXT')).toBeLessThan(block.indexOf('[OTHER RELEVANT PAST SCENES — IN BRIEF]'));
+        expect(block).toContain('- Grey and Rin fight bandits at the ford; Rin is wounded. (witnessed by Rin Holmes)');
+    });
+
     it('active NPC context marker appears when matching NPCs are in ledger', () => {
         const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: userMsg, condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: npcs });
         const allContent = result.messages
@@ -340,7 +361,7 @@ describe('buildPayload — scenario 3: NPC tiered directive', () => {
     const highNpc = makeNPC({
         id: 'npc_high',
         name: 'Zorath',
-        drives: { coreWant: 'conquer the realm', sessionWant: 'recruit allies', sceneWant: 'intimidate the player' },
+        wants: { short: ['intimidate the player'], medium: ['recruit allies'], long: 'conquer the realm' },
         behavioralTriggers: [{ keyword: 'sword', shift: 'becomes aggressive' }],
         hardBoundaries: ['never retreat', 'no mercy'],
         softBoundaries: ['avoids fire'],
@@ -361,13 +382,13 @@ describe('buildPayload — scenario 3: NPC tiered directive', () => {
         expect(npcTrace!.reason).toContain('tiered');
     });
 
-    it('NPC with drives surfaces a WANTS line (legacy drives fallback) in output', () => {
+    it('NPC with wants surfaces a GOAL line in output', () => {
         const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: userMsg, condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [highNpc, lowNpc] });
         const allContent = result.messages
             .map(m => m.content as string)
             .join('\n');
-        // highNpc has drives (not wants) → buildExtendedDirective emits WANTS:.
-        expect(allContent).toContain('WANTS:');
+        // highNpc has wants.long → buildExtendedDirective emits GOAL:.
+        expect(allContent).toContain('GOAL: conquer the realm');
     });
 
     it('NPC triggers surface as ON "keyword": in output', () => {
@@ -386,14 +407,14 @@ describe('buildPayload — scenario 3: NPC tiered directive', () => {
         expect(allContent).toContain('WON\'T:');
     });
 
-    it('NPC without drives does not emit a WANTS line', () => {
+    it('NPC without wants does not emit a GOAL line', () => {
         const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: userMsg, condensedUpToIndex: undefined, relevantLore: undefined, npcLedger: [highNpc, lowNpc] });
         const allContent = result.messages
             .map(m => m.content as string)
             .join('\n');
-        // lowNpc (Tara) has no drives and no wants — no WANTS line for her.
-        // Only highNpc's WANTS line should be present.
-        const wantsCount = (allContent.match(/WANTS:/g) ?? []).length;
+        // lowNpc (Tara) has no wants — no GOAL line for her.
+        // Only highNpc's GOAL line should be present.
+        const wantsCount = (allContent.match(/GOAL:/g) ?? []).length;
         expect(wantsCount).toBe(1);
     });
 });
@@ -959,7 +980,7 @@ describe('buildPayload — cache_control: ephemeral markers', () => {
     it('stable content system message has cache_control: ephemeral', () => {
         const result = buildPayload({ settings: baseSettings(), context: baseContext(), history: [], userMessage: 'Hello world' });
         const stableMsg = result.messages.find(
-            m => m.role === 'system' && typeof m.content === 'string' && m.content.includes('ROLE: Dynamic-Realism GM.')
+            m => m.role === 'system' && typeof m.content === 'string' && m.content.includes('ROLE: GM of a believable world')
         );
         expect(stableMsg).toBeDefined();
         expect((stableMsg as any).cache_control).toEqual({ type: 'ephemeral' });

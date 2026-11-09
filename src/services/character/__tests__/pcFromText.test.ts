@@ -55,10 +55,10 @@ describe('parsePCFromText — create mode', () => {
         expect(patch).not.toHaveProperty('wants');
     });
 
-    it('merges visual profile and coerces array-shaped strings', () => {
+    it('folds a legacy visual profile into appearance and coerces array-shaped strings', () => {
         const patch = parsePCFromText({ name: 'Kael', aliases: ['The Red', 'Captain'], visualProfile: { eyeColor: 'green' } });
         expect(patch.aliases).toBe('The Red, Captain');
-        expect(patch.visualProfile?.eyeColor).toBe('green');
+        expect(patch.appearance).toContain('green');
     });
 });
 

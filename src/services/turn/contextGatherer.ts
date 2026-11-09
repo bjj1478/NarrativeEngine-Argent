@@ -1,3 +1,4 @@
+import { effectiveSceneRecallBudget } from '../archive-memory/recallBudget';
 import type { ArchiveChapter, TimelineEvent } from '../../types';
 import type { TurnState } from './turnOrchestrator';
 import { gatherSemanticCandidates } from '../context-gatherer/semanticCandidates';
@@ -19,7 +20,7 @@ import { beginGatherStage, endGatherStage, clearGatherStages } from './gatherPro
 import { AI_CALL_TIMEOUT_MS } from '../llm/timeouts';
 import type { LoreChunk } from '../../types';
 import type { HostFacade } from './hostFacade';
-import { fetchArchiveScenes } from '../archiveMemory';
+import { fetchRecallScenes } from '../archiveMemory';
 import { EMPTY_REGISTER, getDivergenceSceneIds } from '../campaign-state/divergenceRegister';
 import { formatRoleFaultReason, roleFaultStore, serviceRoles } from '../roles';
 import {
@@ -188,7 +189,7 @@ export async function gatherMemoryRecallViaRole(
         excludeSceneIds: [...(excludeSceneIds ?? [])],
         divergenceSceneIds: [...getDivergenceSceneIds((data?.divergenceRegister ?? state.divergenceRegister) || EMPTY_REGISTER)],
         depth: facade?.config.archiveRecallDepth ?? state.settings.archiveRecallDepth ?? 'standard',
-        tokenBudget: 3000,
+        tokenBudget: facade?.config.sceneRecallBudget ?? effectiveSceneRecallBudget(state.settings.sceneRecallBudget, state.settings.contextLimit),
     };
 
     setMemoryRecallDefaultContext({
@@ -226,7 +227,7 @@ export async function gatherMemoryRecallViaRole(
     const excluded = new Set(input.excludeSceneIds);
     const sceneIds = answer.sceneIds.filter((sceneId) => knownSceneIds.has(sceneId) && !excluded.has(sceneId));
     if (sceneIds.length === 0) return [];
-    return fetchArchiveScenes(input.campaignId, sceneIds, input.tokenBudget);
+    return fetchRecallScenes(input.campaignId, sceneIds, input.tokenBudget, archiveIndex);
 }
 
 export async function gatherContext(

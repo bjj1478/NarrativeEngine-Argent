@@ -1,5 +1,6 @@
 import type { AppSettings, LLMProvider, AIPreset, ApiFormat, AiTier, ResponseLength } from '../../types';
 import { RESPONSE_LENGTHS } from '../../types';
+import { DEFAULT_SCENE_RECALL_BUDGET, normalizeSceneRecallBudget } from '../../services/archive-memory/recallBudget';
 import { set as idbSet } from 'idb-keyval';
 import { encryptSettingsProviders } from '../../services/infrastructure/settingsCrypto';
 import { uid } from '../../utils/uid';
@@ -111,6 +112,7 @@ export const defaultSettings: AppSettings = {
     loreDepth: 'balanced',
     archiveRecallDepth: 'standard',
     responseLength: 'flexible',
+    sceneRecallBudget: DEFAULT_SCENE_RECALL_BUDGET,
     uiScale: 1.0,
     ...READING_DEFAULTS,
     betaUi: false,
@@ -453,6 +455,7 @@ export function migrateSettings(data: Record<string, unknown>): AppSettings {
         responseLength: (RESPONSE_LENGTHS as readonly string[]).includes(raw.responseLength as string)
             ? raw.responseLength as ResponseLength
             : 'flexible',
+        sceneRecallBudget: normalizeSceneRecallBudget(raw.sceneRecallBudget),
         matureMode: (raw.matureMode as boolean) ?? false,
         aiTier: raw.aiTier as AiTier | undefined,
         uiScale: (raw.uiScale as number) ?? 1.0,

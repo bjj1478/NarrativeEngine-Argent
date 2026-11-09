@@ -1,9 +1,9 @@
 import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
-import { Sparkles, ClipboardPaste } from 'lucide-react';
+import { ClipboardPaste } from 'lucide-react';
+import { Sparkles } from '../../icons/narrativeIcons';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../../../store/useAppStore';
 import type { PlayerCharacter, CharacterProfileState, NPCEntry } from '../../../types';
-import { DEFAULT_VISUAL_PROFILE } from '../../../types';
 import { toast } from '../../Toast';
 import { PCEditForm } from '../PCEditForm';
 import { useNpcPortraits } from '../../hooks/useNpcPortraits';
@@ -51,7 +51,6 @@ function blankPcForm(): Partial<PlayerCharacter> {
         name: '',
         status: 'Alive',
         tier: 'recurring',
-        visualProfile: { ...DEFAULT_VISUAL_PROFILE },
     };
 }
 
@@ -181,7 +180,7 @@ export const SheetTab = forwardRef<SheetTabHandle, { onStartGuidedCreation?: () 
                 matureMode: state.settings.matureMode ?? false,
             });
             setForm(existing
-                ? { ...existing, visualProfile: existing.visualProfile || { ...DEFAULT_VISUAL_PROFILE }, ...patch }
+                ? { ...existing, ...patch }
                 : { ...blankPcForm(), ...patch });
             setIsEditing(true);
             setFromTextMode(null);

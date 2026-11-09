@@ -9,7 +9,7 @@
  */
 
 import type { LoreChunk, NPCEntry, InventoryItem, InventoryItemCategory, CharacterProfile } from '../../types';
-import { readPcAffinity } from '../npc/affinityAccess';
+import { clipLine, NPC_FIELD_FLOORS, type NpcFieldLimits } from '../npc/npcFieldLimits';
 
 /**
  * Strip markdown formatting from a block of text.
@@ -139,32 +139,24 @@ export function minifyLoreBlock(chunks: LoreChunk[]): string {
  * Minify an NPC entry for AI consumption.
  * Drops verbose labels and compresses into a single dense line.
  * 
- * Before: [ASH HUANG (None)] Alive | Affinity: 50/100 (Neutral) | Asian male... | Goals: ...
- * After:  ASH_HUANG Alive aff:50 | Asian male... | panicked | Gim:... Glr:... | 6/5/10/1/7/6
+ * Output: [ASH HUANG(Ash)] Alive | Asian male... | panicked, guarded
+ *
+ * The PC relationship is NOT emitted here: buildCoreDirective owns it as an
+ * `[Aff: <band>]` word. A raw number here used to contradict that band.
+ * Motives are not emitted here — the directive tiers send `wants` as NOW/GOAL/PURSUING.
+ *
+ * `limits` scale with the NPC budget (npcFieldLimits.ts); the default is the floor.
  */
-export function minifyNPC(npc: NPCEntry, relationshipMemoryEnabled = false): string {
+export function minifyNPC(npc: NPCEntry, limits: NpcFieldLimits = NPC_FIELD_FLOORS): string {
     const aliases = npc.aliases ? `(${npc.aliases})` : '';
     const name = npc.name.toUpperCase();
     const status = npc.status || 'Alive';
-    const affinityRead = readPcAffinity(npc, relationshipMemoryEnabled);
-    const aff = affinityRead.kind === 'legacyAffinity'
-        ? affinityRead.value
-        : affinityRead.kind === 'pcRelation'
-            ? (npc.affinity ?? 50)
-            : 50;
 
-    // Compact appearance: trim to first 80 chars if very long
-    const appearance = (npc.appearance || '?').length > 80
-        ? (npc.appearance || '?').substring(0, 80) + '…'
-        : (npc.appearance || '?');
+    // Only the appearance's opening reaches the narrator (the portrait gets it all).
+    const appearance = clipLine(npc.appearance, limits.appearance) || '?';
+    const personality = clipLine(npc.personality, limits.personality) || '?';
 
-    const personality = (npc.personality || npc.disposition || '?').length > 60
-        ? (npc.personality || npc.disposition || '?').substring(0, 60) + '…'
-        : (npc.personality || npc.disposition || '?');
-
-    const goals = npc.goals || '?';
-
-    return `[${name}${aliases}] ${status}${affinityRead.kind === 'stance' ? '' : ` aff:${aff}`} | ${appearance} | ${personality} | ${goals}`;
+    return `[${name}${aliases}] ${status} | ${appearance} | ${personality}`;
 }
 
 /**

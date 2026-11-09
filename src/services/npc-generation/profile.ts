@@ -2,12 +2,13 @@ import type { EndpointConfig, ProviderConfig, ChatMessage, NPCEntry, SceneEventT
 import { uid } from '../../utils/uid';
 import { sendMessageAndParseJson, sanitizeSignatureKit } from './shared';
 import { TRAIT_VOCAB, TRAIT_NAMES } from '../npc/agency/agencyPools';
-import { affinityToPcRelation, describeHex } from '../npc/agency/agencyBands';
+import { describeHex } from '../npc/agency/agencyBands';
 import { drawShortWants, drawMediumWants } from '../npc/agency/agencyWantDraw';
 import { buildGoalsFromWants } from '../npc/agency/agencyGoals';
 import { GROUP_KEYS } from '../npc/dispositionGroups';
 import { rollHex, pickGroups, drawConsistentTraits, rollLooksTier } from '../npc/hexRoll';
 import { buildVoiceDirective } from '../npc/hexVoiceGuide';
+import { visualProfileToProse } from '../npc/retireLegacyFields';
 
 // NPC Generation Refit (Phase 1): propose → roll → render.
 //
@@ -119,21 +120,15 @@ export async function generateNPCProfile(
             status: coerceStringField(parsed.status, 'Alive'),
             faction: coerceStringField(parsed.faction, 'Unknown'),
             storyRelevance: coerceStringField(parsed.storyRelevance, 'Unknown'),
-            appearance: coerceStringField(parsed.appearance),
-            visualProfile: parsed.visualProfile || {
-                race: 'Unknown', gender: 'Unknown', ageRange: 'Unknown', build: 'Unknown', symmetry: 'Unknown', hairStyle: 'Unknown', eyeColor: 'Unknown', skinTone: 'Unknown', gait: 'Unknown', distinctMarks: 'None', clothing: 'Unknown', artStyle: 'Stylized Game Realism',
-            },
-            disposition: coerceStringField(parsed.disposition, 'Neutral'),
-            goals: coerceStringField(parsed.goals, 'Unknown'),
+            // One appearance paragraph. A model that still sends the retired structured
+            // "visualProfile" only fills a blank appearance from it.
+            appearance: coerceStringField(parsed.appearance) || visualProfileToProse(parsed.visualProfile),
             voice: coerceStringField(parsed.voice),
-            personality: coerceStringField(parsed.personality, parsed.disposition || 'Unknown'),
+            personality: coerceStringField(parsed.personality, 'Unknown'),
             exampleOutput: coerceStringField(parsed.exampleOutput),
-            affinity: 50,
-            // No `drives` (2026-10-04, owner decision: one motivation system). New NPCs are
-            // born with agency wants below (short/medium pool draws + the model's longWant),
-            // which the prompt and the NPC updater read first. Generating drives as well gave
-            // every new NPC a second, competing set of motivations. A `drives` key the model
-            // still sends is ignored.
+            // One motive system: agency wants below (short/medium pool draws + the model's
+            // longWant). No drives/goals/disposition/affinity — retired 2026-11-01; any of
+            // those keys the model still sends is ignored.
             behavioralTriggers: Array.isArray(parsed.behavioralTriggers)
                 ? parsed.behavioralTriggers.filter((t: Record<string, unknown>) => t.keyword && t.shift).map((t: Record<string, unknown>) => ({ keyword: String(t.keyword), shift: String(t.shift) }))
                 : undefined,
@@ -163,14 +158,9 @@ export async function generateNPCProfile(
         newEntry.secondaryGroup = secondary;
         newEntry.region = coerceStringField(parsed.region);
         newEntry.populated = true;
-        // B2 — Generated NPCs are born populated:true but pcRelation was never homed at birth,
-        // and populateAgencyFields skips populated NPCs, so pcRelation stayed undefined forever
-        // and every NPC scored as a stranger in Phase 2's reaction menu. Home it now from the
-        // affinity band (same mapping populateAgencyFields uses). Guard with === undefined so an
-        // explicit value (e.g. set by a caller) is never clobbered.
-        if (newEntry.pcRelation === undefined) {
-            newEntry.pcRelation = affinityToPcRelation(newEntry.affinity ?? 50);
-        }
+        // B2 — Generated NPCs are born populated:true, and the lazy fill skips populated NPCs,
+        // so home pcRelation at birth (Neutral). Never clobber an explicit value.
+        if (newEntry.pcRelation === undefined) newEntry.pcRelation = 0;
         // Scene-type tags per profile field for smart context injection.
         newEntry.fieldTags = buildDefaultFieldTags(newEntry);
         // Phase-3: seed Goal records from the new medium/long wants (engine layer; hidden cols).
@@ -251,7 +241,7 @@ type RenderPromptOpts = {
 
 /**
  * Call B (RENDER) — build the profile-render prompt. The model renders the fixed skeleton into
- * world flavour: appearance, disposition, goals, voice, exampleOutput, storyRelevance, wants. It
+ * world flavour: appearance, voice, personality, exampleOutput, storyRelevance, longWant. It
  * NEVER emits `personalityHex` or numeric axes — the hex comes from the engine roll. The rolled
  * hex band-words + looksTier + axis-keyed voice directive (WO-5) constrain voice/exampleOutput so
  * they're a function of the numbers, not a generic default.
@@ -283,23 +273,8 @@ ${voiceSection}OUTPUT FORMAT — respond with a JSON object matching this struct
   "status": "String (Alive, Deceased, Missing, or Unknown)",
   "faction": "String (The faction(s), group(s), or origin this NPC belongs to — can list multiple comma-separated factions if they belong to multiple organizations)",
   "storyRelevance": "String (Why this NPC matters to the current story)",
-  "disposition": "String (current mood/attitude: Helpful, Hostile, Suspicious, etc — MUST be consistent with the rolled personality band-words)",
-  "goals": "String (Core motive)",
   "voice": "String — describe HOW this NPC speaks, DERIVED from the VOICE DIRECTION above. Sentence length, vocabulary level, verbal quirks, catchphrases, accent notes. Be specific.",
-  "appearance": "String — physical description grounded in the RECENT CHAT HISTORY and the rolled LOOKS TIER (${looksTier}). Quote details mentioned in prose (hair color, clothing, distinguishing marks). If the chat history does not describe them, write a minimal trope-appropriate description and mark it as inferred with prefix '[inferred] '.",
-  "visualProfile": {
-    "race": "String (e.g. Human, Elf)",
-    "gender": "String",
-    "ageRange": "String",
-    "build": "String",
-    "symmetry": "String (e.g. symmetrical features for handsome, rugged, asymmetrical/pockmarked for ugly)",
-    "hairStyle": "String",
-    "eyeColor": "String",
-    "skinTone": "String",
-    "gait": "String",
-    "distinctMarks": "String",
-    "clothing": "String"
-  },
+  "appearance": "String — 3-5 sentences of physical description grounded in the RECENT CHAT HISTORY and the rolled LOOKS TIER (${looksTier}). The FIRST sentence carries the most identifying details (species, presented gender, age, build) because it is the part read every turn; then hair, eyes, skin, clothing and gear, and distinguishing marks. Quote details mentioned in prose. If the chat history does not describe them, write a minimal trope-appropriate description and mark it as inferred with prefix '[inferred] '.",
   "personality": "String — core personality traits in plain language, CONSISTENT with the rolled band-words. What drives them? How do they treat others? What do they fear?",
   "exampleOutput": "String — one line of in-character dialogue that DEMONSTRATES the VOICE DIRECTION (the axis extremes above). Include a brief action in brackets if needed.",
   "behavioralTriggers": [

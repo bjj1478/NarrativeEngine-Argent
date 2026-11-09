@@ -1,5 +1,6 @@
-import type { EndpointConfig, ProviderConfig, PlayerCharacter, NPCVisualProfile, PersonalityHex, HexAxis } from '../../types';
-import { DEFAULT_VISUAL_PROFILE } from '../../types';
+import type { EndpointConfig, ProviderConfig, PlayerCharacter, PersonalityHex, HexAxis } from '../../types';
+import { visualProfileToProse } from '../npc/retireLegacyFields';
+import { PORTRAIT_ART_STYLE_OPTIONS } from '../../data/portraitStyles';
 import { sendMessage, type OpenAIMessage } from '../llm/llmService';
 import { extractJson } from '../infrastructure/jsonExtract';
 import { sanitizeSignatureKit } from '../npc/signatureKit';
@@ -15,14 +16,14 @@ import { describeHex } from '../npc/agency/agencyBands';
 //    result is reviewed before saving, so it counts as "the user's hand" (§10.2). There is NO
 //    keyword-heuristic fill — axes the text does not ground stay unset (create) or keep their
 //    current value (refine).
-//  - No agency homing: affinity / pcRelation / drives / goalRecords / fieldTags / wants.short
+//  - No agency homing: pcRelation / goalRecords / fieldTags / wants.short
 //    are never written, and short wants are never pool-drawn.
 //
 // Store-free: returns a form patch. The Sheet tab drops it into edit mode for the user to review.
 
 const HEX_AXES: readonly HexAxis[] = ['drive', 'diligence', 'boldness', 'warmth', 'empathy', 'composure'];
-const VP_KEYS: readonly (keyof NPCVisualProfile)[] = ['race', 'gender', 'ageRange', 'build', 'symmetry', 'hairStyle', 'eyeColor', 'skinTone', 'gait', 'distinctMarks', 'clothing'];
-const STRING_FIELDS = ['name', 'aliases', 'status', 'faction', 'storyRelevance', 'disposition', 'goals', 'personality', 'voice', 'exampleOutput', 'appearance', 'region'] as const;
+const ART_STYLES: readonly string[] = PORTRAIT_ART_STYLE_OPTIONS.map(o => o.value);
+const STRING_FIELDS = ['name', 'aliases', 'status', 'faction', 'storyRelevance', 'personality', 'voice', 'exampleOutput', 'appearance', 'region'] as const;
 const VALID_STATUSES = ['Alive', 'Deceased', 'Missing', 'Unknown', 'In Custody'];
 const MAX_TRAITS = 5;
 const RETRY_SUFFIX = '\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY valid JSON. No markdown fences, no comments, no trailing commas, no extra text before or after the JSON.';
@@ -61,8 +62,6 @@ function describeExisting(pc: PlayerCharacter): string {
         `Status: ${pc.status || 'Alive'}`,
         `Faction: ${pc.faction || ''}`,
         `Story Relevance: ${pc.storyRelevance || ''}`,
-        `Disposition: ${pc.disposition || ''}`,
-        `Goals: ${pc.goals || ''}`,
         `Personality: ${pc.personality || ''}`,
         `Voice: ${pc.voice || ''}`,
         `Example Dialogue: ${pc.exampleOutput || ''}`,
@@ -76,10 +75,7 @@ function describeExisting(pc: PlayerCharacter): string {
         const k = pc.signatureKit;
         lines.push(`SignatureKit: gear=[${k.equipment.join(', ')}] powers=[${k.abilities.join(', ')}]${k.element ? ` element=${k.element}` : ''}`);
     }
-    if (pc.visualProfile) {
-        const vp = pc.visualProfile;
-        lines.push(`VisualProfile: ${VP_KEYS.map(k => `${k}=${vp[k] || ''}`).join('; ')}`);
-    }
+    if (pc.artStyle) lines.push(`ArtStyle: ${pc.artStyle}`);
     return lines.join('\n');
 }
 
@@ -105,14 +101,12 @@ OUTPUT FORMAT — a single JSON object. Every key is optional; omit keys the tex
   "status": "Alive | Deceased | Missing | Unknown | In Custody",
   "faction": "String (faction(s)/organization(s), comma separated)",
   "storyRelevance": "String (background: who they are and why their story matters)",
-  "disposition": "String (default mood/attitude)",
-  "goals": "String (core motive)",
   "personality": "String (core personality in plain language: drives, how they treat others, fears)",
   "voice": "String (how they speak: tone, cadence, vocabulary, quirks, catchphrases)",
   "exampleOutput": "String (one in-character line of dialogue that shows the voice; quote the text if it has dialogue)",
-  "appearance": "String (physical description drawn from the text)",
+  "appearance": "String - 3-5 sentences of physical description drawn from the text. The FIRST sentence carries the most identifying details (species, presented gender, age, build) because it is the part read every turn; then hair, eyes, skin, clothing and gear, and distinguishing marks.",
   "region": "String (home or usual location)",
-  "visualProfile": { "race": "", "gender": "", "ageRange": "", "build": "", "symmetry": "", "hairStyle": "", "eyeColor": "", "skinTone": "", "gait": "", "distinctMarks": "", "clothing": "" },
+  "artStyle": "One of: ${ART_STYLES.join(' | ')} - the portrait style that best suits the source material; omit it if the text gives no basis",
   "personalityHex": { "drive": 0, "diligence": 0, "boldness": 0, "warmth": 0, "empathy": 0, "composure": 0 },
   "traits": ["up to ${MAX_TRAITS} traits"],
   "wants": { "medium": ["2-3 arc-level goals"], "long": "one overarching life ambition" },
@@ -158,15 +152,18 @@ export function parsePCFromText(parsed: any, opts: PCFromTextOptions = {}): Part
         if (match) patch.status = match; else delete patch.status;
     }
 
-    // Visual profile — merge only the non-empty incoming fields over what is there.
-    if (p.visualProfile && typeof p.visualProfile === 'object') {
-        const base: NPCVisualProfile = { ...DEFAULT_VISUAL_PROFILE, ...(existing?.visualProfile ?? {}) };
-        let touched = false;
-        for (const k of VP_KEYS) {
-            const val = coerceStringField(p.visualProfile[k]).trim();
-            if (val) { base[k] = val; touched = true; }
-        }
-        if (touched) patch.visualProfile = base;
+    // Appearance is the one visual description. A model that still answers with the retired
+    // structured "visualProfile" only gets to fill a blank appearance from it.
+    if (!patch.appearance) {
+        const prose = visualProfileToProse(p.visualProfile);
+        if (prose) patch.appearance = prose;
+    }
+    // Art style is a controlled vocabulary; an unrecognised value is dropped so the portrait
+    // falls back to the default style rather than sending junk to the image model.
+    const incomingStyle = coerceStringField(p.artStyle).trim();
+    if (incomingStyle) {
+        const match = ART_STYLES.find(s => s.toLowerCase() === incomingStyle.toLowerCase());
+        if (match) patch.artStyle = match;
     }
 
     // Traits — controlled vocabulary + maturity gate. New traits lead; existing ones fill the rest.

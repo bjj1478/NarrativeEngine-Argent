@@ -107,6 +107,9 @@ export type LLMProvider = {
      * and the thinking reserve stays conservative (see WORKORDER-thinking-token-floor §3.2).
      * This is an OUTPUT ceiling, not a context window; they are different and much different sizes. */
     maxOutputTokens?: number;
+    /** Image providers only: the most prompt characters this model accepts. Unset falls
+     *  back to DEFAULT_PORTRAIT_PROMPT_CHARS (services/npc/portraitPrompt.ts). */
+    maxImagePromptChars?: number;
     /** NanoGPT / OpenRouter only: 'flex' is cheaper and slower, 'priority' faster
      *  and dearer. Ignored on other hosts. */
     serviceTier?: ServiceTier;
@@ -202,6 +205,8 @@ export type AppSettings = {
     enableArchivePlanner?: boolean;
     retrievalAlgorithm?: 'classic' | 'idf-rrf';
     loreDepth?: 'lean' | 'balanced' | 'deep';  // lore RAG ceiling as a share of contextLimit + relevance-floor leniency; default 'balanced' (services/lore/loreBudget.ts)
+    /** Tokens past scenes may use per turn: any whole number from 500, default 3000, capped at contextLimit when used. See archive-memory/recallBudget.ts. */
+    sceneRecallBudget?: number;
     archiveRecallDepth?: 'lean' | 'standard' | 'deep';  // archive recall ceiling; default 'standard' (desktop). 'lean' = mobile parity (3/4/5)
     /** Narrator reply length. Absent reads as 'flexible' at the use site. */
     responseLength?: ResponseLength;

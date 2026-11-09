@@ -4,6 +4,7 @@ import { buildDriftAlert, buildKnowledgeBoundary, buildReactionMenuLine } from '
 import { relationBand, describeHex } from '../npc/agency/agencyBands';
 import { readPcAffinity, relationToward } from '../npc/affinityAccess';
 import { minifyLoreChunk, minifyNPC } from '../turn/contextMinifier';
+import { clipLine, npcFieldLimits, NPC_FIELD_FLOORS, type NpcFieldLimits } from '../npc/npcFieldLimits';
 import { resolveTimeline, formatResolvedForContext } from '../campaign-state/timelineResolver';
 import { isFactActive, renderRegisterForPayload } from '../campaign-state/divergenceRegister';
 import { isKnownToAnyOnStage, parseKnownByToken } from '../campaign-state/knowledgeScope';
@@ -32,7 +33,7 @@ function fieldTagMatches(
     return tags.some(t => plannerTags.has(t));
 }
 
-export function buildCoreDirective(npc: NPCEntry, relationshipMemoryEnabled = false): string {
+export function buildCoreDirective(npc: NPCEntry, relationshipMemoryEnabled = false, limits: NpcFieldLimits = NPC_FIELD_FLOORS): string {
     const parts: string[] = [];
     // Routed through the one affinity accessor (WO-4 §2). The `pcRelation` arm
     // preserves the pre-refactor `npc.pcRelation !== undefined` branch exactly;
@@ -41,13 +42,7 @@ export function buildCoreDirective(npc: NPCEntry, relationshipMemoryEnabled = fa
     const affinityLabel = affinityRead.kind === 'pcRelation' ? relationBand(affinityRead.value) : undefined;
     if (affinityLabel) parts.push(`[Aff: ${affinityLabel}]`);
     if (npc.personalityHex) parts.push(`Personality: ${describeHex(npc.personalityHex)}`);
-    if (npc.wants?.short?.[0]) {
-        const s = npc.wants.short[0];
-        parts.push(`NOW: ${s.length > 40 ? s.substring(0, 40) + '\u2026' : s}`);
-    } else if (npc.drives?.sceneWant) {
-        const sw = npc.drives.sceneWant;
-        parts.push(`NOW: ${sw.length > 40 ? sw.substring(0, 40) + '\u2026' : sw}`);
-    }
+    if (npc.wants?.short?.[0]) parts.push(`NOW: ${clipLine(npc.wants.short[0], limits.now)}`);
     // NPC Signature Kit (v1) — durable loadout rides CORE so scene-tag filtering
     // can never drop it. The anti-drift analogue of personalityHex.
     if (npc.signatureKit) {
@@ -64,36 +59,27 @@ export function buildCoreDirective(npc: NPCEntry, relationshipMemoryEnabled = fa
 function buildExtendedDirective(
     npc: NPCEntry,
     plannerTags: Set<SceneEventType> | null,
+    limits: NpcFieldLimits,
 ): string {
     const parts: string[] = [];
-    if (npc.wants?.long) {
-        parts.push(`GOAL: ${npc.wants.long.length > 80 ? npc.wants.long.substring(0, 80) + '\u2026' : npc.wants.long}`);
-    }
-    if (npc.wants?.medium?.[0]) {
-        const m = npc.wants.medium[0];
-        parts.push(`PURSUING: ${m.length > 60 ? m.substring(0, 60) + '\u2026' : m}`);
-    } else if (npc.drives && !npc.wants) {
-        const driveParts: string[] = [];
-        if (npc.drives.sessionWant) driveParts.push(npc.drives.sessionWant.length > 80 ? npc.drives.sessionWant.substring(0, 80) + '\u2026' : npc.drives.sessionWant);
-        if (npc.drives.coreWant) driveParts.push(npc.drives.coreWant.length > 80 ? npc.drives.coreWant.substring(0, 80) + '\u2026' : npc.drives.coreWant);
-        if (driveParts.length > 0) parts.push(`WANTS: ${driveParts.join(' \u2190 ')}`);
-    }
+    if (npc.wants?.long) parts.push(`GOAL: ${clipLine(npc.wants.long, limits.goal)}`);
+    if (npc.wants?.medium?.[0]) parts.push(`PURSUING: ${clipLine(npc.wants.medium[0], limits.pursuing)}`);
     if (npc.hardBoundaries?.length && fieldTagMatches('hardBoundaries', npc.fieldTags, plannerTags)) {
-        parts.push(`WON'T: ${npc.hardBoundaries.map(b => b.length > 40 ? b.substring(0, 40) + '\u2026' : b).join('; ')}`);
+        parts.push(`WON'T: ${npc.hardBoundaries.map(b => clipLine(b, limits.boundary)).join('; ')}`);
     }
     if (npc.softBoundaries?.length && fieldTagMatches('softBoundaries', npc.fieldTags, plannerTags)) {
-        parts.push(`RESENTS: ${npc.softBoundaries.map(b => b.length > 40 ? b.substring(0, 40) + '\u2026' : b).join('; ')}`);
+        parts.push(`RESENTS: ${npc.softBoundaries.map(b => clipLine(b, limits.boundary)).join('; ')}`);
     }
     if (npc.behavioralTriggers?.length && fieldTagMatches('behavioralTriggers', npc.fieldTags, plannerTags)) {
         for (const t of npc.behavioralTriggers) {
-            parts.push(`ON "${t.keyword}": ${t.shift.length > 50 ? t.shift.substring(0, 50) + '\u2026' : t.shift}`);
+            parts.push(`ON "${t.keyword}": ${clipLine(t.shift, limits.trigger)}`);
         }
     }
     if (npc.voice && fieldTagMatches('voice', npc.fieldTags, plannerTags)) {
-        parts.push(`Voice: ${npc.voice.length > 60 ? npc.voice.substring(0, 60) + '\u2026' : npc.voice}`);
+        parts.push(`Voice: ${clipLine(npc.voice, limits.voice)}`);
     }
     if (npc.exampleOutput && fieldTagMatches('exampleOutput', npc.fieldTags, plannerTags)) {
-        parts.push(`Example: ${npc.exampleOutput.length > 80 ? npc.exampleOutput.substring(0, 80) + '\u2026' : npc.exampleOutput}`);
+        parts.push(`Example: ${clipLine(npc.exampleOutput, limits.example)}`);
     }
     return parts.length > 0 ? parts.join(' | ') : '';
 }
@@ -218,8 +204,22 @@ export function buildWorld(opts: {
             // WO-F (2be3ad5) — drop the internal scene number from the header so it never leaks
             // into the GM prompt. The scene id is a storage detail; the AI should recall scenes by
             // content, not by number (and surgical deletes can leave gaps that would confuse it).
-            const text = `[ARCHIVE RECALL — VERBATIM PAST SCENES]\n${filteredRecall.map(s => `${pastSceneHeader(s.sceneId)}\n${s.content}`).join('\n\n')}\n[END ARCHIVE RECALL]`;
-            worldBlocks.push({ source: 'Archive Recall', content: text, tokens: countTokens(text), reason: `Verbatim history (${filteredRecall.length} scenes)` });
+            // Scenes recalled as a one-line definition (form 'short') are listed after the
+            // verbatim ones, so the budget reaches far more scenes than full text alone.
+            const fullRecall = filteredRecall.filter(s => s.form !== 'short');
+            const shortRecall = filteredRecall.filter(s => s.form === 'short');
+            const fullText = fullRecall.map(s => `${pastSceneHeader(s.sceneId)}\n${s.content}`).join('\n\n');
+            const shortText = shortRecall.length > 0
+                ? `[OTHER RELEVANT PAST SCENES — IN BRIEF]\n${shortRecall.map(s => {
+                    const names = witnessNames(witnessesBySceneId.get(s.sceneId), resolveWitness);
+                    return `- ${s.content}${names.length > 0 ? ` (witnessed by ${names.join(', ')})` : ''}`;
+                }).join('\n')}`
+                : '';
+            const text = `[ARCHIVE RECALL — VERBATIM PAST SCENES]\n${[fullText, shortText].filter(Boolean).join('\n\n')}\n[END ARCHIVE RECALL]`;
+            const reason = shortRecall.length > 0
+                ? `Verbatim history (${fullRecall.length} scenes, ${shortRecall.length} in brief)`
+                : `Verbatim history (${filteredRecall.length} scenes)`;
+            worldBlocks.push({ source: 'Archive Recall', content: text, tokens: countTokens(text), reason });
         }
 
         // Post-filter regular-recall IDs available to elevation dedup.
@@ -437,16 +437,24 @@ export function buildWorld(opts: {
             // NPC per turn whose result was discarded.
             const npcSegments: string[] = [];
 
+            // Field caps scale with the NPC budget shared by every active NPC
+            // (npcFieldLimits.ts). Only NPCs on stage get the scaled caps; ones merely
+            // mentioned stay at the floor. With no on-stage list, every NPC scales.
+            const scaledLimits = npcFieldLimits(npcBudgetFloor, activeNPCs.length);
+            const limitsFor = (npc: NPCEntry): NpcFieldLimits =>
+                onStageSet.size === 0 || onStageSet.has(npc.id) ? scaledLimits : NPC_FIELD_FLOORS;
+
             for (const npc of activeNPCs) {
+                const limits = limitsFor(npc);
                 // Core tier — always injected.
-                const coreParts: string[] = [minifyNPC(npc, relationshipMemoryEnabled)];
-                const coreDirective = buildCoreDirective(npc, relationshipMemoryEnabled);
+                const coreParts: string[] = [minifyNPC(npc, limits)];
+                const coreDirective = buildCoreDirective(npc, relationshipMemoryEnabled, limits);
                 if (coreDirective) coreParts.push(coreDirective);
                 const coreLine = coreParts.join(' | ');
 
                 // Extended tier — scene-tagged.
                 const extParts: string[] = [];
-                const extDirective = buildExtendedDirective(npc, plannerTags);
+                const extDirective = buildExtendedDirective(npc, plannerTags, limits);
                 if (extDirective) extParts.push(extDirective);
                 const drift = buildDriftAlert(npc);
                 if (drift && fieldTagMatches('drift', npc.fieldTags, plannerTags)) extParts.push(drift);

@@ -112,26 +112,6 @@ export type CharacterProfileState = {
 /** Number of PC traits always injected regardless of scene tags. */
 export const CORE_FLOOR_TRAITS = 5;
 
-export type NPCVisualProfile = {
-    race: string;
-    gender: string;
-    ageRange: string;
-    build: string;
-    symmetry: string; // ugly / pretty / handsome etc.
-    hairStyle: string;
-    eyeColor: string;
-    skinTone: string;
-    gait: string;
-    distinctMarks: string;
-    clothing: string;
-    artStyle: string;
-};
-
-export const DEFAULT_VISUAL_PROFILE: NPCVisualProfile = {
-    race: '', gender: '', ageRange: '', build: '', symmetry: '',
-    hairStyle: '', eyeColor: '', skinTone: '', gait: '', distinctMarks: '', clothing: '', artStyle: 'Stylized Game Realism',
-};
-
 export type NPCBehavioralTrigger = {
     keyword: string;
     shift: string;
@@ -142,12 +122,6 @@ export type NPCPressureHistory = {
     type: 'ignored' | 'engaged';
     delta: number;
     reason: string;
-};
-
-export type NPCDrives = {
-    coreWant: string;
-    sessionWant: string;
-    sceneWant: string;
 };
 
 export type NPCPressure = {
@@ -178,18 +152,19 @@ export type NPCEntry = {
     id: string;
     name: string;
     aliases: string;
+    /** The one visual description: the portrait prompt gets all of it, the narrator a short lead. */
     appearance: string;
-    visualProfile?: NPCVisualProfile;
+    /** Portrait style preset (data/portraitStyles.ts). Unset = the default style. */
+    artStyle?: string;
     faction: string;
     storyRelevance: string;
-    disposition: string;
     status: string;
-    goals: string;
     voice: string;
     personality: string;
     exampleOutput: string;
-    affinity: number;
     portrait?: string;
+    // Retired 2026-11-01: affinity, disposition, goals, drives, visualProfile — folded into
+    // pcRelation / personality / wants / appearance+artStyle on load (services/npc/retireLegacyFields.ts).
     // ---- Agency-engine referenced fields (Phase 2 port; all optional → lazy migration) ----
     isPC?: boolean;
     tier?: 'recurring' | 'oneshot' | 'walkon';
@@ -197,14 +172,12 @@ export type NPCEntry = {
     previousSnapshot?: {
         personality: string;
         voice: string;
-        affinity: number;
         personalityHex?: PersonalityHex;
         pcRelation?: number;
         skillRung?: number;
     };
     shiftNote?: string;
     shiftTurnCount?: number;
-    drives?: NPCDrives;
     behavioralTriggers?: NPCBehavioralTrigger[];
     hardBoundaries?: string[];
     softBoundaries?: string[];
@@ -268,7 +241,7 @@ export type NPCEntry = {
 export type HexAxis = 'drive' | 'diligence' | 'boldness' | 'warmth' | 'empathy' | 'composure';
 export type PersonalityHex = Record<HexAxis, number>;
 
-// Tiered wants. Sits beside the legacy NPCDrives (seeded from it in Phase 2; not deleted).
+// Tiered wants. The only motive model; the legacy drives/goals fold into it on load.
 export type NPCWants = {
     short: string[];   // needs/flavor pool draws; repeats allowed; no LLM
     medium: string[];  // goal templates (pool); LLM-updated in Phase 2

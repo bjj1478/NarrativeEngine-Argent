@@ -30,7 +30,6 @@ import type {
     CharacterProfileState,
     GameContext,
 } from '../../types';
-import { DEFAULT_VISUAL_PROFILE } from '../../types';
 import { assemblePlayerCharacter } from '../character/commitCharacterDraft';
 import { countTokens } from '../infrastructure/tokenizer';
 import { uid } from '../../utils/uid';
@@ -403,16 +402,12 @@ export function cardToNPC(
         name,
         aliases: '',
         appearance: '',
-        visualProfile: { ...DEFAULT_VISUAL_PROFILE },
         faction: '',
         storyRelevance,
-        disposition: '',
         status: 'Alive',
-        goals: '',
         voice: '',
         personality,
         exampleOutput: cutExampleAtStart(mac(card.mes_example), EXAMPLE_CAP),
-        affinity: 50,
         tier: 'recurring',
         condition: 'healthy',
     };
@@ -526,7 +521,7 @@ export function seedCardToCampaignParts(
 /**
  * §10.2 "Play as one of my cards". Builds a card-derived
  * `CharacterCreationDraft`, runs it through `assemblePlayerCharacter` (which
- * owns `isPC`/`populated`/`affinity`/`status`/`visualProfile`), then patches
+ * owns `isPC`/`populated`/`status`), then patches
  * on the three card-only fields.
  *
  * WO-A2 §0 invariant: `personalityHex` and `traits` are NEVER set here. The

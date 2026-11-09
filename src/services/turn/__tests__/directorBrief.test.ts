@@ -52,13 +52,10 @@ function npcEntry(over: Partial<NPCEntry> = {}): NPCEntry {
         visualProfile: undefined,
         faction: '',
         storyRelevance: '',
-        disposition: '',
         status: '',
-        goals: '',
         voice: '',
         personality: '',
         exampleOutput: '',
-        affinity: 50,
         pcRelation: 0,
         ...over,
     } as NPCEntry;
@@ -166,7 +163,7 @@ describe('runDirectorBrief', () => {
                 dossierText: 'DOSSIER',
                 lastAssistant: 'LAST_GM',
                 userMessage: 'USER_MSG',
-                npcLedger: [npcEntry({ name: 'Ingrid', disposition: 'wary guard' })],
+                npcLedger: [npcEntry({ name: 'Ingrid', storyRelevance: 'wary guard' })],
                 onStageNpcIds: ['npc_ingrid'],
                 timeline: [tlEvent({ subject: 'Aldric', summary: 'SUMMARY' })],
             }));
@@ -229,17 +226,28 @@ describe('runDirectorBrief', () => {
             expect(DIRECTOR_BRIEF_TIMEOUT_MS).toBe(180_000);
         });
 
-        it('passes trackingLabel and priority to llmCall (no own thinkingEffort — WO-04b §3)', async () => {
+        it('passes trackingLabel and priority to llmCall', async () => {
             mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
             await runDirectorBrief(baseInput());
             const opts = mockLlmCall.mock.calls[0][2] as any;
             expect(opts.trackingLabel).toBe('director-brief');
             expect(opts.priority).toBe('low');
             expect(opts.timeoutMs).toBe(180_000);
-            // WO-04b §3: no own `thinkingEffort` property — llmCall inherits the
-            // chosen endpoint's configured `thinkingEffort` (llmCall.ts:95).
-            expect(Object.prototype.hasOwnProperty.call(opts, 'thinkingEffort')).toBe(false);
-            expect(opts.thinkingEffort).toBeUndefined();
+        });
+
+        // The `directorThinking` block (2026-10-07; replaces WO-04b §3's "inherit the
+        // endpoint's thinking"). Off by default: thinking took ~10 s per brief on
+        // DS v4 Flash instead of ~1.7 s and caught no more slips.
+        it('asks for thinking off by default', async () => {
+            mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
+            await runDirectorBrief(baseInput());
+            expect((mockLlmCall.mock.calls[0][2] as any).thinkingEffort).toBe('off');
+        });
+
+        it('lets the endpoint thinking level apply when the block is on', async () => {
+            mockLlmCall.mockResolvedValueOnce(VALID_BRIEF);
+            await runDirectorBrief(baseInput({ thinking: true }));
+            expect((mockLlmCall.mock.calls[0][2] as any).thinkingEffort).toBeUndefined();
         });
 
         it('forwards the abort signal to llmCall', async () => {
@@ -548,13 +556,12 @@ describe('buildNpcSummary', () => {
         expect(buildNpcSummary([], undefined)).toBe('(no NPCs in ledger)');
     });
 
-    it('lists on-stage NPCs first with name, disposition, faction, relation band, active goal', () => {
+    it('lists on-stage NPCs first with name, faction, relevance, relation band, active goal', () => {
         const ingrid = npcEntry({
             id: 'npc_ingrid',
             name: 'Ingrid',
-            disposition: 'wary guard',
             faction: 'City Watch',
-            storyRelevance: '',
+            storyRelevance: 'wary guard',
             pcRelation: 2,
             goalRecords: [activeGoal('Find the mole')],
         });
@@ -566,14 +573,8 @@ describe('buildNpcSummary', () => {
         expect(summary).toContain('goal: Find the mole');
     });
 
-    it('falls back to legacy affinity for the relation band when pcRelation is undefined', () => {
-        const ingrid = npcEntry({ pcRelation: undefined, affinity: 70 });
-        const summary = buildNpcSummary([ingrid], ['npc_ingrid']);
-        expect(summary).toContain('PC relation: friendly');
-    });
-
-    it('omits the relation band when both pcRelation and affinity are missing', () => {
-        const ingrid = npcEntry({ pcRelation: undefined, affinity: undefined as any });
+    it('omits the relation band when pcRelation is missing', () => {
+        const ingrid = npcEntry({ pcRelation: undefined });
         const summary = buildNpcSummary([ingrid], ['npc_ingrid']);
         expect(summary).not.toContain('PC relation');
     });
@@ -604,7 +605,6 @@ describe('buildNpcSummary', () => {
             npcEntry({
                 id: `npc_${i}`,
                 name: `NPC ${i}`,
-                disposition: 'guard',
                 faction: 'Watch',
                 pcRelation: 1,
                 goalRecords: [activeGoal('Find the artifact')],
@@ -617,7 +617,7 @@ describe('buildNpcSummary', () => {
     });
 
     it('returns a placeholder when no on-stage NPCs fit the budget', () => {
-        const ingrid = npcEntry({ id: 'npc_ingrid', name: 'Ingrid', disposition: 'x'.repeat(500) });
+        const ingrid = npcEntry({ id: 'npc_ingrid', name: 'Ingrid', storyRelevance: 'x'.repeat(500) });
         const summary = buildNpcSummary([ingrid], ['npc_ingrid'], 5);
         expect(summary).toContain('no on-stage NPCs fit the budget');
     });

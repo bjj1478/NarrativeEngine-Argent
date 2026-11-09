@@ -36,6 +36,7 @@ export async function injectPinnedChapters(
             archiveIndex, input, messages, npcLedger,
             undefined, state.semanticFacts,
             pinnedRanges, undefined, semanticArchiveIds,
+            undefined,
             excludeSceneIds,
             plannerSceneIds,
             archiveRecallDepth

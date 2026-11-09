@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { X, Plus, Users, LayoutGrid, List, CheckSquare, Upload, Download, BookOpen, Trash2, Search, ArrowDownAZ, ArrowUpZA, Sparkles, Images, ClipboardPaste } from 'lucide-react';
+import { ClipboardPaste } from 'lucide-react';
+import { X, Plus, Users, LayoutGrid, List, CheckSquare, Upload, Download, BookOpen, Trash2, Search, ArrowDownAZ, ArrowUpZA, Sparkles, Images } from './icons/narrativeIcons';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '../store/useAppStore';
 import { updateExistingNPCs, extractNPCFromText } from '../services/chatEngine';
 import { parseNPCsFromLore } from '../services/lore/loreNPCParser';
-import type { NPCEntry, NPCVisualProfile } from '../types';
-import { DEFAULT_VISUAL_PROFILE } from '../types';
+import type { NPCEntry } from '../types';
 import { toast } from './Toast';
 import { uid } from '../utils/uid';
 import { prepareImportedNpcs, type NpcImportMode } from '../services/npc/importTransform';
@@ -60,9 +60,8 @@ const NO_ENDPOINT_COPY = 'no utility or story endpoint is configured';
 /** The empty sheet a brand-new record starts from. */
 function blankNpcForm(): Partial<NPCEntry> {
     return {
-        name: '', aliases: '', appearance: '', faction: '', storyRelevance: '', disposition: '',
-        status: 'Alive', goals: '', voice: '', personality: '', exampleOutput: '',
-        visualProfile: { ...DEFAULT_VISUAL_PROFILE }
+        name: '', aliases: '', appearance: '', faction: '', storyRelevance: '',
+        status: 'Alive', voice: '', personality: '', exampleOutput: '',
     };
 }
 
@@ -146,7 +145,6 @@ export function NPCLedgerModal() {
 
     const [form, setForm] = useState<Partial<NPCEntry>>({
         status: 'Alive', voice: '', personality: '', exampleOutput: '',
-        visualProfile: { ...DEFAULT_VISUAL_PROFILE }
     });
 
     /**
@@ -190,7 +188,7 @@ export function NPCLedgerModal() {
     const handleSelect = (npc: NPCEntry) => {
         if (selectMode) return;
         setSelectedId(npc.id);
-        setForm({ ...npc, visualProfile: npc.visualProfile || { ...DEFAULT_VISUAL_PROFILE } });
+        setForm({ ...npc });
         setIsEditing(false);
     };
 
@@ -542,32 +540,21 @@ export function NPCLedgerModal() {
         const newNpcs: NPCEntry[] = [];
         let updatedCount = 0;
 
-        const hasVisualData = (vp?: NPCVisualProfile) => !!(vp && (vp.race || vp.gender || vp.ageRange || vp.build || vp.symmetry || vp.hairStyle || vp.eyeColor || vp.skinTone || vp.gait || vp.distinctMarks || vp.clothing));
-
+        // Existing records only gain what they lack: an empty appearance or an unset art style.
         for (const incoming of parsed) {
             const existing = existingByName.get(incoming.name.toLowerCase());
             if (!existing) { newNpcs.push(incoming); continue; }
-            const incomingVP = incoming.visualProfile;
-            if (!hasVisualData(incomingVP)) continue;
-            const currentVP = existing.visualProfile || { ...DEFAULT_VISUAL_PROFILE };
-            const mergedVP: NPCVisualProfile = {
-                race: currentVP.race || incomingVP?.race || '', gender: currentVP.gender || incomingVP?.gender || '',
-                ageRange: currentVP.ageRange || incomingVP?.ageRange || '', build: currentVP.build || incomingVP?.build || '',
-                symmetry: currentVP.symmetry || incomingVP?.symmetry || '', hairStyle: currentVP.hairStyle || incomingVP?.hairStyle || '',
-                eyeColor: currentVP.eyeColor || incomingVP?.eyeColor || '', skinTone: currentVP.skinTone || incomingVP?.skinTone || '',
-                gait: currentVP.gait || incomingVP?.gait || '', distinctMarks: currentVP.distinctMarks || incomingVP?.distinctMarks || '',
-                clothing: currentVP.clothing || incomingVP?.clothing || '', artStyle: currentVP.artStyle || incomingVP?.artStyle || 'Stylized Game Realism',
-            };
-            const vpChanged = Object.keys(mergedVP).some(k => mergedVP[k as keyof NPCVisualProfile] !== (currentVP[k as keyof NPCVisualProfile] || (k === 'artStyle' ? 'Stylized Game Realism' : '')));
-            const appearanceChanged = !existing.appearance && !!incoming.appearance;
-            if (vpChanged || appearanceChanged) {
-                updateNPC(existing.id, { appearance: existing.appearance || incoming.appearance, visualProfile: mergedVP });
+            const patch: Partial<NPCEntry> = {};
+            if (!existing.appearance?.trim() && incoming.appearance?.trim()) patch.appearance = incoming.appearance;
+            if (!existing.artStyle && incoming.artStyle) patch.artStyle = incoming.artStyle;
+            if (Object.keys(patch).length > 0) {
+                updateNPC(existing.id, patch);
                 updatedCount += 1;
             }
         }
 
         if (newNpcs.length > 0) addNPCs(newNpcs);
-        if (newNpcs.length === 0 && updatedCount === 0) { alert('No new lore characters found, and no existing records needed visual-profile updates.'); return; }
+        if (newNpcs.length === 0 && updatedCount === 0) { alert('No new lore characters found, and no existing records needed appearance updates.'); return; }
         alert(`Lore sync complete: added ${newNpcs.length} new NPC(s), updated ${updatedCount} existing NPC(s).`);
     };
 
@@ -621,7 +608,7 @@ export function NPCLedgerModal() {
                 matureMode: state.settings.matureMode ?? false,
             });
             if (existing) {
-                setForm({ ...existing, visualProfile: existing.visualProfile || { ...DEFAULT_VISUAL_PROFILE }, ...patch });
+                setForm({ ...existing, ...patch });
             } else {
                 setSelectedId(null);
                 setSelectMode(false);
@@ -641,7 +628,7 @@ export function NPCLedgerModal() {
 
     const handleCancelEdit = () => {
         const npc = npcLedger.find(n => n.id === selectedId);
-        if (npc) setForm({ ...npc, visualProfile: npc.visualProfile || { ...DEFAULT_VISUAL_PROFILE } });
+        if (npc) setForm({ ...npc });
         setIsEditing(false);
     };
 

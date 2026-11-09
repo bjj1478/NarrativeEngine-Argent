@@ -1,8 +1,9 @@
-import type { EndpointConfig, ProviderConfig, NPCEntry, NPCVisualProfile, PersonalityHex, HexAxis } from '../../types';
-import { DEFAULT_VISUAL_PROFILE } from '../../types';
+import type { EndpointConfig, ProviderConfig, NPCEntry, PersonalityHex, HexAxis } from '../../types';
+import { visualProfileToProse } from '../npc/retireLegacyFields';
+import { PORTRAIT_ART_STYLE_OPTIONS } from '../../data/portraitStyles';
 import { sendMessageAndParseJson, sanitizeSignatureKit, type JsonModelCall } from './shared';
 import { coerceStringField, offeredTraitNames, buildDefaultFieldTags } from './profile';
-import { describeHex, affinityToPcRelation } from '../npc/agency/agencyBands';
+import { describeHex } from '../npc/agency/agencyBands';
 import { drawShortWants, drawMediumWants } from '../npc/agency/agencyWantDraw';
 import { buildGoalsFromWants } from '../npc/agency/agencyGoals';
 import { RUNG_DEFAULT } from '../npc/agency/agencyConstants';
@@ -16,8 +17,8 @@ import { deriveKeywordHex } from '../import/keywordHex';
 // Store-free: returns a form patch. The ledger drops it into edit mode for the user to review.
 
 const HEX_AXES: readonly HexAxis[] = ['drive', 'diligence', 'boldness', 'warmth', 'empathy', 'composure'];
-const VP_KEYS: readonly (keyof NPCVisualProfile)[] = ['race', 'gender', 'ageRange', 'build', 'symmetry', 'hairStyle', 'eyeColor', 'skinTone', 'gait', 'distinctMarks', 'clothing'];
-const STRING_FIELDS = ['name', 'aliases', 'status', 'faction', 'storyRelevance', 'disposition', 'goals', 'personality', 'voice', 'exampleOutput', 'appearance', 'region'] as const;
+const ART_STYLES: readonly string[] = PORTRAIT_ART_STYLE_OPTIONS.map(o => o.value);
+const STRING_FIELDS = ['name', 'aliases', 'status', 'faction', 'storyRelevance', 'personality', 'voice', 'exampleOutput', 'appearance', 'region'] as const;
 const VALID_STATUSES = ['Alive', 'Deceased', 'Missing', 'Unknown', 'In Custody'];
 const MAX_TRAITS = 5;
 
@@ -38,8 +39,6 @@ function describeExisting(npc: NPCEntry): string {
         `Status: ${npc.status || 'Alive'}`,
         `Faction: ${npc.faction || ''}`,
         `Story Relevance: ${npc.storyRelevance || ''}`,
-        `Disposition: ${npc.disposition || ''}`,
-        `Goals: ${npc.goals || ''}`,
         `Personality: ${npc.personality || ''}`,
         `Voice: ${npc.voice || ''}`,
         `Example Dialogue: ${npc.exampleOutput || ''}`,
@@ -53,10 +52,7 @@ function describeExisting(npc: NPCEntry): string {
         const k = npc.signatureKit;
         lines.push(`SignatureKit: gear=[${k.equipment.join(', ')}] powers=[${k.abilities.join(', ')}]${k.element ? ` element=${k.element}` : ''}`);
     }
-    if (npc.visualProfile) {
-        const vp = npc.visualProfile;
-        lines.push(`VisualProfile: ${VP_KEYS.map(k => `${k}=${vp[k] || ''}`).join('; ')}`);
-    }
+    if (npc.artStyle) lines.push(`ArtStyle: ${npc.artStyle}`);
     return lines.join('\n');
 }
 
@@ -87,14 +83,12 @@ OUTPUT FORMAT — a single JSON object. Every key is optional; omit keys the tex
   "status": "Alive | Deceased | Missing | Unknown | In Custody",
   "faction": "String (faction(s)/organization(s), comma separated)",
   "storyRelevance": "String (why this character matters)",
-  "disposition": "String (default mood/attitude)",
-  "goals": "String (core motive)",
   "personality": "String (core personality in plain language: drives, how they treat others, fears)",
   "voice": "String (how they speak: tone, cadence, vocabulary, quirks, catchphrases)",
   "exampleOutput": "String (one in-character line of dialogue that shows the voice; quote the text if it has dialogue)",
-  "appearance": "String (physical description drawn from the text)",
+  "appearance": "String - 3-5 sentences of physical description drawn from the text. The FIRST sentence carries the most identifying details (species, presented gender, age, build) because it is the part read every turn; then hair, eyes, skin, clothing and gear, and distinguishing marks.",
   "region": "String (home or usual location)",
-  "visualProfile": { "race": "", "gender": "", "ageRange": "", "build": "", "symmetry": "", "hairStyle": "", "eyeColor": "", "skinTone": "", "gait": "", "distinctMarks": "", "clothing": "" },
+  "artStyle": "One of: ${ART_STYLES.join(' | ')} - the portrait style that best suits the source material; omit it if the text gives no basis",
   "personalityHex": { "drive": 0, "diligence": 0, "boldness": 0, "warmth": 0, "empathy": 0, "composure": 0 },
   "traits": ["up to ${MAX_TRAITS} traits"],
   "wants": { "medium": ["2-3 arc-level goals"], "long": "one overarching life ambition" },
@@ -129,7 +123,7 @@ function nonEmptyStrings(v: unknown): string[] | undefined {
 /**
  * Sanitize the model's JSON into a form patch. Pure (given `rng`) so it is testable without a
  * network call. In refine mode only fields the model supplied appear in the patch, and
- * engine-owned fields (affinity / pcRelation / drives / wants.short) are never written.
+ * engine-owned fields (pcRelation / wants.short) are never written.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseNPCFromText(parsed: any, opts: FromTextOptions = {}): Partial<NPCEntry> {
@@ -146,15 +140,18 @@ export function parseNPCFromText(parsed: any, opts: FromTextOptions = {}): Parti
         if (match) patch.status = match; else delete patch.status;
     }
 
-    // Visual profile — merge only the non-empty incoming fields over what is there.
-    if (p.visualProfile && typeof p.visualProfile === 'object') {
-        const base: NPCVisualProfile = { ...DEFAULT_VISUAL_PROFILE, ...(existing?.visualProfile ?? {}) };
-        let touched = false;
-        for (const k of VP_KEYS) {
-            const val = coerceStringField(p.visualProfile[k]).trim();
-            if (val) { base[k] = val; touched = true; }
-        }
-        if (touched) patch.visualProfile = base;
+    // Appearance is the one visual description. A model that still answers with the retired
+    // structured "visualProfile" only gets to fill a blank appearance from it.
+    if (!patch.appearance) {
+        const prose = visualProfileToProse(p.visualProfile);
+        if (prose) patch.appearance = prose;
+    }
+    // Art style is a controlled vocabulary; an unrecognised value is dropped so the portrait
+    // falls back to the default style rather than sending junk to the image model.
+    const incomingStyle = coerceStringField(p.artStyle).trim();
+    if (incomingStyle) {
+        const match = ART_STYLES.find(s => s.toLowerCase() === incomingStyle.toLowerCase());
+        if (match) patch.artStyle = match;
     }
 
     // Traits — controlled vocabulary + maturity gate. New traits lead; existing ones fill the rest.
@@ -174,7 +171,7 @@ export function parseNPCFromText(parsed: any, opts: FromTextOptions = {}): Parti
     const readAxes = HEX_AXES.filter(a => typeof rawHex[a] === 'number' && Number.isFinite(rawHex[a]));
     if (readAxes.length > 0 || !existing) {
         const fallback: PersonalityHex = existing?.personalityHex
-            ?? deriveKeywordHex([patch.personality ?? '', patch.disposition ?? '', (patch.traits ?? []).join(' ')], rng).hex;
+            ?? deriveKeywordHex([patch.personality ?? '', patch.appearance ?? '', (patch.traits ?? []).join(' ')], rng).hex;
         const hex = { ...fallback };
         for (const a of readAxes) hex[a] = Math.max(-3, Math.min(3, Math.round(rawHex[a])));
         patch.personalityHex = hex;
@@ -218,8 +215,7 @@ export function parseNPCFromText(parsed: any, opts: FromTextOptions = {}): Parti
     if (!existing) {
         // Same agency homing the other creation paths apply (profile.ts / populateImportedNPC.ts).
         patch.status = patch.status || 'Alive';
-        patch.affinity = 50;
-        patch.pcRelation = affinityToPcRelation(50);
+        patch.pcRelation = 0;
         patch.skillRung = RUNG_DEFAULT;
         patch.rungCeiling = 3;
         patch.populated = true;

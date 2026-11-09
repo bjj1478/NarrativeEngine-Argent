@@ -43,7 +43,6 @@ describe('parseNPCFromText — create mode', () => {
         const patch = parseNPCFromText({ name: 'Vorin', wants: { medium: ['take the pass'], long: 'rule Ironwall' } }, { rng: fixedRng });
         expect(patch.populated).toBe(true);
         expect(patch.pcRelation).toBe(0);
-        expect(patch.affinity).toBe(50);
         expect(patch.status).toBe('Alive');
         expect(patch.wants?.medium).toEqual(['take the pass']);
         expect(patch.wants?.short.length).toBeGreaterThan(0);

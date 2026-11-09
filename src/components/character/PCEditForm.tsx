@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Trash2, Save, ScrollText, X, ChevronUp, ChevronDown, Search, ClipboardPaste, Loader2 } from 'lucide-react';
+import { ClipboardPaste, Loader2 } from 'lucide-react';
+import { Trash2, Save, ScrollText, X, ChevronUp, ChevronDown, Search } from '../icons/narrativeIcons';
 import { NPCPortraitSection } from '../npc-ledger/NPCPortraitSection';
-import type { NPCVisualProfile, NPCBehavioralTrigger, DivergenceCategory, HexAxis, PlayerCharacter } from '../../types';
-import { DEFAULT_VISUAL_PROFILE } from '../../types';
+import type { NPCBehavioralTrigger, DivergenceCategory, HexAxis, PlayerCharacter } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { getEntriesForNpc, CATEGORY_LABELS, EMPTY_REGISTER } from '../../services/campaign-state/divergenceRegister';
 import { TRAIT_NAMES, TRAIT_VOCAB } from '../../services/npc/agency/agencyPools';
@@ -72,13 +72,6 @@ export function PCEditForm({
 
     const isPC = !!form.isPC;
     void isPC; // always true for the PC form — kept for parity with NPCEditForm branches
-
-    const handleVisualProfileChange = (field: keyof NPCVisualProfile, value: string) => {
-        setForm(prev => ({
-            ...prev,
-            visualProfile: { ...(prev.visualProfile || DEFAULT_VISUAL_PROFILE), [field]: value }
-        }));
-    };
 
     const [traitSearch, setTraitSearch] = useState('');
     const [relationTargetId, setRelationTargetId] = useState('');
@@ -281,18 +274,6 @@ export function PCEditForm({
                             placeholder="Background, role, what makes your character matter to the story..."
                             rows={2}
                             className="w-full bg-terminal/5 border border-terminal/30 rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-dim/50 disabled:opacity-70 disabled:bg-surface disabled:border-transparent resize-none focus:outline-none focus:border-terminal"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-text-dim text-[10px] uppercase tracking-wider mb-1">Default Disposition</label>
-                        <input
-                            type="text"
-                            value={form.disposition || ''}
-                            onChange={e => setForm({ ...form, disposition: e.target.value })}
-                            disabled={!isEditing}
-                            placeholder="How your character comes across to others..."
-                            className="w-full bg-void border border-border rounded px-3 py-2 text-sm text-text-primary placeholder:text-text-dim/50 disabled:opacity-70 disabled:bg-surface disabled:border-transparent focus:outline-none focus:border-terminal"
                         />
                     </div>
 
@@ -824,18 +805,18 @@ export function PCEditForm({
                     </div>
                 </div>
 
-                {/* Right Form Column (Visual Profile) */}
+                {/* Right Form Column (Look & Portrait) */}
                 <div className="space-y-4">
                     <NPCPortraitSection
                         portrait={form.portrait}
                         name={form.name || ''}
-                        visualProfile={form.visualProfile || DEFAULT_VISUAL_PROFILE}
                         isEditing={isEditing}
                         isGeneratingImage={isGeneratingImage}
                         onGeneratePortrait={onGeneratePortrait}
                         onUploadPortrait={onUploadPortrait}
                         onRemovePortrait={onRemovePortrait}
-                        onVisualProfileChange={handleVisualProfileChange}
+                        artStyle={form.artStyle}
+                        onArtStyleChange={(v) => setForm(prev => ({ ...prev, artStyle: v }))}
                         appearance={form.appearance || ''}
                         onAppearanceChange={(v) => setForm(prev => ({ ...prev, appearance: v }))}
                     />

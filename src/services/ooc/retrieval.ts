@@ -45,7 +45,7 @@ export async function searchCampaignRecords(
     const localArchiveIds = retrieveArchiveMemory(
         snapshot.archiveIndex, question, snapshot.messages, snapshot.npcLedger, 2,
         snapshot.semanticFacts, undefined, undefined, semantic.archive, undefined,
-        undefined, 'lean', snapshot.campaignId,
+        undefined, undefined, 'lean', snapshot.campaignId,
     ).slice(0, 2);
     const archive = await fetchArchiveScenes(snapshot.campaignId, localArchiveIds, 500);
     const selectedLoreIds = new Set([...semantic.lore, ...semantic.rules]);

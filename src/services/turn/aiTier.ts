@@ -10,7 +10,7 @@ export type TierFeature =
   | 'sceneStakesClassify'
   | 'heartbeatTick' | 'timeskipRun'
   | 'arcTick' | 'arcSpawn'
-  | 'directorBrief'
+  | 'directorBrief' | 'directorThinking'
   | 'lodDynamicElevation'
   | 'lodSlottedRag';
 
@@ -49,31 +49,31 @@ export const MATRIX: Record<AiTier, Record<TierFeature, boolean>> = {
         sceneStakesClassify: false,
         heartbeatTick: false, timeskipRun: false,
         arcTick: false, arcSpawn: false,
-        directorBrief: false,
+        directorBrief: false, directorThinking: false,
         lodDynamicElevation: false,
         lodSlottedRag: false,
     },
     pro: {
-        introEngine: false, planner: false, expandQuery: false, reranker: false, archiveFunnel: false,
+        introEngine: false, planner: true, expandQuery: false, reranker: false, archiveFunnel: false,
         deepScan: true, recommender: true, recommenderThinking: false, npcStance: true,
         importanceRating: false, witnessAux: false, npcValidate: true, npcProfileGen: true,
         npcUpdate: true, drivesBackfill: false, profileScan: false, inventoryScan: false, locationScan: false, locationEnrich: true, sealChapter: true,
         sceneStakesClassify: true,
         heartbeatTick: true, timeskipRun: true,
         arcTick: true, arcSpawn: true,
-        directorBrief: true,
+        directorBrief: true, directorThinking: false,
         lodDynamicElevation: true,
         lodSlottedRag: false,
     },
     max: {
-        introEngine: true, planner: false, expandQuery: false, reranker: true, archiveFunnel: false,
+        introEngine: true, planner: true, expandQuery: false, reranker: true, archiveFunnel: false,
         deepScan: true, recommender: true, recommenderThinking: false, npcStance: true,
         importanceRating: true, witnessAux: true, npcValidate: true, npcProfileGen: true,
         npcUpdate: true, drivesBackfill: false, profileScan: true, inventoryScan: true, locationScan: true, locationEnrich: true, sealChapter: true,
         sceneStakesClassify: true,
         heartbeatTick: true, timeskipRun: true,
         arcTick: true, arcSpawn: true,
-        directorBrief: true,
+        directorBrief: true, directorThinking: false,
         lodDynamicElevation: true,
         lodSlottedRag: true,
     },
@@ -153,10 +153,10 @@ export interface TierBlock {
 
 const TIER_BLOCKS: readonly TierBlock[] = [
     { id: 'introEngine', name: 'Character Intro Engine', description: 'Rolls a one-line introduction tag for newly mentioned NPCs before the GM writes the reply.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
-    { id: 'planner', name: 'Archive Planner', description: 'Asks a utility model which past scenes to recall before the main turn runs. Off by default: on the Turn Prep memory probes its picks never changed which scenes reached the writer, and it reads ~21k tokens a turn.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
+    { id: 'planner', name: 'Recall Picker', description: 'Before each turn, a utility model reads one-line definitions of the 30 best-matching past scenes and picks up to 5 the GM needs; its first pick is recalled in full. About 1.5k tokens per turn, and the turn waits up to 5 s for it. Reads scene definitions, or the scene events for scenes without one. Replaced the Archive Planner.', toggleable: true, trigger: 'automatic', defaultEnabled: true, callsModel: true },
     { id: 'expandQuery', name: 'Query Expansion', description: "Rewrites short or \"remember when…\" messages into extra memory searches, using the last exchange. Off by default: on short versions of the Turn Prep memory probes it found fewer of the right scenes on its own (3.5 vs 7 of the targets in the top 6); with the Semantic Reranker also on it scored best (9).", toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
     { id: 'reranker', name: 'Semantic Reranker', description: 'Re-ranks archive search results with a utility model after the first-pass retrieval.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
-    { id: 'archiveFunnel', name: 'Chapter Recall Funnel', description: 'Narrows scene recall to the chapters a utility model confirms, then matches keywords inside them. Off by default: archive-wide search found the right scenes where the funnel locked onto the wrong chapter, and the funnel ignores meaning search and the Archive Planner.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
+    { id: 'archiveFunnel', name: 'Chapter Recall Funnel', description: 'Narrows scene recall to the chapters a utility model confirms, then matches keywords inside them. Off by default: archive-wide search found the right scenes where the funnel locked onto the wrong chapter, and the funnel ignores meaning search and the Recall Picker.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
     { id: 'deepScan', name: 'Deep Archive Search', description: "Adds a Deep Search button to the toolbar. Arm it and the next turn runs a two-round AI scan across sealed chapters (about 1–2 min). Nothing runs unless you arm it.", toggleable: true, trigger: 'automatic', defaultEnabled: true, callsModel: true },
     { id: 'recommenderThinking', name: 'Context Recommender: Thinking', description: 'Lets the Context Recommender reason before it picks. Off by default: measured on DS v4 Flash, thinking made each pick take ~20 s instead of ~1 s and chose no better.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
     { id: 'npcStance', name: 'NPC Stance Reasoning', description: 'Computes a scene-specific stance for each on-stage NPC (relationship memory only). The writer gets it, and the Cognitive Process panel shows it.', toggleable: true, trigger: 'automatic', defaultEnabled: true, callsModel: true },
@@ -178,6 +178,7 @@ const TIER_BLOCKS: readonly TierBlock[] = [
     { id: 'arcTick', name: 'Arc Engine Tick', description: 'Rolls tempo per active arc, advances the ladder, and folds the surface line into the next GM call.', toggleable: true, trigger: 'automatic', defaultEnabled: true, callsModel: false },
     { id: 'arcSpawn', name: 'Arc Injector Spawn', description: 'Fires a new systemic-conflict arc from the Arc Injector button. The press is the gate; the tier matrix value is never read.', toggleable: false, trigger: 'manual', defaultEnabled: true, callsModel: true },
     { id: 'directorBrief', name: 'Director Brief', description: 'Asks a utility model for scene directives that steer the next GM reply.', toggleable: true, trigger: 'automatic', defaultEnabled: true, callsModel: true },
+    { id: 'directorThinking', name: 'Director Brief: Thinking', description: 'Lets the Director reason before it writes its brief. Off by default: measured on DS v4 Flash over nine probe turns, thinking made each brief take ~10 s (up to 26 s) instead of ~2 s and caught no more continuity or knowledge slips.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: true },
     { id: 'lodDynamicElevation', name: 'Dynamic Scene Elevation', description: 'Puts the closest-matching older (synopsis-tier) scenes back in full for this turn, below the cache boundary. There is no relevance cutoff: it always takes the top matches.', toggleable: true, trigger: 'automatic', defaultEnabled: true, callsModel: false },
     { id: 'lodSlottedRag', name: 'Slotted RAG Snippets', description: 'Injects one-line snippets from synopsis-tier scenes that had search hits but were not elevated.', toggleable: true, trigger: 'automatic', defaultEnabled: false, callsModel: false },
 ];
